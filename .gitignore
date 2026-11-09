@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.vscode/
+*.swp
+
+# Local working notes and the paper shelf: third-party PDFs, never committed.
+__DEV/
