@@ -14,6 +14,22 @@ every inclusion a program rests on. Nothing here reads JSON Schema itself.
 
 Status: pre-alpha, not on an index.
 
+## What it does
+
+| step | module |
+|---|---|
+| read each tool's contract as argument and result slots | `valgebra_planning/contracts.py` |
+| cut the JSON values into the cells of every slot, input and goal | `valgebra_planning/cells.py` |
+| search a strong program, or a weak one whose stops name what they leave | `valgebra_planning/planner.py` |
+| verify every link of a program with valgebra alone | `valgebra_planning/verify.py` |
+| read a program written in Python, verify it and critique it | `valgebra_planning/critic.py` |
+| hold a program to tool errors, policies, flow rules and mined types | `planner.py`, `policy.py`, `flows.py`, `mining.py` |
+| run a program, checking every contract | `valgebra_planning/run.py` |
+
+[`docs/01-method.md`](docs/01-method.md) states the method and its limits, and
+[`docs/04-results.md`](docs/04-results.md) the studies: on a parcel-returns library of ten
+tools, eight tasks get programs whose every link valgebra proves, from 3 of 3 to 24 of 24.
+
 ## Prior work
 
 The method starts from valplan
