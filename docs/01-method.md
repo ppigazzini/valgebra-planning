@@ -124,6 +124,11 @@ block a call needs. A language model proposes, a sound critic checks (Kambhampat
 Mined types decide nothing here either: a binding crossing two types the observed calls tell apart
 is a note, and the program is accepted on its links alone.
 
+`valgebra_planning/codemode.py` gives the tools as typed Python stubs for a model to write
+against, each docstring holding the tool's own input and output schemas, since a pattern or a
+bound has no Python type; and `repair` hands each critique back to the model for the next
+proposal, until a program is accepted or the rounds run out, any callable being the model.
+
 ## Specifications that hold vacuously
 
 A check that passes without testing what its author meant is vacuous (Kupferman and Vardi 2003),

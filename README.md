@@ -30,6 +30,7 @@ Status: pre-alpha, not on an index.
 | find the specifications of a library that hold vacuously | `valgebra_planning/vacuity.py` |
 | read Progent's privilege policies as sets: narrowing, expansion, a program held to one | `valgebra_planning/privilege.py` |
 | serve an MCP proxy holding every call to the contracts, policies and flow rules | `valgebra_planning/proxy.py` |
+| give a model typed stubs, and repair its program with the critique | `valgebra_planning/codemode.py` |
 
 [`docs/00-using.md`](docs/00-using.md) shows the command line,
 [`docs/01-method.md`](docs/01-method.md) states the method and its limits, and

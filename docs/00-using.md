@@ -44,6 +44,17 @@ a policy needs first, the source a flow rule trusts, the error block a call need
 two types the task's observed calls tell apart is a note, and decides nothing. The exit status is 0 when the program is
 accepted, 1 when it is not, and 2 when the reader refuses its text.
 
+## Stubs for a model
+
+```bash
+uv run valgebra-planning stubs examples/parcels
+```
+
+prints the library's tools as Python stubs, after a preamble stating the language a program
+uses: one function a tool, every argument by name, its docstring holding the tool's input and
+output schemas. Hand them to a model to write a program against, then `critique` it; in Python,
+`valgebra_planning.codemode.repair` runs that loop with any callable as the model.
+
 ## Check a library
 
 ```bash

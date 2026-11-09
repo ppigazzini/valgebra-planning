@@ -5,6 +5,7 @@
     valgebra-planning run LIBRARY --task NAME --inputs JSON --server SERVER [--json]
     valgebra-planning check LIBRARY [--server SERVER] [--json]
     valgebra-planning privileges OLD NEW [--json]
+    valgebra-planning stubs LIBRARY [--server SERVER]
     valgebra-planning proxy --server SERVER [--library LIBRARY]
 
 ``LIBRARY`` is a directory `valgebra_planning.library.read_library` reads. ``plan`` prints each
@@ -16,6 +17,8 @@ live server, failing closed; it exits 1 when the run does not return a value ins
 ``privileges`` compares two privilege policies in Progent's format and exits 1 unless the new one
 narrows the old for every tool it names. ``proxy`` serves an MCP server over stdio in front of
 ``SERVER``, holding every call to the contracts and to the library's policies and flow rules.
+``stubs`` prints the tools as typed Python stubs, their schemas in their docstrings, for a model
+to write a program against.
 ``SERVER`` is a URL or a command starting a stdio server; its tools replace ``tools.json``, and
 it needs the ``mcp`` extra. With ``--json`` each prints one JSON document.
 """
@@ -30,6 +33,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from valgebra_planning.codemode import stubs
 from valgebra_planning.contracts import Contract
 from valgebra_planning.critic import ProgramError, critique
 from valgebra_planning.library import Library, Problem, read_library
@@ -275,9 +279,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     privileged.add_argument("old", type=Path)
     privileged.add_argument("new", type=Path)
     privileged.add_argument("--json", action="store_true")
+    stubbed = commands.add_parser("stubs", help="print typed Python stubs of a library's tools")
+    stubbed.add_argument("library", type=Path)
     proxied = commands.add_parser("proxy", help="serve an MCP proxy holding calls to the rules")
     proxied.add_argument("--library", type=Path, help="a library whose policies and flows hold")
-    for command in (planning, critic, running, checking, proxied):
+    for command in (planning, critic, running, checking, stubbed, proxied):
         required = command in (running, proxied)
         command.add_argument("--server", required=required, help="a URL or a command")
     args = parser.parse_args(argv)
@@ -294,6 +300,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _plan(library, args.task, as_json=args.json)
         if args.command == "check":
             return _check(library, as_json=args.json)
+        if args.command == "stubs":
+            print(stubs(library.tools))
+            return 0
         return _critique(library, args.task, args.program, as_json=args.json)
     except KeyError as missing:
         print(f"{args.library}: no task named {missing}", file=sys.stderr)

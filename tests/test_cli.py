@@ -111,3 +111,9 @@ def test_privileges_exits_1_on_an_expansion(
     assert capsys.readouterr().out == "send: narrowing\n"
     assert main(["privileges", str(old), str(new)]) == 1
     assert capsys.readouterr().out.startswith("send: expansion, allowing ")
+
+
+def test_stubs_prints_python_a_model_writes_against(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["stubs", PARCELS]) == 0
+    out = capsys.readouterr().out
+    assert "def find_parcel(*, tracking: str) -> dict[str, Any]:" in out
