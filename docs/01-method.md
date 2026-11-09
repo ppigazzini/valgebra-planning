@@ -185,6 +185,11 @@ refused, and a value from a task input with it, since a proxy sees no task.
   postcondition the library declares could say (Mansoor et al. 2026), and none is read. So when
   a call that is not idempotent fails, its path goes on without it, through another call or to
   a stop.
+- **A stop is not a question.** Each weak plan of the parcel library stops on a value a tool
+  returned, a parcel's state or country. Asking the user for one inside the set the next call
+  takes would put a value they make up where the tool's must be: the integrity leak a flow rule
+  with `only` refutes. A stop on a task input says the task admits inputs no tool takes, which
+  its input schema fixes before any run.
 - **A policy carries no value between calls.** A rule about one parcel across two calls is read
   as one about any two, so a program approving one parcel and booking another passes a rule that
   a booking follows its own parcel's approval. That one call takes the value another returned
