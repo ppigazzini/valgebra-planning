@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -60,3 +61,26 @@ def test_a_program_the_reader_refuses_exits_2(
     bad.write_text("import os\n", encoding="utf-8")
     assert main(["critique", PARCELS, "--task", "return a parcel", str(bad)]) == 2
     assert str(bad) in capsys.readouterr().err
+
+
+SERVER = f"{sys.executable} {Path(__file__).parent / 'parcel_server.py'}"
+
+
+def test_run_plans_and_runs_a_task_against_a_live_server(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    inputs = '{"tracking": "AB123456789IT"}'
+    argv = ["run", PARCELS, "--task", "settle a parcel", "--inputs", inputs, "--server", SERVER]
+    assert main([*argv, "--json"]) == 0
+    row = json.loads(capsys.readouterr().out)
+    assert row["strong"] is True
+    assert row["refused"] is None
+    assert row["broken"] == []
+    assert row["value"].startswith("lbl_")
+
+
+def test_plan_reads_the_tools_of_a_live_server(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["plan", PARCELS, "--task", "return a parcel", "--server", SERVER, "--json"]) == 0
+    live = json.loads(capsys.readouterr().out)
+    assert main(["plan", PARCELS, "--task", "return a parcel", "--json"]) == 0
+    assert live == json.loads(capsys.readouterr().out)

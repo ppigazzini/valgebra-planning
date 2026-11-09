@@ -42,7 +42,26 @@ states what it reads), verifies every link, and prints each link not proven with
 refutes it and the test that would make the call safe. The exit status is 0 when the program is
 accepted, 1 when it is not, and 2 when the reader refuses its text.
 
+## A live server
+
+With the `mcp` extra (`uv sync --extra mcp`, or `pip install "valgebra-planning[mcp]"`), `--server`
+reads the tools from a live MCP server instead of `tools.json`: a URL connects over Streamable
+HTTP, anything else is a command starting a server over stdio.
+
+```bash
+uv run valgebra-planning plan examples/parcels --task "return a parcel" \
+  --server "uv run python tests/parcel_server.py"
+uv run valgebra-planning run examples/parcels --task "settle a parcel" \
+  --inputs '{"tracking": "AB123456789IT"}' --server "uv run python tests/parcel_server.py"
+```
+
+`run` plans the task over the server's tools and runs the program against the server
+(`valgebra_planning/servers.py`): each call is a `tools/call`, its `structuredContent` the value
+it returns, an `isError` result a tool error, and the run fails closed on any argument record, policy
+step or result outside its contract. It prints how the run ended and exits 1 unless it returned a
+value with no break. `tests/parcel_server.py` serves the example's tools over stdio.
+
 ## Limits
 
-- The command line reads files. A live server is not read and no tool is called.
 - `critique` holds a program to the contracts. It does not hold it to the rules the task names.
+- With `--server`, the tasks, policies, flow rules and observed calls are still the library's files.

@@ -52,12 +52,16 @@ def _listed(path: Path, key: str) -> list[Any]:
     return json.loads(path.read_text(encoding="utf-8"))[key] if path.exists() else []
 
 
-def read_library(directory: Path) -> Library:
-    """Read a library directory; a rule a task names and the directory lacks is a `KeyError`."""
-    tools = {
-        contract.name: contract
-        for contract in map(read_contract, _listed(directory / "tools.json", "tools"))
-    }
+def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -> Library:
+    """Read a library directory; a rule a task names and the directory lacks is a `KeyError`.
+
+    ``tools``, read from a live server, replaces the directory's ``tools.json``.
+    """
+    if tools is None:
+        tools = {
+            contract.name: contract
+            for contract in map(read_contract, _listed(directory / "tools.json", "tools"))
+        }
     policies = {
         p.name: p for p in map(read_policy, _listed(directory / "policies.json", "policies"))
     }
