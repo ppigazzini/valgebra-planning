@@ -82,10 +82,11 @@ verifier, which adds a link for it.
 - **Errors** (`errors`). Any tool may answer with an error. A call may be retried only where the
   tool's annotations say it is read-only or idempotent, a strong cyclic solution ending under
   fairness (Daniele et al. 2000); any other call needs an error block,
-  `try:`/`except ToolError:`, since retrying it may act twice. A retry's link lists what it
-  rests on: the tool's errors transient within the runner's 8 attempts, and the annotations, a
-  hint the server gives, unless the library marks the server trusted. A multi round-trip request is the client's loop around
-  one call and leaves the plan unchanged.
+  `try:`/`except ToolError:`, since retrying it may act twice. A call made again in its error
+  block on the values it was given is a retry written out, and held as one. A retry's link
+  lists what it rests on: the tool's errors transient within the runner's 8 attempts, and the
+  annotations, a hint the server gives, unless the library marks the server trusted. A multi
+  round-trip request is the client's loop around one call and leaves the plan unchanged.
 - **Policies** (`valgebra_planning/policy.py`). An automaton over a program's calls whose
   guards are valgebra sets over the argument record. Along each path a guard is taken surely,
   possibly or never, and a path surely reaching a bad state is refuted, possibly undecided. A
@@ -179,6 +180,11 @@ refused, and a value from a task input with it, since a proxy sees no task.
   `prefixItems`; and a program the planner writes holds no constant, tests no key and loops
   over no array. A program written elsewhere may do all three, and each is checked like any
   value.
+- **No verify-before-retry.** A call made again on a value read again after its error is not
+  judged a retry: whether it repeats the first rests on what the read shows, which only a
+  postcondition the library declares could say (Mansoor et al. 2026), and none is read. So when
+  a call that is not idempotent fails, its path goes on without it, through another call or to
+  a stop.
 - **A policy carries no value between calls.** A rule about one parcel across two calls is read
   as one about any two, so a program approving one parcel and booking another passes a rule that
   a booking follows its own parcel's approval. That one call takes the value another returned

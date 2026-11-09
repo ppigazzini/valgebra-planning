@@ -31,10 +31,19 @@ def retry_assumptions(contract: Contract) -> tuple[str, ...]:
     transient, so one of the runner's attempts succeeds. The annotations saying the tool is
     read-only or idempotent are a hint the server gives, untrusted unless the server is.
     """
-    transient = f"an error of {contract.name} is transient within {ATTEMPTS} attempts"
-    if contract.trusted:
-        return (transient,)
-    return (f"the annotations of {contract.name}, a hint its server gives", transient)
+    return (
+        *annotated(contract),
+        f"an error of {contract.name} is transient within {ATTEMPTS} attempts",
+    )
+
+
+def annotated(contract: Contract) -> tuple[str, ...]:
+    """Return the assumption that a tool's annotations hold, unless its server is trusted."""
+    return (
+        ()
+        if contract.trusted
+        else (f"the annotations of {contract.name}, a hint its server gives",)
+    )
 
 
 class ToolError(Exception):

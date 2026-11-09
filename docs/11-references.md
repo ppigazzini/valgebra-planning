@@ -56,6 +56,10 @@ directions.
 - **Elkoussy and Perez 2026.** L. Elkoussy, J. Perez. AgentLTL: a trace-verification
   framework for measuring, enforcing, and training procedural compliance in tool-using LLM
   agents. [arXiv:2607.02599](https://arxiv.org/abs/2607.02599), 2026.
+- **Mansoor et al. 2026.** I. K. Mansoor, A. Phadke, P. Rana. Verified tool calls improve LLM
+  agent reliability under non-atomic failures.
+  [arXiv:2608.02645](https://arxiv.org/abs/2608.02645), 2026. A postcondition read before a
+  retry, which the method does not read.
 
 ## Information flow and privilege for agents
 

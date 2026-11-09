@@ -30,7 +30,7 @@ from valgebra_planning.contracts import Contract, Slot, Task, item_slots, listed
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
-from valgebra_planning.run import retry_assumptions
+from valgebra_planning.run import annotated, retry_assumptions
 
 Verdict = Literal["proven", "refuted", "undecided"]
 
@@ -143,13 +143,15 @@ class _Walk:
         inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
         states = path.states
         while self.policies:
-            ends = self.iterate(end.body, inner, inside, _Path(states, tested), silent=True)
+            ends = self.iterate(
+                end.body, inner, inside, _Path(states, tested, path.acted), silent=True
+            )
             grown = tuple(s.union(*(e[i] for e in ends)) for i, s in enumerate(states))
             if grown == states:
                 break
             states = grown
-        self.iterate(end.body, inner, inside, _Path(states, tested), silent=False)
-        self.block(end.after, env, where, _Path(states, path.tested))
+        self.iterate(end.body, inner, inside, _Path(states, tested, path.acted), silent=False)
+        self.block(end.after, env, where, _Path(states, path.tested, path.acted))
 
     def iterate(
         self, body: Block, env: dict[Ref, _Held], where: str, path: _Path, *, silent: bool
@@ -189,7 +191,7 @@ class _Walk:
         inside = _Held(intersection(held.values, tested), held.origin)
         outside = _Held(intersection(held.values, complement(tested)), held.origin)
         # Which branch runs carries the tested value's influence: an implicit flow.
-        tested = _Path(path.states, path.tested | {held.origin.tool})
+        tested = _Path(path.states, path.tested | {held.origin.tool}, path.acted)
         self.block(test.then, {**env, test.ref: inside, **opened}, _join(where, "then"), tested)
         self.block(test.otherwise, {**env, test.ref: outside}, _join(where, "else"), tested)
 
@@ -201,6 +203,8 @@ class _Walk:
             self.links.append(Link(where, f"{call.tool} is a tool", "refuted"))
             return env, path
         self.flowing(call, env, where, path)
+        acted = path.acted
+        failing = self.repeated(call, contract, where, acted) if acted or call.on_error else acted
         states = path.states
         bound = self.bind(call, env, where)
         for slot in contract.arguments:
@@ -217,11 +221,27 @@ class _Walk:
             )
         # A tool that answered with an error may still have acted, so its block reads both.
         either = tuple(before | then for before, then in zip(states, after, strict=True))
-        self.failure(call, contract, env, where, _Path(either, path.tested))
+        self.failure(call, contract, env, where, _Path(either, path.tested, failing))
         defined = {ref: held for ref, held in env.items() if ref.variable != call.result}
         for slot in contract.results:
             defined[Ref(call.result, slot.path)] = _Held(slot.values, slot)
-        return defined, _Path(after, path.tested)
+        return defined, _Path(after, path.tested, _unread(acted, call.result) if acted else acted)
+
+    def repeated(self, call: Call, contract: Contract, where: str, acted: _Acted) -> _Acted:
+        """Check a call against those that may have acted on this path; return what its block holds.
+
+        A call made again on the values one that may have acted was given is a retry written
+        out, and holds as one: only for a read-only or idempotent tool, on its annotations unless
+        they are trusted. A call on a value read again after the error is not one: whether it
+        repeats the first rests on what the read shows. Only an error block holds a call that
+        may have acted, so a path outside one asks nothing.
+        """
+        made = (call.tool, frozenset(call.bindings))
+        if made in acted:
+            verdict: Verdict = "proven" if contract.idempotent else "refuted"
+            assumed = annotated(contract) if contract.idempotent else ()
+            self.links.append(Link(where, f"{call.tool} may be retried", verdict, (), assumed))
+        return acted | {made} if call.on_error is not None else acted
 
     def bind(self, call: Call, env: dict[Ref, _Held], where: str) -> dict[str, _Held]:
         """Add the link of each binding inside its argument; return the set each argument holds."""
@@ -389,12 +409,27 @@ def _join(where: str, branch: str) -> str:
 _States = tuple[frozenset[str], ...]
 
 
+_Acted = frozenset[tuple[str, frozenset[tuple[str, Ref | Const]]]]
+
+
+def _unread(acted: _Acted, result: str) -> _Acted:
+    """Return the calls that may have acted, less those given a value ``result`` now rebinds."""
+    return frozenset(
+        (tool, given)
+        for tool, given in acted
+        if all(not isinstance(r, Ref) or r.variable != result for _, r in given)
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class _Path:
     """What a path carries beside its values: policy states, and the sources it tested."""
 
     states: _States
     tested: frozenset[str] = frozenset()
+    #: The calls that answered with an error on the way here and may have acted: each tool,
+    #: and the values it was given.
+    acted: _Acted = frozenset()
 
 
 #: Whether a path may reach a bad state, read as a verdict on the policy holding.

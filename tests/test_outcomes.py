@@ -53,6 +53,55 @@ def test_a_retry_is_accepted_only_for_an_idempotent_tool() -> None:
     assert claims["book_return may be retried"] == "refuted"
 
 
+#: A booking made again in its own error block, as a model writing code would retry it.
+BOOK = (
+    "book_return(parcel_id=c1.parcel.parcel_id, state=c1.parcel.state, weight_g=c1.parcel.weight_g)"
+)
+AGAIN = (
+    "c1 = retry(find_parcel(tracking=tracking))\n"
+    f"try:\n    c2 = {BOOK}\n"
+    f"except ToolError:\n    c3 = {BOOK}\n    return c3.label_id\n"
+    "return c2.label_id"
+)
+
+
+def _retries(source: str) -> list[tuple[str, str, str, tuple[str, ...]]]:
+    checked = verify(read_program(source), TOOLS, SETTLE, errors=True)
+    return [
+        (link.where, link.claim, link.verdict, link.assumed)
+        for link in checked.links
+        if link.claim.endswith(" may be retried")
+    ]
+
+
+def test_a_call_made_again_in_its_own_error_block_is_a_retry() -> None:
+    assert _retries(AGAIN)[1:] == [
+        ("error:book_return", "book_return may be retried", "refuted", ()),
+    ]
+    claimed = AGAIN.replace("book_return", "open_claim").replace(
+        ", weight_g=c1.parcel.weight_g", ""
+    )
+    assert _retries(claimed)[1:] == [
+        (
+            "error:open_claim",
+            "open_claim may be retried",
+            "proven",
+            ("the annotations of open_claim, a hint its server gives",),
+        ),
+    ]
+
+
+def test_a_call_on_a_value_read_again_after_the_error_is_not_a_retry() -> None:
+    read_again = AGAIN.replace(
+        "except ToolError:\n",
+        "except ToolError:\n    c1 = retry(find_parcel(tracking=tracking))\n",
+    )
+    assert [claim for _, claim, _, _ in _retries(read_again)] == [
+        "find_parcel may be retried",
+        "find_parcel may be retried",
+    ]
+
+
 def test_an_error_nothing_handles_is_a_gap_when_tools_may_fail() -> None:
     lookup = Call("find_parcel", (("tracking", Ref("tracking")),), "c1")
     program = Block((lookup,), Return(Ref("c1", ("parcel", "parcel_id"))))
