@@ -369,6 +369,7 @@ def critique(
             note += f"; {remedy}"
         notes.append(note)
     notes += [f"{_gap(gap.ref)} (at {gap.where or 'top'})" for gap in checked.gaps]
+    notes += [f"assumed: {a}" for a in sorted({a for link in checked.links for a in link.assumed})]
     if types is not None:
         notes += _crossed(program, {}, types)
     return Critique(program, checked, tuple(notes))

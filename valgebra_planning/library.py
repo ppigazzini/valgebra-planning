@@ -4,7 +4,9 @@ A library is a directory. ``tools.json`` holds a server's ``tools/list`` result,
 [...]}``; ``tasks.json`` holds ``{"tasks": [...]}``, each task its ``name``, the JSON Schema of
 each input in ``inputs`` and of the ``goal``, and the rules it names: ``errors`` (any tool may
 fail), ``policies`` and ``flows`` by name, and ``types``, the file of observed calls its types
-are mined from. ``policies.json`` and ``flows.json`` hold the rules a task names, as
+are mined from; a tool listed without an ``outputSchema`` gets one shaped from its results in
+those observed calls, an assumption (`valgebra_planning.mining.infer_outputs`). ``policies.json``
+and ``flows.json`` hold the rules a task names, as
 `valgebra_planning.policy.read_policy` and `valgebra_planning.flows.read_flow` read them.
 """
 
@@ -12,13 +14,13 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 from valgebra_planning.contracts import Contract, Task, read_contract, read_task
 from valgebra_planning.flows import Flow, read_flow
-from valgebra_planning.mining import Types, mine
+from valgebra_planning.mining import Types, infer_outputs, mine
 from valgebra_planning.policy import Policy, read_policy
 
 
@@ -60,17 +62,28 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
 
     ``tools``, read from a live server, replaces the directory's ``tools.json``.
     """
+    specs = _listed(directory / "tasks.json", "tasks")
+    logs = sorted({spec["types"] for spec in specs if "types" in spec})
+    observed = [call for log in logs for call in _listed(directory / log, "calls")]
     if tools is None:
+        listing = _listed(directory / "tools.json", "tools")
+        shaped = infer_outputs(observed, listing)
         tools = {
-            contract.name: contract
-            for contract in map(read_contract, _listed(directory / "tools.json", "tools"))
+            spec["name"]: (
+                replace(
+                    read_contract({**spec, "outputSchema": shaped[spec["name"]]}), inferred=True
+                )
+                if spec["name"] in shaped
+                else read_contract(spec)
+            )
+            for spec in listing
         }
     policies = {
         p.name: p for p in map(read_policy, _listed(directory / "policies.json", "policies"))
     }
     flows = {f.name: f for f in map(read_flow, _listed(directory / "flows.json", "flows"))}
     problems = []
-    for spec in _listed(directory / "tasks.json", "tasks"):
+    for spec in specs:
         log = spec.get("types")
         problems.append(
             Problem(

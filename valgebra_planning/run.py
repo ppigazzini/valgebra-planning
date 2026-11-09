@@ -102,7 +102,12 @@ class _Runner:
             return made
         result = made[0]
         if contract.returns is not None and not contract.returns.is_valid(result):
-            refused = self.breaks(f"{call.tool} returned {result!r:.120}, outside its contract")
+            outside = (
+                "the output schema inferred from observed calls"
+                if contract.inferred
+                else "its contract"
+            )
+            refused = self.breaks(f"{call.tool} returned {result!r:.120}, outside {outside}")
             if refused is not None:
                 return refused
         return {**env, call.result: result}

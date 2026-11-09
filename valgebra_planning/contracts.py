@@ -80,6 +80,9 @@ class Contract:
     #: Each field the output schema declares and does not guarantee, below guaranteed objects,
     #: with the fields it guarantees in turn: held only where a test shows the field present.
     optional: tuple[Slot, ...] = ()
+    #: Whether the output schema was shaped from observed results, the server declaring none:
+    #: an assumption every link and binding resting on it names.
+    inferred: bool = False
 
     def argument(self, name: str) -> Slot:
         """Return the argument slot called ``name``, or raise `KeyError`."""

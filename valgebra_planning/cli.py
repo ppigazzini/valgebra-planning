@@ -41,6 +41,7 @@ def _links(checked: Verification) -> list[dict[str, Any]]:
             "claim": link.claim,
             "verdict": link.verdict,
             "counterexample": list(link.counterexample),
+            "assumed": list(link.assumed),
         }
         for link in checked.links
     ]

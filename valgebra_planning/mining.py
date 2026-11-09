@@ -13,7 +13,7 @@ observed carries no type and is bound as its set alone allows.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -97,3 +97,67 @@ def mine(observed: Iterable[Mapping[str, Any]], contracts: Mapping[str, Contract
         root(keys[0])
     roots = sorted({root(key) for key in parent})
     return Types({key: roots.index(root(key)) for key in parent})
+
+
+#: The JSON kind of a Python value `json.loads` returns, a bool being no integer.
+def _kind(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    return "array" if isinstance(value, list) else "object"
+
+
+def shape(values: Sequence[Any]) -> dict[str, Any]:
+    """Return the JSON Schema of observed values: each kind they take, and nothing narrower.
+
+    An object holds every key any observed object holds, the keys every one holds required;
+    an array's items are the shape of every item seen; an integer seen beside a number is a
+    number. No pattern, enum or bound is guessed: the shape is what was seen, generalized only
+    to the kind.
+    """
+    kinds: dict[str, list[Any]] = {}
+    for value in values:
+        kinds.setdefault(_kind(value), []).append(value)
+    if "integer" in kinds and "number" in kinds:
+        kinds["number"] += kinds.pop("integer")
+    found = []
+    for kind, seen in sorted(kinds.items()):
+        if kind == "object":
+            keys = sorted({key for value in seen for key in value})
+            found.append(
+                {
+                    "type": "object",
+                    "properties": {k: shape([v[k] for v in seen if k in v]) for k in keys},
+                    "required": [k for k in keys if all(k in v for v in seen)],
+                }
+            )
+        elif kind == "array":
+            items = [item for value in seen for item in value]
+            found.append({"type": "array", **({"items": shape(items)} if items else {})})
+        else:
+            found.append({"type": kind})
+    return found[0] if len(found) == 1 else {"anyOf": found}
+
+
+def infer_outputs(
+    observed: Iterable[Mapping[str, Any]], listing: Iterable[Mapping[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Return an output schema for each listed tool declaring none, shaped from its results.
+
+    An inferred schema is an assumption, as a mined type is: a contract carrying one is marked
+    `valgebra_planning.contracts.Contract.inferred`, and every link and binding resting on it
+    names it.
+    """
+    bare = {tool["name"] for tool in listing if "outputSchema" not in tool}
+    results: dict[str, list[Any]] = {}
+    for call in observed:
+        if call.get("tool") in bare and "result" in call:
+            results.setdefault(call["tool"], []).append(call["result"])
+    return {name: shape(seen) for name, seen in results.items()}

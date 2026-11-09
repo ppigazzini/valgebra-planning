@@ -87,8 +87,8 @@ class Uncovered:
 class Plan:
     """A program for a task, whether it is strong, and what its stops leave uncovered.
 
-    ``assumed`` names each binding that rests on a mined semantic type rather than on its
-    sets alone.
+    ``assumed`` names each binding that rests on a mined semantic type or on an output schema
+    inferred from observed calls, rather than on the contracts alone.
     """
 
     program: Block | None
@@ -411,24 +411,35 @@ def _result_key(origin: str, ref: Ref) -> SlotKey:
     return ("result", ".".join((origin, *ref.path)))
 
 
-def _assumed(block: Block, types: Types | None, made: Mapping[str, str] | None = None) -> list[str]:
-    """Return every binding of a program whose two slots both carry a mined type."""
-    if types is None:
-        return []
+def _assumed(
+    block: Block,
+    types: Types | None,
+    contracts: Mapping[str, Contract],
+    made: Mapping[str, str] | None = None,
+) -> list[str]:
+    """Return every binding resting on an assumption: a mined type, or an inferred output."""
     made = dict(made or {})
     found = []
     for call in block.calls:
         for name, ref in call.bindings:
-            if isinstance(ref, Ref) and ref.variable in made:
-                key = _result_key(made[ref.variable], ref)
-                if types.typed(key, ("argument", f"{call.tool}.{name}")):
-                    found.append(f"{ref} -> {call.tool}.{name}")
+            if not isinstance(ref, Ref) or ref.variable not in made:
+                continue
+            source = made[ref.variable]
+            if types is not None and types.typed(
+                _result_key(source, ref), ("argument", f"{call.tool}.{name}")
+            ):
+                found.append(f"{ref} -> {call.tool}.{name}")
+            if contracts[source].inferred:
+                found.append(
+                    f"{ref} -> {call.tool}.{name}, from the output of {source} as observed"
+                )
         if call.on_error is not None:
-            found += _assumed(call.on_error, types, made)
+            found += _assumed(call.on_error, types, contracts, made)
         made[call.result] = call.tool
     end = block.end
     if isinstance(end, Branch):
-        found += _assumed(end.then, types, made) + _assumed(end.otherwise, types, made)
+        found += _assumed(end.then, types, contracts, made)
+        found += _assumed(end.otherwise, types, contracts, made)
     return found
 
 
@@ -638,7 +649,7 @@ def plan(
                 uncovered=(),
                 abstraction=abstraction,
                 expanded=search.expanded,
-                assumed=tuple(_assumed(program, types)),
+                assumed=tuple(_assumed(program, types, contracts)),
             )
     if weak:
         # One search at the full bound: a branch stops only where no continuation exists
@@ -654,6 +665,6 @@ def plan(
                 uncovered=gaps,
                 abstraction=abstraction,
                 expanded=search.expanded,
-                assumed=tuple(_assumed(program, types)),
+                assumed=tuple(_assumed(program, types, contracts)),
             )
     return Plan(None, strong=False, uncovered=(), abstraction=abstraction, expanded=search.expanded)

@@ -50,6 +50,9 @@ class Link:
     claim: str
     verdict: Verdict
     counterexample: tuple[Any, ...] = ()
+    #: What the verdict rests on beside the contracts: an output schema inferred from observed
+    #: calls, never a proof. The verdict is valgebra's over the contracts and these.
+    assumed: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,7 +298,15 @@ class _Walk:
         if verdict != "proven":
             outside = [v for v in self.candidates(ref, held) if not target.is_valid(v)]
             found = tuple(outside[:1])
-        self.links.append(Link(where, claim, "refuted" if found else verdict, found))
+        verdict = "refuted" if found else verdict
+        self.links.append(Link(where, claim, verdict, found, self.assumption(held)))
+
+    def assumption(self, held: _Held) -> tuple[str, ...]:
+        """Return the assumption a held value rests on: its tool's output schema, if inferred."""
+        contract = self.contracts.get(held.origin.tool)
+        if contract is None or not contract.inferred:
+            return ()
+        return (f"the output of {contract.name} as observed",)
 
     def opened(self, ref: Ref, held: _Held, key: str) -> dict[Ref, _Held]:
         """Return the optional fields a test showing ``key`` in ``ref`` makes the program hold."""

@@ -99,6 +99,11 @@ verifier, which adds a link for it.
   semantic type (APIphany, Guo et al. 2022), and a value fills an argument only where their
   types agree. A mined type is an assumption: the verifier reads none, and a plan names each
   binding that rests on one.
+- **Inferred outputs** (`valgebra_planning/mining.py`). A tool listed without an `outputSchema`
+  gets one shaped from its results in the observed calls: each kind seen, an object's keys every
+  observed one holds required, nothing narrower guessed. It is an assumption as a mined type is:
+  every link resting on it lists it beside valgebra's verdict, the plan names each binding that
+  rests on it, and a run refuses a result outside it, naming it.
 
 ## The critic
 
