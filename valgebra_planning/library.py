@@ -1,13 +1,14 @@
 """A library on disk: a server's tool list, the tasks over it and the rules each is held to.
 
 A library is a directory. ``tools.json`` holds a server's ``tools/list`` result, ``{"tools":
-[...]}``; ``tasks.json`` holds ``{"tasks": [...]}``, each task its ``name``, the JSON Schema of
-each input in ``inputs`` and of the ``goal``, and the rules it names: ``errors`` (any tool may
-fail), ``policies`` and ``flows`` by name, and ``types``, the file of observed calls its types
-are mined from; a tool listed without an ``outputSchema`` gets one shaped from its results in
-those observed calls, an assumption (`valgebra_planning.mining.infer_outputs`). ``policies.json``
-and ``flows.json`` hold the rules a task names, as
-`valgebra_planning.policy.read_policy` and `valgebra_planning.flows.read_flow` read them.
+[...]}``, and ``"trusted": true`` where the server's annotations are trusted. ``tasks.json``
+holds ``{"tasks": [...]}``, each task its ``name``, the JSON Schema of each input in ``inputs``
+and of the ``goal``, and the rules it names: ``errors`` (any tool may fail), ``policies`` and
+``flows`` by name, and ``types``, the file of observed calls its types are mined from; a tool
+listed without an ``outputSchema`` gets one shaped from its results in those observed calls, an
+assumption (`valgebra_planning.mining.infer_outputs`). ``policies.json`` and ``flows.json`` hold
+the rules a task names, as `valgebra_planning.policy.read_policy` and
+`valgebra_planning.flows.read_flow` read them.
 """
 
 from __future__ import annotations
@@ -66,15 +67,18 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
     logs = sorted({spec["types"] for spec in specs if "types" in spec})
     observed = [call for log in logs for call in _listed(directory / log, "calls")]
     if tools is None:
-        listing = _listed(directory / "tools.json", "tools")
+        listed = directory / "tools.json"
+        document = json.loads(listed.read_text(encoding="utf-8")) if listed.exists() else {}
+        listing = document.get("tools", [])
         shaped = infer_outputs(observed, listing)
+        trusted = document.get("trusted") is True
         tools = {
-            spec["name"]: (
-                replace(
-                    read_contract({**spec, "outputSchema": shaped[spec["name"]]}), inferred=True
-                )
+            spec["name"]: replace(
+                read_contract({**spec, "outputSchema": shaped[spec["name"]]})
                 if spec["name"] in shaped
-                else read_contract(spec)
+                else read_contract(spec),
+                inferred=spec["name"] in shaped,
+                trusted=trusted,
             )
             for spec in listing
         }

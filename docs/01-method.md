@@ -82,15 +82,18 @@ verifier, which adds a link for it.
 - **Errors** (`errors`). Any tool may answer with an error. A call may be retried only where the
   tool's annotations say it is read-only or idempotent, a strong cyclic solution ending under
   fairness (Daniele et al. 2000); any other call needs an error block,
-  `try:`/`except ToolError:`, since retrying it may act twice. The annotations are hints a
-  server gives, and a retry trusts them. A multi round-trip request is the client's loop around
+  `try:`/`except ToolError:`, since retrying it may act twice. A retry's link lists what it
+  rests on: the tool's errors transient within the runner's 8 attempts, and the annotations, a
+  hint the server gives, unless the library marks the server trusted. A multi round-trip request is the client's loop around
   one call and leaves the plan unchanged.
 - **Policies** (`valgebra_planning/policy.py`). An automaton over a program's calls whose
   guards are valgebra sets over the argument record. Along each path a guard is taken surely,
   possibly or never, and a path surely reaching a bad state is refuted, possibly undecided. A
   loop's body may run any number of times, so the states a policy may be in when it starts are
   taken to a fixpoint, the states being finite. A policy reads one program's calls in order and
-  carries no value from one call to another.
+  carries no value from one call to another. A transition may read an annotation hint,
+  `destructiveHint` or another, on any tool setting it; the policy's link then lists the hints it
+  reads as an assumption.
 - **Flows** (`valgebra_planning/flows.py`). A value from an untrusted source reaches a sink
   argument only inside the rule's endorsed set, and with `implicit` no sink call runs under a
   test on such a value or in a loop over an array from such a source: the integrity half of CaMeL (Debenedetti et al. 2025), FIDES (Costa

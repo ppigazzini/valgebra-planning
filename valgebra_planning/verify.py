@@ -30,6 +30,7 @@ from valgebra_planning.contracts import Contract, Slot, Task, item_slots, listed
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
+from valgebra_planning.run import retry_assumptions
 
 Verdict = Literal["proven", "refuted", "undecided"]
 
@@ -167,7 +168,9 @@ class _Walk:
         """Add a link per policy: whether this path may reach one of its bad states."""
         for policy, held in zip(self.policies, states, strict=True):
             verdict = _OBEYED[policy.reach(held)]
-            self.links.append(Link(where, f"policy {policy.name} holds", verdict))
+            hinted = policy.hints() and not all(c.trusted for c in self.contracts.values())
+            assumed = (f"the annotation hints policy {policy.name} reads",) if hinted else ()
+            self.links.append(Link(where, f"policy {policy.name} holds", verdict, (), assumed))
 
     def branch(self, test: Branch, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         held = self.held(env, test.ref, where)
@@ -209,7 +212,7 @@ class _Walk:
         if self.policies:
             record = Validator({name: held.values for name, held in bound.items()}).close()
             after = tuple(
-                policy.step(held, call.tool, record)
+                policy.step(held, call.tool, record, contract.hints)
                 for policy, held in zip(self.policies, states, strict=True)
             )
         # A tool that answered with an error may still have acted, so its block reads both.
@@ -269,7 +272,8 @@ class _Walk:
         """Check what a call does when its tool answers with an error."""
         if call.retry:
             verdict: Verdict = "proven" if contract.idempotent else "refuted"
-            self.links.append(Link(where, f"{call.tool} may be retried", verdict))
+            assumed = retry_assumptions(contract) if contract.idempotent else ()
+            self.links.append(Link(where, f"{call.tool} may be retried", verdict, (), assumed))
         if call.on_error is not None:
             # The result is never bound on this path, so the block reads what the call read.
             self.block(call.on_error, env, _join(where, f"error:{call.tool}"), path)

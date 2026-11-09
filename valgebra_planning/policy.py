@@ -31,12 +31,21 @@ Reach = Literal["never", "possibly", "surely"]
 
 @dataclass(frozen=True, slots=True)
 class Transition:
-    """From ``source`` to ``target`` on a call to ``tool`` whose arguments lie in ``guard``."""
+    """From ``source`` to ``target`` on a call to ``tool`` whose arguments lie in ``guard``.
+
+    With ``hint`` set and ``tool`` empty, the call is to any tool whose annotations set that hint,
+    ``destructiveHint`` or another: a hint its server gives, untrusted unless the server is.
+    """
 
     source: str
     tool: str
     guard: Validator[Any]
     target: str
+    hint: str = ""
+
+    def reads(self, tool: str, hints: frozenset[str]) -> bool:
+        """Return whether a call to ``tool``, whose annotations set ``hints``, is one it reads."""
+        return self.hint in hints if self.hint else self.tool == tool
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,10 +58,20 @@ class Policy:
     transitions: tuple[Transition, ...]
 
     def tools(self) -> frozenset[str]:
-        """Return every tool a transition reads."""
-        return frozenset(transition.tool for transition in self.transitions)
+        """Return every tool a transition names."""
+        return frozenset(transition.tool for transition in self.transitions if transition.tool)
 
-    def step(self, states: frozenset[str], tool: str, record: Validator[Any]) -> frozenset[str]:
+    def hints(self) -> frozenset[str]:
+        """Return every annotation hint a transition reads."""
+        return frozenset(transition.hint for transition in self.transitions if transition.hint)
+
+    def step(
+        self,
+        states: frozenset[str],
+        tool: str,
+        record: Validator[Any],
+        hints: frozenset[str] = frozenset(),
+    ) -> frozenset[str]:
         """Return the states the automaton may be in after a call whose record lies in ``record``.
 
         A transition taken surely leaves its source; one taken possibly adds its target and
@@ -62,7 +81,7 @@ class Policy:
         for state in states:
             stays = True
             for transition in self.transitions:
-                if transition.source != state or transition.tool != tool:
+                if transition.source != state or not transition.reads(tool, hints):
                     continue
                 taken = _taken(record, transition.guard)
                 if taken != "never":
@@ -92,15 +111,17 @@ def _taken(record: Validator[Any], guard: Validator[Any]) -> Reach:
 def read_policy(spec: Mapping[str, Any]) -> Policy:
     """Read a policy: ``name``, ``initial``, ``bad`` states and ``transitions``.
 
-    Each transition names its ``from`` and ``to`` states and its ``tool``, and optionally the
-    JSON Schema its ``arguments`` record must meet, every record where it names none.
+    Each transition names its ``from`` and ``to`` states and its ``tool``, or the annotation
+    ``hint`` a tool must set, and optionally the JSON Schema its ``arguments`` record must meet,
+    every record where it names none.
     """
     transitions = tuple(
         Transition(
             source=t["from"],
-            tool=t["tool"],
+            tool=t.get("tool", ""),
             guard=compile_schema(t.get("arguments", True)),
             target=t["to"],
+            hint=t.get("hint", ""),
         )
         for t in spec["transitions"]
     )
@@ -118,12 +139,14 @@ class Monitor:
     def __post_init__(self) -> None:
         self.state = self.state or self.policy.initial
 
-    def observe(self, tool: str, arguments: Mapping[str, Any]) -> bool:
+    def observe(
+        self, tool: str, arguments: Mapping[str, Any], hints: frozenset[str] = frozenset()
+    ) -> bool:
         """Step on one call; return whether it reached a bad state."""
         for transition in self.policy.transitions:
             if (
                 transition.source == self.state
-                and transition.tool == tool
+                and transition.reads(tool, hints)
                 and transition.guard.is_valid(dict(arguments))
             ):
                 self.state = transition.target

@@ -97,6 +97,14 @@ def _policy(policy: Policy, tools: dict[str, Contract]) -> list[Finding]:
     found, live = [], []
     for at, transition in enumerate(policy.transitions):
         step = f"{where}, transition {at} ({transition.source} -> {transition.target})"
+        if transition.hint:
+            if any(transition.hint in c.hints for c in tools.values()):
+                live.append(transition)
+            else:
+                found.append(
+                    Finding(step, f"reads {transition.hint}, which no tool sets", "proven")
+                )
+            continue
         contract = tools.get(transition.tool)
         if contract is None:
             found.append(Finding(step, f"names {transition.tool}, no tool", "proven"))

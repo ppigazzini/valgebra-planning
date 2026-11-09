@@ -43,6 +43,7 @@ from valgebra_planning.program import (
     render,
     renumber,
 )
+from valgebra_planning.run import retry_assumptions
 
 #: The calls and tests a path may take.
 DEPTH = 6
@@ -88,7 +89,8 @@ class Plan:
     """A program for a task, whether it is strong, and what its stops leave uncovered.
 
     ``assumed`` names each binding that rests on a mined semantic type or on an output schema
-    inferred from observed calls, rather than on the contracts alone.
+    inferred from observed calls, and each retry, which rests on its tool's errors being
+    transient and, unless its server is trusted, on its annotations.
     """
 
     program: Block | None
@@ -303,7 +305,7 @@ class _Search:
             return state.policed
         record = Validator({name: self.values(state.cells(ref)) for name, ref in bindings}).close()
         after = tuple(
-            policy.step(held, contract.name, record)
+            policy.step(held, contract.name, record, contract.hints)
             for policy, held in zip(self.policies, state.policed, strict=True)
         )
         if any(
@@ -417,7 +419,7 @@ def _assumed(
     contracts: Mapping[str, Contract],
     made: Mapping[str, str] | None = None,
 ) -> list[str]:
-    """Return every binding resting on an assumption: a mined type, or an inferred output."""
+    """Return every binding and retry resting on an assumption, as `Plan.assumed` names them."""
     made = dict(made or {})
     found = []
     for call in block.calls:
@@ -433,6 +435,8 @@ def _assumed(
                 found.append(
                     f"{ref} -> {call.tool}.{name}, from the output of {source} as observed"
                 )
+        if call.retry:
+            found += [f"retry {call.tool}: {a}" for a in retry_assumptions(contracts[call.tool])]
         if call.on_error is not None:
             found += _assumed(call.on_error, types, contracts, made)
         made[call.result] = call.tool
@@ -615,7 +619,11 @@ def plan(
     mined ``types``, a value fills an argument only where their types agree, and the plan
     names every binding that rests on one.
     """
-    kept = frozenset(tool for policy in policies for tool in policy.tools())
+    kept = frozenset(tool for policy in policies for tool in policy.tools()) | frozenset(
+        name
+        for name, contract in contracts.items()
+        if any(policy.hints() & contract.hints for policy in policies)
+    )
     contracts = _reachable(contracts, task, kept)
     abstraction = abstract(_predicates(contracts, task), seed=seed)
     goal = abstraction.cells_of(abstraction.index(_GOAL))

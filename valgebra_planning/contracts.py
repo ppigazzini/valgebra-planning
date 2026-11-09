@@ -77,6 +77,10 @@ class Contract:
     #: Whether calling twice acts as calling once: the tool's annotations say it is
     #: read-only or idempotent. A hint the server gives; a retry trusts it.
     idempotent: bool = False
+    #: Every annotation hint the tool sets true, `readOnlyHint` or `destructiveHint`.
+    hints: frozenset[str] = frozenset()
+    #: Whether the server's annotations are trusted, waiving the assumption a retry makes.
+    trusted: bool = False
     #: Each field the output schema declares and does not guarantee, below guaranteed objects,
     #: with the fields it guarantees in turn: held only where a test shows the field present.
     optional: tuple[Slot, ...] = ()
@@ -185,6 +189,12 @@ def item_slots(slot: Slot) -> tuple[Slot, ...]:
     return tuple(_result_slots(slot.tool, compiler, node["items"], (*slot.path, "[]")))
 
 
+def _hints(annotations: object) -> frozenset[str]:
+    if not isinstance(annotations, Mapping):
+        return frozenset()
+    return frozenset(name for name, value in annotations.items() if value is True)
+
+
 def _idempotent(annotations: object) -> bool:
     if not isinstance(annotations, Mapping):
         return False
@@ -234,6 +244,7 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
         returns=tool.result,
         plain=_plain(node),
         idempotent=_idempotent(spec.get("annotations")),
+        hints=_hints(spec.get("annotations")),
         optional=optional,
     )
 

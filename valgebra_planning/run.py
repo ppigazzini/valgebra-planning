@@ -24,6 +24,19 @@ from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref
 ATTEMPTS = 8
 
 
+def retry_assumptions(contract: Contract) -> tuple[str, ...]:
+    """Return what a retry of a tool rests on: its errors transient, its annotations unless trusted.
+
+    A retry is a strong cyclic solution, sound under fairness (Daniele et al. 2000): an error is
+    transient, so one of the runner's attempts succeeds. The annotations saying the tool is
+    read-only or idempotent are a hint the server gives, untrusted unless the server is.
+    """
+    transient = f"an error of {contract.name} is transient within {ATTEMPTS} attempts"
+    if contract.trusted:
+        return (transient,)
+    return (f"the annotations of {contract.name}, a hint its server gives", transient)
+
+
 class ToolError(Exception):
     """A tool answered with an error: an MCP result with ``isError`` set."""
 
@@ -119,7 +132,7 @@ class _Runner:
             if refused is not None:
                 return refused
         for monitor in self.monitors:
-            if monitor.observe(tool, arguments):
+            if monitor.observe(tool, arguments, contract.hints):
                 refused = self.breaks(monitor.violations[-1])
                 if refused is not None:
                     return refused
