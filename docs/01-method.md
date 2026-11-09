@@ -55,8 +55,8 @@ enabled when each required argument has a value whose cells lie inside the argum
 call branches on a value that only overlaps an argument, calls the tool on the narrowed value in
 one branch and goes on in the other; a second overlapping argument is guarded inside it. A
 program is strong when every path returns a value whose cells lie inside the goal's: strong
-planning under nondeterministic outcomes (Cimatti, Pistore, Roveri and Traverso 2003), a branch
-being an observation (Bertoli et al. 2006). The search deepens on the calls and tests along a
+planning under nondeterministic outcomes (Cimatti et al. 2003), a branch being an observation
+(Bertoli et al. 2006). The search deepens on the calls and tests along a
 path, so the first strong program is a shallowest one. Where none exists, one search at the full
 bound lets a branch stop once its sibling returns, and each stop names the values it leaves
 uncovered.
@@ -71,7 +71,7 @@ verifier, which adds a link for it.
 
 - **Errors** (`errors`). Any tool may answer with an error. A call may be retried only where the
   tool's annotations say it is read-only or idempotent, a strong cyclic solution ending under
-  fairness (Daniele, Traverso and Vardi 2000); any other call needs an error block,
+  fairness (Daniele et al. 2000); any other call needs an error block,
   `try:`/`except ToolError:`, since retrying it may act twice. The annotations are hints a
   server gives, and a retry trusts them. A multi round-trip request is the client's loop around
   one call and leaves the plan unchanged.
@@ -81,7 +81,8 @@ verifier, which adds a link for it.
   policy reads one program's calls in order and carries no value from one call to another.
 - **Flows** (`valgebra_planning/flows.py`). A value from an untrusted source reaches a sink
   argument only inside the rule's endorsed set, and with `implicit` no sink call runs under a
-  test on such a value: the integrity half of CaMeL, FIDES and Progent, decided over sets.
+  test on such a value: the integrity half of CaMeL (Debenedetti et al. 2025), FIDES (Costa
+  et al. 2025) and Progent (Shi et al. 2025), decided over sets.
 - **Mined types** (`valgebra_planning/mining.py`). Slots holding one observed value are one
   semantic type (APIphany, Guo et al. 2022), and a value fills an argument only where their
   types agree. A mined type is an assumption: the verifier reads none, and a plan names each

@@ -4,8 +4,9 @@ A policy is a symbolic automaton over call events (D'Antoni and Veanes 2017): a 
 fires on a call to its tool whose argument record lies in its guard, a JSON Schema the
 companion reads into a set. Some states are bad, and reaching one is a violation; a call no
 guard of the current state matches keeps that state. It states what a domain policy says
-in prose (τ-bench), and what a trace rule checks one prefix at a time (AgentLTL), as a set a
-whole program is decided against before it runs.
+in prose (τ-bench, Yao et al. 2024), and what a trace rule checks one prefix at a time
+(AgentLTL, Elkoussy and Perez 2026), as a set a whole program is decided against before it
+runs.
 
 Statically, a program's every path steps the automaton with the argument records it may
 pass: a guard is taken surely where valgebra proves the record inside it, never where it

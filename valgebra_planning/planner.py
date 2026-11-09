@@ -7,9 +7,8 @@ whole record inside it. A guarded call handles a reference that only overlaps an
 it branches on the reference lying in the argument, calls the tool on the narrowed value,
 and goes on with the rest in the other branch. A program is strong when every path returns
 a reference whose cells lie inside the goal's: strong planning under nondeterministic
-outcomes (Cimatti, Pistore, Roveri and Traverso 2003), the outcomes partitioned by the cells
-rather than listed, and a branch on a runtime type test as an observation (Bertoli,
-Cimatti, Roveri and Traverso 2006).
+outcomes (Cimatti et al. 2003), the outcomes partitioned by the cells rather than listed,
+and a branch on a runtime type test as an observation (Bertoli et al. 2006).
 
 The search deepens on the calls and tests along a path, so the first strong program found is
 a shallowest one. Where none exists within the bound, one search at the full bound lets a
