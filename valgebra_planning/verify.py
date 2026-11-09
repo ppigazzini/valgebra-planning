@@ -88,6 +88,7 @@ class _Walk:
     task: Task
     examples: Mapping[str, Sequence[Any]]
     rng: random.Random
+    errors: bool
     links: list[Link] = field(default_factory=list)
     gaps: list[Gap] = field(default_factory=list)
 
@@ -136,10 +137,22 @@ class _Walk:
                 self.links.append(Link(where, f"{slot.name} is bound", "refuted"))
         if not contract.plain and len(bound) == len(call.bindings):
             self.record(call, contract, bound, where)
+        self.failure(call, contract, env, where)
         defined = {ref: held for ref, held in env.items() if ref.variable != call.result}
         for slot in contract.results:
             defined[Ref(call.result, slot.path)] = _Held(slot.values, slot)
         return defined
+
+    def failure(self, call: Call, contract: Contract, env: dict[Ref, _Held], where: str) -> None:
+        """Check what a call does when its tool answers with an error."""
+        if call.retry:
+            verdict: Verdict = "proven" if contract.idempotent else "refuted"
+            self.links.append(Link(where, f"{call.tool} may be retried", verdict))
+        if call.on_error is not None:
+            # The result is never bound on this path, so the block reads what the call read.
+            self.block(call.on_error, env, _join(where, f"error:{call.tool}"))
+        elif not call.retry and self.errors:
+            self.gaps.append(Gap(where, f"an error of {call.tool}"))
 
     def record(self, call: Call, contract: Contract, bound: dict[str, _Held], where: str) -> None:
         record = Validator({name: held.values for name, held in bound.items()}).close()
@@ -212,13 +225,17 @@ def verify(
     *,
     examples: Mapping[str, Sequence[Any]] | None = None,
     seed: int = 0,
+    errors: bool = False,
 ) -> Verification:
     """Ask every link of ``program`` of valgebra, for ``task`` over ``contracts``.
 
     ``examples`` maps a reference, written as the program writes it, to values it may hold,
-    tried first in search of a counterexample.
+    tried first in search of a counterexample. With ``errors``, any tool may answer with an
+    error, and a call neither retried nor given an error block leaves that path uncovered.
+    A retry is accepted only for a tool that is read-only or idempotent, since calling twice
+    must act as calling once; it ends under fairness, the strong cyclic reading.
     """
-    walk = _Walk(contracts, task, examples or {}, random.Random(seed))
+    walk = _Walk(contracts, task, examples or {}, random.Random(seed), errors)
     env = {
         Ref(var, slot.path): _Held(slot.values, slot)
         for var, slots in task.held.items()

@@ -74,6 +74,9 @@ class Contract:
     accepts: Validator[Any]
     returns: Validator[Any] | None
     plain: bool
+    #: Whether calling twice acts as calling once: the tool's annotations say it is
+    #: read-only or idempotent. A hint the server gives; a retry trusts it.
+    idempotent: bool = False
 
     def argument(self, name: str) -> Slot:
         """Return the argument slot called ``name``, or raise `KeyError`."""
@@ -151,6 +154,12 @@ def _result_slots(
     return slots
 
 
+def _idempotent(annotations: object) -> bool:
+    if not isinstance(annotations, Mapping):
+        return False
+    return annotations.get("readOnlyHint") is True or annotations.get("idempotentHint") is True
+
+
 def read_contract(spec: Mapping[str, Any]) -> Contract:
     """Read one entry of a server's tool list into its contract.
 
@@ -190,6 +199,7 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
         accepts=tool.arguments,
         returns=tool.result,
         plain=_plain(node),
+        idempotent=_idempotent(spec.get("annotations")),
     )
 
 

@@ -13,7 +13,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from valgebra_planning.contracts import Contract, Task, listed
-from valgebra_planning.program import Block, Branch, Ref, Return, Stop
+from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop
+
+#: How many times a retried call is made before the run gives up on it.
+ATTEMPTS = 8
+
+
+class ToolError(Exception):
+    """A tool answered with an error: an MCP result with ``isError`` set."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,14 +41,10 @@ class _Runner:
 
     def block(self, block: Block, env: dict[str, Any]) -> Run:
         for call in block.calls:
-            contract = self.contracts[call.tool]
-            arguments = {name: _read(env, ref) for name, ref in call.bindings}
-            if not contract.accepts.is_valid(arguments):
-                self.broken.append(f"{call.tool} refuses its arguments {arguments!r:.120}")
-            result = self.tools[call.tool](**arguments)
-            if contract.returns is not None and not contract.returns.is_valid(result):
-                self.broken.append(f"{call.tool} returned {result!r:.120}, outside its contract")
-            env = {**env, call.result: result}
+            outcome = self.call(call, env)
+            if isinstance(outcome, Run):
+                return outcome
+            env = outcome
         end = block.end
         if isinstance(end, Return):
             value = _read(env, end.ref)
@@ -51,6 +54,27 @@ class _Runner:
         if isinstance(end, Stop):
             return Run(_read(env, end.ref), str(end.ref), tuple(self.broken))
         return self.branch(end, env)
+
+    def call(self, call: Call, env: dict[str, Any]) -> dict[str, Any] | Run:
+        """Make one call; return the values held after it, or the run its error ended."""
+        contract = self.contracts[call.tool]
+        arguments = {name: _read(env, ref) for name, ref in call.bindings}
+        if not contract.accepts.is_valid(arguments):
+            self.broken.append(f"{call.tool} refuses its arguments {arguments!r:.120}")
+        for attempt in range(1, ATTEMPTS + 1):
+            try:
+                result = self.tools[call.tool](**arguments)
+                break
+            except ToolError:
+                if call.retry and attempt < ATTEMPTS:
+                    continue
+                if call.on_error is not None:
+                    return self.block(call.on_error, env)
+                self.broken.append(f"{call.tool} answered with an error nothing handles")
+                return Run(None, f"an error of {call.tool}", tuple(self.broken))
+        if contract.returns is not None and not contract.returns.is_valid(result):
+            self.broken.append(f"{call.tool} returned {result!r:.120}, outside its contract")
+        return {**env, call.result: result}
 
     def branch(self, branch: Branch, env: dict[str, Any]) -> Run:
         if branch.tool:

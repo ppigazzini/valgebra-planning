@@ -4,6 +4,7 @@
   "rows": [
     {
       "task": "return a parcel",
+      "errors": false,
       "predicates": 23,
       "cells": 84,
       "undecided cells": 16,
@@ -19,6 +20,7 @@
     },
     {
       "task": "settle a parcel",
+      "errors": false,
       "predicates": 24,
       "cells": 84,
       "undecided cells": 18,
@@ -34,6 +36,7 @@
     },
     {
       "task": "customs for a parcel",
+      "errors": false,
       "predicates": 23,
       "cells": 84,
       "undecided cells": 16,
@@ -44,6 +47,22 @@
       "steps": 3,
       "links": 3,
       "proven": 3,
+      "refuted": 0,
+      "undecided": 0
+    },
+    {
+      "task": "settle a parcel, tools may fail",
+      "errors": true,
+      "predicates": 24,
+      "cells": 84,
+      "undecided cells": 18,
+      "program": "weak",
+      "calls": 6,
+      "tests": 4,
+      "stops": 2,
+      "steps": 5,
+      "links": 22,
+      "proven": 22,
       "refuted": 0,
       "undecided": 0
     }

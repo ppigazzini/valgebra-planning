@@ -103,6 +103,7 @@ class _Search:
     contracts: Mapping[str, Contract]
     abstraction: Abstraction
     goal: frozenset[int]
+    errors: bool = False
     failed: set[tuple[frozenset[frozenset[int]], int, bool]] = field(default_factory=set)
     expanded: int = 0
     #: The cells each stop leaves uncovered, by the stop's identity: a stop is made once
@@ -170,11 +171,44 @@ class _Search:
             ):
                 continue
             result = f"c{state.fresh}"
+            call = self.failure(state, contract, bindings, result, depth, weak=weak)
+            if call is None:
+                continue
             after = self.after(state, contract, bindings, result)
             rest = self.solve(after, depth - 1, weak=weak)
             if rest is not None:
-                return Block((Call(contract.name, bindings, result), *rest.calls), rest.end)
+                return Block((call, *rest.calls), rest.end)
         return None
+
+    def failure(
+        self,
+        state: _State,
+        contract: Contract,
+        bindings: tuple[tuple[str, Ref], ...],
+        result: str,
+        depth: int,
+        *,
+        weak: bool,
+    ) -> Call | None:
+        """Return the call with what it does on an error, or None where nothing covers one.
+
+        A tool that is read-only or idempotent is retried. Any other gets a block searched
+        from the state before the call, the call itself excluded, and a weak program may stop
+        there on the value the call was given.
+        """
+        if not self.errors:
+            return Call(contract.name, bindings, result)
+        if contract.idempotent:
+            return Call(contract.name, bindings, result, retry=True)
+        without = _State(state.refs, state.made | {(contract.name, bindings)}, state.fresh)
+        fallback = self.solve(without, depth - 1, weak=weak)
+        if fallback is None and weak and bindings:
+            stop = Stop(bindings[0][1])
+            self.stops[id(stop)] = state.cells(bindings[0][1])
+            fallback = Block((), stop)
+        if fallback is None:
+            return None
+        return Call(contract.name, bindings, result, on_error=fallback)
 
     def guarded(
         self,
@@ -248,6 +282,9 @@ def _predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate
 def _reads(block: Block) -> set[str]:
     """Return every variable a block reads, in its calls, its ending and below."""
     read = {ref.variable for call in block.calls for _, ref in call.bindings}
+    for call in block.calls:
+        if call.on_error is not None:
+            read |= _reads(call.on_error)
     end = block.end
     read.add(end.ref.variable)
     if isinstance(end, Branch):
@@ -257,6 +294,9 @@ def _reads(block: Block) -> set[str]:
 
 def _pair_stops(first: Block, second: Block, stops: dict[int, frozenset[int]]) -> None:
     """Give each stop of ``first`` the uncovered cells of the stop beside it in ``second``."""
+    for one, other in zip(first.calls, second.calls, strict=False):
+        if one.on_error is not None and other.on_error is not None:
+            _pair_stops(one.on_error, other.on_error, stops)
     if isinstance(first.end, Stop) and isinstance(second.end, Stop):
         held = stops.get(id(first.end), frozenset())
         stops[id(first.end)] = held | stops.get(id(second.end), frozenset())
@@ -281,7 +321,12 @@ def _prune(block: Block, stops: dict[int, frozenset[int]]) -> Block:
         else:
             branch = Branch(end.ref, end.tool, end.argument, then, otherwise, end.values)
             block = Block(block.calls, branch)
-    calls = list(block.calls)
+    calls = [
+        call
+        if call.on_error is None
+        else Call(call.tool, call.bindings, call.result, call.retry, _prune(call.on_error, stops))
+        for call in block.calls
+    ]
     for at in range(len(calls) - 1, -1, -1):
         later = Block(tuple(calls[at + 1 :]), block.end)
         if calls[at].result not in _reads(later):
@@ -291,6 +336,9 @@ def _prune(block: Block, stops: dict[int, frozenset[int]]) -> Block:
 
 def _carry(old: Block, new: Block, stops: dict[int, frozenset[int]]) -> None:
     """Move each stop's uncovered cells to the stop beside it in a renumbered copy."""
+    for one, other in zip(old.calls, new.calls, strict=True):
+        if one.on_error is not None and other.on_error is not None:
+            _carry(one.on_error, other.on_error, stops)
     if isinstance(old.end, Stop) and isinstance(new.end, Stop):
         stops[id(new.end)] = stops.get(id(old.end), frozenset())
     elif isinstance(old.end, Branch) and isinstance(new.end, Branch):
@@ -316,6 +364,20 @@ def _tidy(block: Block, stops: dict[int, frozenset[int]]) -> Block:
 
 def _uncovered(block: Block, search: _Search, where: str = "") -> list[Uncovered]:
     """Return every stop of a program with the values it leaves uncovered."""
+    found = [
+        gap
+        for call in block.calls
+        if call.on_error is not None
+        for gap in _uncovered(
+            call.on_error,
+            search,
+            f"{where}.error:{call.tool}" if where else f"error:{call.tool}",
+        )
+    ]
+    return found + _ending_uncovered(block, search, where)
+
+
+def _ending_uncovered(block: Block, search: _Search, where: str) -> list[Uncovered]:
     end = block.end
     if isinstance(end, Branch):
         then = f"{where}.then" if where else "then"
@@ -335,10 +397,16 @@ def plan(
     depth: int = DEPTH,
     seed: int = 0,
     weak: bool = True,
+    errors: bool = False,
 ) -> Plan:
-    """Search a program for ``task`` over ``contracts``: strong first, then weak if asked."""
+    """Search a program for ``task`` over ``contracts``: strong first, then weak if asked.
+
+    With ``errors``, any tool may answer with an error, and every call is retried or given
+    a block for it, as `valgebra_planning.verify.verify` holds with the same flag.
+    """
     abstraction = abstract(_predicates(contracts, task), seed=seed)
-    search = _Search(contracts, abstraction, abstraction.cells_of(abstraction.index(_GOAL)))
+    goal = abstraction.cells_of(abstraction.index(_GOAL))
+    search = _Search(contracts, abstraction, goal, errors=errors)
     start = _State(
         tuple(
             (Ref(var, slot.path), search.cells_of(_held_name(slot)))

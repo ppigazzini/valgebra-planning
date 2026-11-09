@@ -29,6 +29,10 @@ def _count(block: Block) -> tuple[int, int, int]:
     """Return the calls, tests and stops in a program, over every branch."""
     end = block.end
     calls, tests, stops = len(block.calls), 0, 0
+    for call in block.calls:
+        if call.on_error is not None:
+            more = _count(call.on_error)
+            calls, tests, stops = calls + more[0], tests + more[1], stops + more[2]
     if isinstance(end, Branch):
         for side in (end.then, end.otherwise):
             more = _count(side)
@@ -50,10 +54,12 @@ def study(example: Path) -> tuple[dict[str, Any], list[str]]:
     rows, text = [], []
     for spec in json.loads((example / "tasks.json").read_text())["tasks"]:
         task = read_task(spec["name"], spec["inputs"], spec["goal"])
-        found = plan(tools, task)
+        errors = bool(spec.get("errors", False))
+        found = plan(tools, task, errors=errors)
         cells = found.abstraction.cells
         row: dict[str, Any] = {
             "task": task.name,
+            "errors": errors,
             "predicates": len(found.abstraction.predicates),
             "cells": len(cells),
             "undecided cells": sum(cell.status == "undecided" for cell in cells),
@@ -61,7 +67,7 @@ def study(example: Path) -> tuple[dict[str, Any], list[str]]:
         }
         text.append(f"## {task.name}")
         if found.program is not None:
-            checked = verify(found.program, tools, task)
+            checked = verify(found.program, tools, task, errors=errors)
             calls, tests, stops = _count(found.program)
             row |= {
                 "program": "strong" if found.strong else "weak",

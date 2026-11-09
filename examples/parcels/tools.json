@@ -58,6 +58,9 @@
         "required": [
           "parcel"
         ]
+      },
+      "annotations": {
+        "readOnlyHint": true
       }
     },
     {
@@ -96,6 +99,9 @@
         "required": [
           "label_id"
         ]
+      },
+      "annotations": {
+        "idempotentHint": false
       }
     },
     {
@@ -134,6 +140,9 @@
         "required": [
           "label_id"
         ]
+      },
+      "annotations": {
+        "idempotentHint": false
       }
     },
     {
@@ -166,6 +175,9 @@
         "required": [
           "claim_id"
         ]
+      },
+      "annotations": {
+        "idempotentHint": true
       }
     },
     {
@@ -198,6 +210,9 @@
         "required": [
           "ticket_id"
         ]
+      },
+      "annotations": {
+        "idempotentHint": true
       }
     },
     {
@@ -230,6 +245,9 @@
         "required": [
           "ticket_id"
         ]
+      },
+      "annotations": {
+        "idempotentHint": true
       }
     },
     {
@@ -259,6 +277,9 @@
         "required": [
           "form_id"
         ]
+      },
+      "annotations": {
+        "idempotentHint": true
       }
     },
     {

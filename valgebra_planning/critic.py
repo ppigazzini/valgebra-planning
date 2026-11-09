@@ -9,8 +9,9 @@ The reader takes the Python an agent writes against typed tool APIs: a function 
 block of statements; ``c1 = find_parcel(tracking=tracking)`` or ``tools.find_parcel(...)``,
 awaited or not; fields as attributes or as string subscripts; ``return``; ``stop(ref)``; and
 ``if``/``elif``/``else`` testing a value against a tool's argument (``ref in tool.argument``)
-or against listed constants (``==``, ``!=``, ``in``, ``not in``). Anything else is refused by
-line, never skipped.
+or against listed constants (``==``, ``!=``, ``in``, ``not in``); ``retry(tool(...))``; and
+``try:`` around one call with ``except ToolError:``. Anything else is refused by line, never
+skipped.
 """
 
 from __future__ import annotations
@@ -58,12 +59,43 @@ def _tool(node: ast.expr) -> str:
     raise _fail(node, "a tool is called by its name")
 
 
+def _named(node: ast.expr) -> str | None:
+    return node.id if isinstance(node, ast.Name) else None
+
+
+def _guarded_call(statement: ast.Try) -> Call:
+    """Read ``try: x = tool(...) except ToolError: <block>`` as a call with an error block."""
+    if (
+        len(statement.body) != 1
+        or not isinstance(statement.body[0], ast.Assign)
+        or len(statement.handlers) != 1
+        or statement.orelse
+        or statement.finalbody
+    ):
+        raise _fail(statement, "a try holds one call and one `except ToolError:`")
+    handler = statement.handlers[0]
+    if handler.type is None or _tool(handler.type) != "ToolError":
+        raise _fail(statement, "a try catches `ToolError` alone")
+    call = _call(statement.body[0])
+    return Call(call.tool, call.bindings, call.result, call.retry, _block(handler.body, handler))
+
+
 def _call(statement: ast.Assign) -> Call:
     if len(statement.targets) != 1 or not isinstance(statement.targets[0], ast.Name):
         raise _fail(statement, "a call's result is bound to one name")
     value = statement.value
     if isinstance(value, ast.Await):
         value = value.value
+    retry = (
+        isinstance(value, ast.Call)
+        and _named(value.func) == "retry"
+        and len(value.args) == 1
+        and not value.keywords
+    )
+    if retry and isinstance(value, ast.Call):
+        value = value.args[0]
+        if isinstance(value, ast.Await):
+            value = value.value
     if not isinstance(value, ast.Call) or value.args:
         raise _fail(statement, "a call passes every argument by name")
     bindings = []
@@ -71,7 +103,7 @@ def _call(statement: ast.Assign) -> Call:
         if keyword.arg is None:
             raise _fail(statement, "a call passes every argument by name")
         bindings.append((keyword.arg, _ref(keyword.value)))
-    return Call(_tool(value.func), tuple(bindings), statement.targets[0].id)
+    return Call(_tool(value.func), tuple(bindings), statement.targets[0].id, retry=retry)
 
 
 def _constants(node: ast.expr) -> tuple[Any, ...]:
@@ -118,6 +150,9 @@ def _block(statements: Sequence[ast.stmt], parent: ast.AST | None = None) -> Blo
             # An `if` with no `else` before more statements: what follows is its other branch.
             branch = _branch(_with_else(statement, statements[at + 1 :]))
             return Block(tuple(calls), branch)
+        if isinstance(statement, ast.Try):
+            calls.append(_guarded_call(statement))
+            continue
         if not isinstance(statement, ast.Assign):
             raise _fail(statement, "only calls come before a block's last statement")
         calls.append(_call(statement))

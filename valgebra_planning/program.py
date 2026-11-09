@@ -29,11 +29,18 @@ class Ref:
 
 @dataclass(frozen=True, slots=True)
 class Call:
-    """Call ``tool`` with each argument bound to a reference, the result named ``result``."""
+    """Call ``tool`` with each argument bound to a reference, the result named ``result``.
+
+    A tool may answer with an error. ``retry`` makes the call again until it succeeds, which
+    only a tool that is read-only or idempotent allows; ``on_error`` is the block run instead
+    of the rest, where the result is never bound.
+    """
 
     tool: str
     bindings: tuple[tuple[str, Ref], ...]
     result: str
+    retry: bool = False
+    on_error: Block | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,12 +90,15 @@ class Block:
 
 def render(block: Block, indent: str = "") -> str:
     """Return the program as Python-like text, one step a line."""
-    lines = [
-        f"{indent}{call.result} = {call.tool}("
-        + ", ".join(f"{name}={ref}" for name, ref in call.bindings)
-        + ")"
-        for call in block.calls
-    ]
+    lines = []
+    for call in block.calls:
+        made = f"{call.tool}(" + ", ".join(f"{name}={ref}" for name, ref in call.bindings) + ")"
+        line = f"{call.result} = " + (f"retry({made})" if call.retry else made)
+        if call.on_error is None:
+            lines.append(f"{indent}{line}")
+        else:
+            lines += [f"{indent}try:", f"{indent}    {line}", f"{indent}except ToolError:"]
+            lines.append(render(call.on_error, indent + "    "))
     end = block.end
     if isinstance(end, Return):
         lines.append(f"{indent}return {end.ref}")
@@ -103,10 +113,14 @@ def render(block: Block, indent: str = "") -> str:
 
 
 def steps(block: Block) -> int:
-    """Return the calls and tests on the longest path of a program."""
+    """Return the calls and tests on the longest path of a program, error paths included."""
     end = block.end
     below = 1 + max(steps(end.then), steps(end.otherwise)) if isinstance(end, Branch) else 0
-    return len(block.calls) + below
+    longest = len(block.calls) + below
+    for at, call in enumerate(block.calls, start=1):
+        if call.on_error is not None:
+            longest = max(longest, at + steps(call.on_error))
+    return longest
 
 
 def renumber(block: Block, first: int = 1) -> Block:
@@ -127,8 +141,9 @@ def _renumber(block: Block, names: dict[str, str], first: int) -> Block:
     calls = []
     for at, call in enumerate(block.calls, start=first):
         bindings = tuple((name, _renamed(ref, names)) for name, ref in call.bindings)
+        on_error = None if call.on_error is None else _renumber(call.on_error, names, at)
         names[call.result] = f"c{at}"
-        calls.append(Call(call.tool, bindings, names[call.result]))
+        calls.append(Call(call.tool, bindings, names[call.result], call.retry, on_error))
     after = first + len(calls)
     end = block.end
     if isinstance(end, Return):
