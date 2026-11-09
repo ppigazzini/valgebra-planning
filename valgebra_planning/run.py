@@ -8,11 +8,12 @@ broken contract is recorded, never raised, so one run reports every break it mee
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from valgebra_planning.contracts import Contract, Task, listed
+from valgebra_planning.policy import Monitor, Policy
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop
 
 #: How many times a retried call is made before the run gives up on it.
@@ -37,6 +38,7 @@ class _Runner:
     contracts: Mapping[str, Contract]
     tools: Mapping[str, Callable[..., Any]]
     task: Task
+    monitors: list[Monitor]
     broken: list[str] = field(default_factory=list)
 
     def block(self, block: Block, env: dict[str, Any]) -> Run:
@@ -61,6 +63,9 @@ class _Runner:
         arguments = {name: _read(env, ref) for name, ref in call.bindings}
         if not contract.accepts.is_valid(arguments):
             self.broken.append(f"{call.tool} refuses its arguments {arguments!r:.120}")
+        for monitor in self.monitors:
+            if monitor.observe(call.tool, arguments):
+                self.broken.append(monitor.violations[-1])
         for attempt in range(1, ATTEMPTS + 1):
             try:
                 result = self.tools[call.tool](**arguments)
@@ -98,6 +103,13 @@ def run(
     task: Task,
     inputs: Mapping[str, Any],
     tools: Mapping[str, Callable[..., Any]],
+    *,
+    policies: Sequence[Policy] = (),
 ) -> Run:
-    """Run ``program`` on ``inputs``, calling ``tools`` by name, checking every contract."""
-    return _Runner(contracts, tools, task).block(program, dict(inputs))
+    """Run ``program`` on ``inputs``, calling ``tools`` by name, checking every contract.
+
+    Each policy is monitored on the calls as they are made; reaching a bad state is recorded
+    with the broken contracts.
+    """
+    monitors = [Monitor(policy) for policy in policies]
+    return _Runner(contracts, tools, task, monitors).block(program, dict(inputs))

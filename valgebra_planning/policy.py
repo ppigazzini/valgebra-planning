@@ -1,0 +1,133 @@
+"""Policies over the calls a program makes: automata whose guards are valgebra sets.
+
+A policy is a symbolic automaton over call events (D'Antoni and Veanes 2017): a transition
+fires on a call to its tool whose argument record lies in its guard, a JSON Schema the
+companion reads into a set. Some states are bad, and reaching one is a violation; a call no
+guard of the current state matches keeps that state. It states what a domain policy says
+in prose (τ-bench), and what a trace rule checks one prefix at a time (AgentLTL), as a set a
+whole program is decided against before it runs.
+
+Statically, a program's every path steps the automaton with the argument records it may
+pass: a guard is taken surely where valgebra proves the record inside it, never where it
+proves them disjoint, and possibly otherwise. A path reaching a bad state surely refutes
+the program, possibly leaves it undecided, and no path reaching one proves it. At run time
+the same automaton is a monitor stepping on concrete records.
+
+A policy reads one program's calls in order. It carries no value from one call to another,
+so a rule about the same parcel across two calls is read as a rule about any two calls.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
+from valgebra_planning._valgebra import Validator, compile_schema, intersection, nothing
+
+Reach = Literal["never", "possibly", "surely"]
+
+
+@dataclass(frozen=True, slots=True)
+class Transition:
+    """From ``source`` to ``target`` on a call to ``tool`` whose arguments lie in ``guard``."""
+
+    source: str
+    tool: str
+    guard: Validator[Any]
+    target: str
+
+
+@dataclass(frozen=True, slots=True)
+class Policy:
+    """An automaton over call events: its states, where it starts, and which states are bad."""
+
+    name: str
+    initial: str
+    bad: frozenset[str]
+    transitions: tuple[Transition, ...]
+
+    def tools(self) -> frozenset[str]:
+        """Return every tool a transition reads."""
+        return frozenset(transition.tool for transition in self.transitions)
+
+    def step(self, states: frozenset[str], tool: str, record: Validator[Any]) -> frozenset[str]:
+        """Return the states the automaton may be in after a call whose record lies in ``record``.
+
+        A transition taken surely leaves its source; one taken possibly adds its target and
+        keeps the source, as does a call no guard of the state surely matches.
+        """
+        after: set[str] = set()
+        for state in states:
+            stays = True
+            for transition in self.transitions:
+                if transition.source != state or transition.tool != tool:
+                    continue
+                taken = _taken(record, transition.guard)
+                if taken != "never":
+                    after.add(transition.target)
+                if taken == "surely":
+                    stays = False
+            if stays:
+                after.add(state)
+        return frozenset(after)
+
+    def reach(self, states: frozenset[str]) -> Reach:
+        """Return whether a bad state is held: surely where every state is bad."""
+        bad = states & self.bad
+        if not bad:
+            return "never"
+        return "surely" if bad == states else "possibly"
+
+
+def _taken(record: Validator[Any], guard: Validator[Any]) -> Reach:
+    if record.relation_to(guard) == "subset":
+        return "surely"
+    if intersection(record, guard).relation_to(nothing) == "subset":
+        return "never"
+    return "possibly"
+
+
+def read_policy(spec: Mapping[str, Any]) -> Policy:
+    """Read a policy: ``name``, ``initial``, ``bad`` states and ``transitions``.
+
+    Each transition names its ``from`` and ``to`` states and its ``tool``, and optionally the
+    JSON Schema its ``arguments`` record must meet, every record where it names none.
+    """
+    transitions = tuple(
+        Transition(
+            source=t["from"],
+            tool=t["tool"],
+            guard=compile_schema(t.get("arguments", True)),
+            target=t["to"],
+        )
+        for t in spec["transitions"]
+    )
+    return Policy(spec["name"], spec["initial"], frozenset(spec["bad"]), transitions)
+
+
+@dataclass(slots=True)
+class Monitor:
+    """A policy stepped on concrete calls, as a run makes them."""
+
+    policy: Policy
+    state: str = ""
+    violations: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.state = self.state or self.policy.initial
+
+    def observe(self, tool: str, arguments: Mapping[str, Any]) -> bool:
+        """Step on one call; return whether it reached a bad state."""
+        for transition in self.policy.transitions:
+            if (
+                transition.source == self.state
+                and transition.tool == tool
+                and transition.guard.is_valid(dict(arguments))
+            ):
+                self.state = transition.target
+                break
+        if self.state in self.policy.bad:
+            self.violations.append(f"{self.policy.name}: {tool} reached {self.state}")
+            return True
+        return False

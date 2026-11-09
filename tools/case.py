@@ -19,6 +19,7 @@ from typing import Any
 
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.planner import plan
+from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Block, Branch, Stop, render, steps
 from valgebra_planning.verify import verify
 
@@ -51,15 +52,24 @@ def study(example: Path) -> tuple[dict[str, Any], list[str]]:
             read_contract, json.loads((example / "tools.json").read_text())["tools"]
         )
     }
+    listed = example / "policies.json"
+    policies = {
+        policy.name: policy
+        for policy in map(
+            read_policy, json.loads(listed.read_text())["policies"] if listed.exists() else []
+        )
+    }
     rows, text = [], []
     for spec in json.loads((example / "tasks.json").read_text())["tasks"]:
         task = read_task(spec["name"], spec["inputs"], spec["goal"])
         errors = bool(spec.get("errors", False))
-        found = plan(tools, task, errors=errors)
+        under = [policies[name] for name in spec.get("policies", [])]
+        found = plan(tools, task, errors=errors, policies=under)
         cells = found.abstraction.cells
         row: dict[str, Any] = {
             "task": task.name,
             "errors": errors,
+            "policies": len(under),
             "predicates": len(found.abstraction.predicates),
             "cells": len(cells),
             "undecided cells": sum(cell.status == "undecided" for cell in cells),
@@ -67,7 +77,7 @@ def study(example: Path) -> tuple[dict[str, Any], list[str]]:
         }
         text.append(f"## {task.name}")
         if found.program is not None:
-            checked = verify(found.program, tools, task, errors=errors)
+            checked = verify(found.program, tools, task, errors=errors, policies=under)
             calls, tests, stops = _count(found.program)
             row |= {
                 "program": "strong" if found.strong else "weak",

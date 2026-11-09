@@ -283,6 +283,37 @@
       }
     },
     {
+      "name": "approve_freight",
+      "description": "Approve a freight return for a parcel.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "parcel_id": {
+            "type": "string",
+            "pattern": "^pcl_[0-9]+$"
+          }
+        },
+        "required": [
+          "parcel_id"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "approval_id": {
+            "type": "string",
+            "pattern": "^apr_[0-9]+$"
+          }
+        },
+        "required": [
+          "approval_id"
+        ]
+      },
+      "annotations": {
+        "idempotentHint": true
+      }
+    },
+    {
       "name": "notify",
       "description": "Send a notice; returns nothing structured.",
       "inputSchema": {

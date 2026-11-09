@@ -26,6 +26,7 @@ from valgebra_planning._valgebra import (
     intersection,
 )
 from valgebra_planning.contracts import Contract, Slot, Task, listed
+from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop
 
 Verdict = Literal["proven", "refuted", "undecided"]
@@ -89,23 +90,32 @@ class _Walk:
     examples: Mapping[str, Sequence[Any]]
     rng: random.Random
     errors: bool
+    policies: tuple[Policy, ...]
     links: list[Link] = field(default_factory=list)
     gaps: list[Gap] = field(default_factory=list)
 
-    def block(self, block: Block, env: dict[Ref, _Held], where: str) -> None:
+    def block(self, block: Block, env: dict[Ref, _Held], where: str, states: _States) -> None:
         for call in block.calls:
-            env = self.call(call, env, where)
+            env, states = self.call(call, env, where, states)
         end = block.end
         if isinstance(end, Return):
             held = self.held(env, end.ref, where)
             if held is not None:
                 self.inclusion(where, f"return {end.ref} <= goal", end.ref, held, self.task.goal)
+            self.obeyed(where, states)
         elif isinstance(end, Stop):
             self.gaps.append(Gap(where, str(end.ref)))
+            self.obeyed(where, states)
         else:
-            self.branch(end, env, where)
+            self.branch(end, env, where, states)
 
-    def branch(self, test: Branch, env: dict[Ref, _Held], where: str) -> None:
+    def obeyed(self, where: str, states: _States) -> None:
+        """Add a link per policy: whether this path may reach one of its bad states."""
+        for policy, held in zip(self.policies, states, strict=True):
+            verdict = _OBEYED[policy.reach(held)]
+            self.links.append(Link(where, f"policy {policy.name} holds", verdict))
+
+    def branch(self, test: Branch, env: dict[Ref, _Held], where: str, states: _States) -> None:
         held = self.held(env, test.ref, where)
         if test.tool:
             slot = self.argument(test.tool, test.argument, where)
@@ -116,14 +126,16 @@ class _Walk:
             return
         inside = _Held(intersection(held.values, tested), held.origin)
         outside = _Held(intersection(held.values, complement(tested)), held.origin)
-        self.block(test.then, {**env, test.ref: inside}, _join(where, "then"))
-        self.block(test.otherwise, {**env, test.ref: outside}, _join(where, "else"))
+        self.block(test.then, {**env, test.ref: inside}, _join(where, "then"), states)
+        self.block(test.otherwise, {**env, test.ref: outside}, _join(where, "else"), states)
 
-    def call(self, call: Call, env: dict[Ref, _Held], where: str) -> dict[Ref, _Held]:
+    def call(
+        self, call: Call, env: dict[Ref, _Held], where: str, states: _States
+    ) -> tuple[dict[Ref, _Held], _States]:
         contract = self.contracts.get(call.tool)
         if contract is None:
             self.links.append(Link(where, f"{call.tool} is a tool", "refuted"))
-            return env
+            return env, states
         bound: dict[str, _Held] = {}
         for name, ref in call.bindings:
             slot = self.argument(call.tool, name, where)
@@ -137,20 +149,36 @@ class _Walk:
                 self.links.append(Link(where, f"{slot.name} is bound", "refuted"))
         if not contract.plain and len(bound) == len(call.bindings):
             self.record(call, contract, bound, where)
-        self.failure(call, contract, env, where)
+        after = states
+        if self.policies:
+            record = Validator({name: held.values for name, held in bound.items()}).close()
+            after = tuple(
+                policy.step(held, call.tool, record)
+                for policy, held in zip(self.policies, states, strict=True)
+            )
+        # A tool that answered with an error may still have acted, so its block reads both.
+        either = tuple(before | then for before, then in zip(states, after, strict=True))
+        self.failure(call, contract, env, where, either)
         defined = {ref: held for ref, held in env.items() if ref.variable != call.result}
         for slot in contract.results:
             defined[Ref(call.result, slot.path)] = _Held(slot.values, slot)
-        return defined
+        return defined, after
 
-    def failure(self, call: Call, contract: Contract, env: dict[Ref, _Held], where: str) -> None:
+    def failure(
+        self,
+        call: Call,
+        contract: Contract,
+        env: dict[Ref, _Held],
+        where: str,
+        states: _States,
+    ) -> None:
         """Check what a call does when its tool answers with an error."""
         if call.retry:
             verdict: Verdict = "proven" if contract.idempotent else "refuted"
             self.links.append(Link(where, f"{call.tool} may be retried", verdict))
         if call.on_error is not None:
             # The result is never bound on this path, so the block reads what the call read.
-            self.block(call.on_error, env, _join(where, f"error:{call.tool}"))
+            self.block(call.on_error, env, _join(where, f"error:{call.tool}"), states)
         elif not call.retry and self.errors:
             self.gaps.append(Gap(where, f"an error of {call.tool}"))
 
@@ -206,6 +234,12 @@ def _join(where: str, branch: str) -> str:
     return f"{where}.{branch}" if where else branch
 
 
+#: The states of every policy a path may be in, one set per policy.
+_States = tuple[frozenset[str], ...]
+
+#: Whether a path may reach a bad state, read as a verdict on the policy holding.
+_OBEYED: dict[str, Verdict] = {"never": "proven", "surely": "refuted", "possibly": "undecided"}
+
 #: valgebra's three answers, read as verdicts on an inclusion.
 _VERDICTS: dict[str, Verdict] = {
     "subset": "proven",
@@ -226,6 +260,7 @@ def verify(
     examples: Mapping[str, Sequence[Any]] | None = None,
     seed: int = 0,
     errors: bool = False,
+    policies: Sequence[Policy] = (),
 ) -> Verification:
     """Ask every link of ``program`` of valgebra, for ``task`` over ``contracts``.
 
@@ -233,13 +268,15 @@ def verify(
     tried first in search of a counterexample. With ``errors``, any tool may answer with an
     error, and a call neither retried nor given an error block leaves that path uncovered.
     A retry is accepted only for a tool that is read-only or idempotent, since calling twice
-    must act as calling once; it ends under fairness, the strong cyclic reading.
+    must act as calling once; it ends under fairness, the strong cyclic reading. Each policy
+    adds a link at the end of every path: proven where no bad state can be reached there,
+    refuted where one surely is, undecided where one possibly is.
     """
-    walk = _Walk(contracts, task, examples or {}, random.Random(seed), errors)
+    walk = _Walk(contracts, task, examples or {}, random.Random(seed), errors, tuple(policies))
     env = {
         Ref(var, slot.path): _Held(slot.values, slot)
         for var, slots in task.held.items()
         for slot in slots
     }
-    walk.block(program, env, "")
+    walk.block(program, env, "", tuple(frozenset({p.initial}) for p in policies))
     return Verification(tuple(walk.links), tuple(walk.gaps))

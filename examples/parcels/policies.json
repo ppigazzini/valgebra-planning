@@ -1,0 +1,23 @@
+{
+  "policies": [
+    {
+      "name": "freight approved first",
+      "initial": "start",
+      "bad": [
+        "violated"
+      ],
+      "transitions": [
+        {
+          "from": "start",
+          "tool": "approve_freight",
+          "to": "approved"
+        },
+        {
+          "from": "start",
+          "tool": "book_freight_return",
+          "to": "violated"
+        }
+      ]
+    }
+  ]
+}

@@ -76,6 +76,34 @@
         ]
       },
       "errors": true
+    },
+    {
+      "name": "settle a parcel, freight approved first",
+      "inputs": {
+        "tracking": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}[0-9]{9}[A-Z]{2}$"
+        }
+      },
+      "goal": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^lbl_[0-9]+$"
+          },
+          {
+            "type": "string",
+            "pattern": "^clm_[0-9]+$"
+          },
+          {
+            "type": "string",
+            "pattern": "^tkt_[0-9]+$"
+          }
+        ]
+      },
+      "policies": [
+        "freight approved first"
+      ]
     }
   ]
 }

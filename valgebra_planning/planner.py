@@ -22,13 +22,14 @@ nor the search.
 from __future__ import annotations
 
 import itertools
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from valgebra_planning._valgebra import Validator, union
 from valgebra_planning.cells import Abstraction, Predicate, abstract, gather
 from valgebra_planning.contracts import Contract, Slot, Task
+from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop, render, renumber
 
 #: The calls and tests a path may take.
@@ -86,16 +87,18 @@ class _State:
     refs: tuple[tuple[Ref, frozenset[int]], ...]
     made: frozenset[tuple[str, tuple[tuple[str, Ref], ...]]]
     fresh: int
+    #: The states each policy may be in, one set per policy.
+    policed: tuple[frozenset[str], ...] = ()
 
     def cells(self, ref: Ref) -> frozenset[int]:
         return dict(self.refs)[ref]
 
     def narrowed(self, ref: Ref, cells: frozenset[int]) -> _State:
         refs = tuple((r, cells if r == ref else held) for r, held in self.refs)
-        return _State(refs, self.made, self.fresh)
+        return _State(refs, self.made, self.fresh, self.policed)
 
-    def signature(self) -> frozenset[frozenset[int]]:
-        return frozenset(cells for _, cells in self.refs)
+    def signature(self) -> tuple[frozenset[frozenset[int]], tuple[frozenset[str], ...]]:
+        return frozenset(cells for _, cells in self.refs), self.policed
 
 
 @dataclass(slots=True)
@@ -104,7 +107,8 @@ class _Search:
     abstraction: Abstraction
     goal: frozenset[int]
     errors: bool = False
-    failed: set[tuple[frozenset[frozenset[int]], int, bool]] = field(default_factory=set)
+    policies: tuple[Policy, ...] = ()
+    failed: set[tuple[object, int, bool]] = field(default_factory=set)
     expanded: int = 0
     #: The cells each stop leaves uncovered, by the stop's identity: a stop is made once
     #: and read back only from the program returned, which keeps it alive.
@@ -170,11 +174,19 @@ class _Search:
                 state, contract, bindings
             ):
                 continue
+            policed = self.policed(state, contract, bindings)
+            if policed is None:
+                continue
+            # A tool that answered with an error may still have acted, so the block run then
+            # starts from either set of policy states.
+            either = tuple(a | b for a, b in zip(state.policed, policed, strict=True))
             result = f"c{state.fresh}"
-            call = self.failure(state, contract, bindings, result, depth, weak=weak)
+            failing = _State(state.refs, state.made, state.fresh, either)
+            call = self.failure(failing, contract, bindings, result, depth, weak=weak)
             if call is None:
                 continue
-            after = self.after(state, contract, bindings, result)
+            stepped = _State(state.refs, state.made, state.fresh, policed)
+            after = self.after(stepped, contract, bindings, result)
             rest = self.solve(after, depth - 1, weak=weak)
             if rest is not None:
                 return Block((call, *rest.calls), rest.end)
@@ -200,7 +212,9 @@ class _Search:
             return Call(contract.name, bindings, result)
         if contract.idempotent:
             return Call(contract.name, bindings, result, retry=True)
-        without = _State(state.refs, state.made | {(contract.name, bindings)}, state.fresh)
+        without = _State(
+            state.refs, state.made | {(contract.name, bindings)}, state.fresh, state.policed
+        )
         fallback = self.solve(without, depth - 1, weak=weak)
         if fallback is None and weak and bindings:
             stop = Stop(bindings[0][1])
@@ -245,6 +259,23 @@ class _Search:
         record = Validator({name: self.values(state.cells(ref)) for name, ref in bindings}).close()
         return record.relation_to(contract.accepts) == "subset"
 
+    def policed(
+        self, state: _State, contract: Contract, bindings: tuple[tuple[str, Ref], ...]
+    ) -> tuple[frozenset[str], ...] | None:
+        """Return each policy's states after the call, or None if one may turn bad."""
+        if not self.policies:
+            return state.policed
+        record = Validator({name: self.values(state.cells(ref)) for name, ref in bindings}).close()
+        after = tuple(
+            policy.step(held, contract.name, record)
+            for policy, held in zip(self.policies, state.policed, strict=True)
+        )
+        if any(
+            policy.reach(held) != "never" for policy, held in zip(self.policies, after, strict=True)
+        ):
+            return None
+        return after
+
     def after(
         self,
         state: _State,
@@ -256,7 +287,7 @@ class _Search:
             (Ref(result, slot.path), self.cells_of(_result_name(slot))) for slot in contract.results
         )
         made = state.made | {(contract.name, bindings)}
-        return _State(state.refs + results, made, state.fresh + 1)
+        return _State(state.refs + results, made, state.fresh + 1, state.policed)
 
 
 def _predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate]:
@@ -305,7 +336,7 @@ def _pair_stops(first: Block, second: Block, stops: dict[int, frozenset[int]]) -
         _pair_stops(first.end.otherwise, second.end.otherwise, stops)
 
 
-def _prune(block: Block, stops: dict[int, frozenset[int]]) -> Block:
+def _prune(block: Block, stops: dict[int, frozenset[int]], kept: frozenset[str]) -> Block:
     """Drop calls nothing reads, then collapse a branch whose two sides read the same.
 
     A call can act on the world, so one whose result no later step reads is not made. A
@@ -314,7 +345,7 @@ def _prune(block: Block, stops: dict[int, frozenset[int]]) -> Block:
     """
     end = block.end
     if isinstance(end, Branch):
-        then, otherwise = _prune(end.then, stops), _prune(end.otherwise, stops)
+        then, otherwise = _prune(end.then, stops, kept), _prune(end.otherwise, stops, kept)
         if render(then) == render(otherwise):
             _pair_stops(then, otherwise, stops)
             block = Block((*block.calls, *then.calls), then.end)
@@ -324,12 +355,14 @@ def _prune(block: Block, stops: dict[int, frozenset[int]]) -> Block:
     calls = [
         call
         if call.on_error is None
-        else Call(call.tool, call.bindings, call.result, call.retry, _prune(call.on_error, stops))
+        else Call(
+            call.tool, call.bindings, call.result, call.retry, _prune(call.on_error, stops, kept)
+        )
         for call in block.calls
     ]
     for at in range(len(calls) - 1, -1, -1):
         later = Block(tuple(calls[at + 1 :]), block.end)
-        if calls[at].result not in _reads(later):
+        if calls[at].tool not in kept and calls[at].result not in _reads(later):
             del calls[at]
     return Block(tuple(calls), block.end)
 
@@ -352,11 +385,11 @@ def _numbered(block: Block, stops: dict[int, frozenset[int]]) -> Block:
     return numbered
 
 
-def _tidy(block: Block, stops: dict[int, frozenset[int]]) -> Block:
+def _tidy(block: Block, stops: dict[int, frozenset[int]], kept: frozenset[str]) -> Block:
     """Prune and renumber until the program no longer changes."""
     block = _numbered(block, stops)
     while True:
-        tidied = _numbered(_prune(block, stops), stops)
+        tidied = _numbered(_prune(block, stops, kept), stops)
         if render(tidied) == render(block):
             return tidied
         block = tidied
@@ -398,15 +431,19 @@ def plan(
     seed: int = 0,
     weak: bool = True,
     errors: bool = False,
+    policies: Sequence[Policy] = (),
 ) -> Plan:
     """Search a program for ``task`` over ``contracts``: strong first, then weak if asked.
 
     With ``errors``, any tool may answer with an error, and every call is retried or given
-    a block for it, as `valgebra_planning.verify.verify` holds with the same flag.
+    a block for it, as `valgebra_planning.verify.verify` holds with the same flag. A call is
+    made only where valgebra proves it keeps every policy away from its bad states, and a
+    call a policy reads is kept even where no result of it is read.
     """
     abstraction = abstract(_predicates(contracts, task), seed=seed)
     goal = abstraction.cells_of(abstraction.index(_GOAL))
-    search = _Search(contracts, abstraction, goal, errors=errors)
+    search = _Search(contracts, abstraction, goal, errors=errors, policies=tuple(policies))
+    kept = frozenset(tool for policy in policies for tool in policy.tools())
     start = _State(
         tuple(
             (Ref(var, slot.path), search.cells_of(_held_name(slot)))
@@ -415,11 +452,12 @@ def plan(
         ),
         frozenset(),
         1,
+        tuple(frozenset({policy.initial}) for policy in policies),
     )
     for bound in range(1, depth + 1):
         program = search.solve(start, bound, weak=False)
         if program is not None:
-            program = _tidy(program, search.stops)
+            program = _tidy(program, search.stops, kept)
             return Plan(
                 program,
                 strong=True,
@@ -433,7 +471,7 @@ def plan(
         search.failed.clear()
         program = search.solve(start, depth, weak=True)
         if program is not None:
-            program = _tidy(program, search.stops)
+            program = _tidy(program, search.stops, kept)
             gaps = tuple(_uncovered(program, search))
             return Plan(
                 program,
