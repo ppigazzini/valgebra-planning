@@ -3,12 +3,14 @@
     valgebra-planning plan LIBRARY [--task NAME] [--server SERVER] [--json]
     valgebra-planning critique LIBRARY --task NAME PROGRAM [--server SERVER] [--json]
     valgebra-planning run LIBRARY --task NAME --inputs JSON --server SERVER [--json]
+    valgebra-planning check LIBRARY [--server SERVER] [--json]
 
 ``LIBRARY`` is a directory `valgebra_planning.library.read_library` reads. ``plan`` prints each
 task's program and its verification; it exits 1 when a task gets no program. ``critique`` reads a
 program written in Python, verifies it under the task's rules and prints what is not proven; it
 exits 1 when the program is not accepted. ``run`` plans a task and runs the program against a
 live server, failing closed; it exits 1 when the run does not return a value inside the goal.
+``check`` lists every specification that holds vacuously and exits 1 when it finds one.
 ``SERVER`` is a URL or a command starting a stdio server; its tools replace ``tools.json``, and
 it needs the ``mcp`` extra. With ``--json`` each prints one JSON document.
 """
@@ -28,6 +30,7 @@ from valgebra_planning.critic import ProgramError, critique
 from valgebra_planning.library import Library, Problem, read_library
 from valgebra_planning.planner import Plan, plan
 from valgebra_planning.program import render
+from valgebra_planning.vacuity import vacuities
 from valgebra_planning.verify import Verification, verify
 
 
@@ -191,6 +194,24 @@ def _run(directory: Path, name: str, inputs: dict[str, Any], server: str, *, as_
     return 0 if returned and not row["broken"] else 1
 
 
+def _check(library: Library, *, as_json: bool) -> int:
+    found = vacuities(library)
+    if as_json:
+        print(
+            json.dumps(
+                [{"where": f.where, "finding": f.finding, "certainty": f.certainty} for f in found],
+                indent=2,
+            )
+        )
+    else:
+        lines = [
+            f"{f.where}: {f.finding}" + ("" if f.certainty == "proven" else " (undecided)")
+            for f in found
+        ]
+        print("\n".join(lines) if lines else "no specification holds vacuously")
+    return 1 if found else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command the arguments name and return its exit status."""
     parser = argparse.ArgumentParser(prog="valgebra-planning", description=__doc__.splitlines()[0])
@@ -209,7 +230,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     running.add_argument("--task", required=True)
     running.add_argument("--inputs", required=True, type=json.loads, help="a JSON object")
     running.add_argument("--json", action="store_true")
-    for command in (planning, critic, running):
+    checking = commands.add_parser("check", help="find specifications that hold vacuously")
+    checking.add_argument("library", type=Path)
+    checking.add_argument("--json", action="store_true")
+    for command in (planning, critic, running, checking):
         command.add_argument("--server", required=command is running, help="a URL or a command")
     args = parser.parse_args(argv)
     try:
@@ -219,6 +243,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         library = read_library(args.library, tools)
         if args.command == "plan":
             return _plan(library, args.task, as_json=args.json)
+        if args.command == "check":
+            return _check(library, as_json=args.json)
         return _critique(library, args.task, args.program, as_json=args.json)
     except KeyError as missing:
         print(f"{args.library}: no task named {missing}", file=sys.stderr)

@@ -23,6 +23,10 @@ directions.
 - **D'Antoni and Veanes 2017.** L. D'Antoni, M. Veanes. The power of symbolic automata and
   transducers. CAV 2017.
 
+- **Kupferman and Vardi 2003.** O. Kupferman, M. Y. Vardi. Vacuity detection in temporal model
+  checking. International Journal on Software Tools for Technology Transfer 4(2), 2003, 224-233.
+  [doi:10.1007/s100090100062](https://doi.org/10.1007/s100090100062)
+
 ## Synthesis from typed components
 
 - **Feng et al. 2017.** Y. Feng, R. Martins, Y. Wang, I. Dillig, T. W. Reps.

@@ -101,6 +101,18 @@ block a call needs. A language model proposes, a sound critic checks (Kambhampat
 Mined types decide nothing here either: a binding crossing two types the observed calls tell apart
 is a note, and the program is accepted on its links alone.
 
+## Specifications that hold vacuously
+
+A check that passes without testing what its author meant is vacuous (Kupferman and Vardi 2003),
+and `valgebra_planning/vacuity.py` finds each kind a library can hold, every one a set question:
+a goal no value meets or every value meets; an input, an argument record or a result no value
+meets; a policy transition naming no tool, or whose guard no argument record of its tool meets,
+and a policy no transition that can fire takes to a bad state; a flow rule naming no tool or
+argument, or whose endorsed set meets nothing its sink takes, or holds all of it; a policy or rule
+no task is held to. Values drawn from a schema are tried first, a member found proving a set
+inhabited; valgebra is asked only where none is, and a question it leaves undecided is reported
+as undecided.
+
 ## Running a program
 
 `valgebra_planning/run.py` calls the tools a program names and checks each step as it is made:

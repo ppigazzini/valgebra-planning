@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +39,9 @@ class Library:
 
     tools: Mapping[str, Contract]
     problems: tuple[Problem, ...]
+    #: Every policy and flow rule the library defines, by name, whether a task names it or not.
+    policies: Mapping[str, Policy] = field(default_factory=dict)
+    flows: Mapping[str, Flow] = field(default_factory=dict)
 
     def problem(self, name: str) -> Problem:
         """Return the problem whose task is ``name``; raise `KeyError` naming it otherwise."""
@@ -78,4 +81,4 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
                 types=None if log is None else mine(_listed(directory / log, "calls"), tools),
             )
         )
-    return Library(tools, tuple(problems))
+    return Library(tools, tuple(problems), policies, flows)

@@ -84,3 +84,10 @@ def test_plan_reads_the_tools_of_a_live_server(capsys: pytest.CaptureFixture[str
     live = json.loads(capsys.readouterr().out)
     assert main(["plan", PARCELS, "--task", "return a parcel", "--json"]) == 0
     assert live == json.loads(capsys.readouterr().out)
+
+
+def test_check_finds_no_vacuous_specification_in_the_parcels(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["check", PARCELS]) == 0
+    assert capsys.readouterr().out == "no specification holds vacuously\n"
