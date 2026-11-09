@@ -25,7 +25,7 @@ from valgebra_planning._valgebra import (
     complement,
     intersection,
 )
-from valgebra_planning.contracts import Contract, Slot, Task
+from valgebra_planning.contracts import Contract, Slot, Task, listed
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop
 
 Verdict = Literal["proven", "refuted", "undecided"]
@@ -106,11 +106,15 @@ class _Walk:
 
     def branch(self, test: Branch, env: dict[Ref, _Held], where: str) -> None:
         held = self.held(env, test.ref, where)
-        slot = self.argument(test.tool, test.argument, where)
-        if held is None or slot is None:
+        if test.tool:
+            slot = self.argument(test.tool, test.argument, where)
+            tested = None if slot is None else slot.values
+        else:
+            tested = listed(test.values)
+        if held is None or tested is None:
             return
-        inside = _Held(intersection(held.values, slot.values), held.origin)
-        outside = _Held(intersection(held.values, complement(slot.values)), held.origin)
+        inside = _Held(intersection(held.values, tested), held.origin)
+        outside = _Held(intersection(held.values, complement(tested)), held.origin)
         self.block(test.then, {**env, test.ref: inside}, _join(where, "then"))
         self.block(test.otherwise, {**env, test.ref: outside}, _join(where, "else"))
 

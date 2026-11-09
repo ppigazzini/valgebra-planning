@@ -11,7 +11,9 @@ The text reads as Python, so a program written elsewhere in that form is read ba
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,13 +52,25 @@ class Stop:
 
 @dataclass(frozen=True, slots=True)
 class Branch:
-    """Branch on whether ``ref`` lies in the argument ``argument`` of ``tool``."""
+    """Branch on whether ``ref`` lies in a set: a tool's argument, or JSON values listed.
+
+    With ``tool`` empty the set is ``values``, read as a JSON Schema ``enum``: ``1`` and
+    ``1.0`` are one value there. Otherwise it is the argument ``argument`` of ``tool``.
+    """
 
     ref: Ref
     tool: str
     argument: str
     then: Block
     otherwise: Block
+    values: tuple[Any, ...] = ()
+
+    @property
+    def against(self) -> str:
+        """Return the set as a program writes it."""
+        if self.tool:
+            return f"{self.tool}.{self.argument}"
+        return "(" + "".join(f"{json.dumps(v)}, " for v in self.values).rstrip(" ") + ")"
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,9 +93,9 @@ def render(block: Block, indent: str = "") -> str:
     if isinstance(end, Return):
         lines.append(f"{indent}return {end.ref}")
     elif isinstance(end, Stop):
-        lines.append(f"{indent}stop  # {end.ref} is not covered")
+        lines.append(f"{indent}stop({end.ref})")
     else:
-        lines.append(f"{indent}if {end.ref} in {end.tool}.{end.argument}:")
+        lines.append(f"{indent}if {end.ref} in {end.against}:")
         lines.append(render(end.then, indent + "    "))
         lines.append(f"{indent}else:")
         lines.append(render(end.otherwise, indent + "    "))
@@ -128,5 +142,6 @@ def _renumber(block: Block, names: dict[str, str], first: int) -> Block:
             end.argument,
             _renumber(end.then, names, after),
             _renumber(end.otherwise, names, after),
+            end.values,
         )
     return Block(tuple(calls), ending)

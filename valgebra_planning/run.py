@@ -12,7 +12,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from valgebra_planning.contracts import Contract, Task
+from valgebra_planning.contracts import Contract, Task, listed
 from valgebra_planning.program import Block, Branch, Ref, Return, Stop
 
 
@@ -53,8 +53,11 @@ class _Runner:
         return self.branch(end, env)
 
     def branch(self, branch: Branch, env: dict[str, Any]) -> Run:
-        slot = self.contracts[branch.tool].argument(branch.argument)
-        taken = branch.then if slot.values.is_valid(_read(env, branch.ref)) else branch.otherwise
+        if branch.tool:
+            tested = self.contracts[branch.tool].argument(branch.argument).values
+        else:
+            tested = listed(branch.values)
+        taken = branch.then if tested.is_valid(_read(env, branch.ref)) else branch.otherwise
         return self.block(taken, env)
 
 

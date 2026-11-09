@@ -132,6 +132,6 @@ def test_a_program_reads_as_python() -> None:
         "    c2 = refund(order_id=order_id, status=c1.order.status)\n"
         "    return c2.refund_id\n"
         "else:\n"
-        "    stop  # c1.order.status is not covered"
+        "    stop(c1.order.status)"
     )
     assert steps(GUARDED) == 3

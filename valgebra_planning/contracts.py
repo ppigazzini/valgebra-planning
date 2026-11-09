@@ -9,7 +9,7 @@ resolves where the tool wrote it. Nothing here reads a keyword: the companion ow
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -200,3 +200,8 @@ def read_task(name: str, inputs: Mapping[str, object], goal: object) -> Task:
         root = _root(schema)
         held[var] = tuple(_result_slots(var, Compiler(root), root, ()))
     return Task(name=name, held=held, goal=compile_schema(goal), goal_schema=goal)
+
+
+def listed(values: Sequence[Any]) -> Validator[Any]:
+    """Return the set of JSON values ``values`` lists, as an ``enum`` reads them."""
+    return compile_schema({"enum": list(values)})
