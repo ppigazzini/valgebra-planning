@@ -42,7 +42,8 @@ class Slot:
 
     ``path`` is the argument's name for an argument, and the field names leading to it for a
     result, the empty path being the whole result. ``schema`` is the subschema as written,
-    which a sampler draws members from; ``values`` is the set it compiles to.
+    which a sampler draws members from against ``root``, the document it sits in; ``values``
+    is the set it compiles to.
     """
 
     tool: str
@@ -50,6 +51,7 @@ class Slot:
     schema: object
     values: Validator[Any]
     required: bool
+    root: object
 
     @property
     def name(self) -> str:
@@ -92,14 +94,14 @@ class Contract:
 class Task:
     """What an agent holds and what it must return.
 
-    ``inputs`` maps each variable the agent starts with to the schema its value lies in, and
-    ``goal`` is the schema the returned value must lie in.
+    ``held`` maps each variable the agent starts with to its slots, read as a result's are:
+    the whole value and each field it guarantees. ``goal`` is the set the returned value must
+    lie in, and ``goal_schema`` the schema it compiles from.
     """
 
     name: str
-    inputs: Mapping[str, Validator[Any]]
+    held: Mapping[str, tuple[Slot, ...]]
     goal: Validator[Any]
-    input_schemas: Mapping[str, object]
     goal_schema: object
 
 
@@ -137,7 +139,7 @@ def _result_slots(
     tool: str, compiler: Compiler, schema: object, path: tuple[str, ...]
 ) -> list[Slot]:
     """Return the slot of ``schema`` at ``path`` and of every field it guarantees below."""
-    slots = [Slot(tool, path, schema, compiler.compile(schema), required=True)]
+    slots = [Slot(tool, path, schema, compiler.compile(schema), required=True, root=compiler.root)]
     if len(path) >= RESULT_DEPTH:
         return slots
     node = _object_node(compiler, schema)
@@ -172,6 +174,7 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
             subschema,
             compiler.compile(subschema),
             required=name in required,
+            root=root,
         )
         for name, subschema in declared.items()
     )
@@ -192,10 +195,8 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
 
 def read_task(name: str, inputs: Mapping[str, object], goal: object) -> Task:
     """Read a task: the schema of each value the agent starts with, and of the goal."""
-    return Task(
-        name=name,
-        inputs={var: compile_schema(schema) for var, schema in inputs.items()},
-        goal=compile_schema(goal),
-        input_schemas=dict(inputs),
-        goal_schema=goal,
-    )
+    held = {}
+    for var, schema in inputs.items():
+        root = _root(schema)
+        held[var] = tuple(_result_slots(var, Compiler(root), root, ()))
+    return Task(name=name, held=held, goal=compile_schema(goal), goal_schema=goal)

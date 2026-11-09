@@ -1,0 +1,95 @@
+"""A program of tool calls and type tests, and its text.
+
+A program is a block: calls, each binding arguments to references and naming its result,
+then one ending. A return hands a reference back, a stop marks a value the program does not
+cover, and a test branches on whether a reference lies in a tool's argument, each branch a
+block of its own. A reference is a variable and a path of fields below it, ``c1.order.status``.
+
+The text reads as Python, so a program written elsewhere in that form is read back by
+`valgebra_planning.critic`.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class Ref:
+    """A variable, and the fields below it: ``c1.order.status`` is ``c1`` at ``order.status``."""
+
+    variable: str
+    path: tuple[str, ...] = ()
+
+    def __str__(self) -> str:
+        return ".".join((self.variable, *self.path))
+
+
+@dataclass(frozen=True, slots=True)
+class Call:
+    """Call ``tool`` with each argument bound to a reference, the result named ``result``."""
+
+    tool: str
+    bindings: tuple[tuple[str, Ref], ...]
+    result: str
+
+
+@dataclass(frozen=True, slots=True)
+class Return:
+    """Hand back the value of a reference: the task's goal must hold it."""
+
+    ref: Ref
+
+
+@dataclass(frozen=True, slots=True)
+class Stop:
+    """End a path the program does not cover; ``ref`` is the value left uncovered there."""
+
+    ref: Ref
+
+
+@dataclass(frozen=True, slots=True)
+class Branch:
+    """Branch on whether ``ref`` lies in the argument ``argument`` of ``tool``."""
+
+    ref: Ref
+    tool: str
+    argument: str
+    then: Block
+    otherwise: Block
+
+
+@dataclass(frozen=True, slots=True)
+class Block:
+    """Calls in order, then one ending."""
+
+    calls: tuple[Call, ...]
+    end: Return | Stop | Branch
+
+
+def render(block: Block, indent: str = "") -> str:
+    """Return the program as Python-like text, one step a line."""
+    lines = [
+        f"{indent}{call.result} = {call.tool}("
+        + ", ".join(f"{name}={ref}" for name, ref in call.bindings)
+        + ")"
+        for call in block.calls
+    ]
+    end = block.end
+    if isinstance(end, Return):
+        lines.append(f"{indent}return {end.ref}")
+    elif isinstance(end, Stop):
+        lines.append(f"{indent}stop  # {end.ref} is not covered")
+    else:
+        lines.append(f"{indent}if {end.ref} in {end.tool}.{end.argument}:")
+        lines.append(render(end.then, indent + "    "))
+        lines.append(f"{indent}else:")
+        lines.append(render(end.otherwise, indent + "    "))
+    return "\n".join(lines)
+
+
+def steps(block: Block) -> int:
+    """Return the calls and tests on the longest path of a program."""
+    end = block.end
+    below = 1 + max(steps(end.then), steps(end.otherwise)) if isinstance(end, Branch) else 0
+    return len(block.calls) + below

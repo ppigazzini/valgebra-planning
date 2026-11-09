@@ -139,13 +139,22 @@ def test_a_tool_the_companion_refuses_is_refused() -> None:
         read_contract({"name": "scalar", "inputSchema": {"type": "string"}})
 
 
-def test_a_task_holds_its_inputs_and_goal_as_sets() -> None:
+def test_a_task_holds_its_inputs_as_slots_and_its_goal_as_a_set() -> None:
     task = read_task(
         "refund",
-        {"email": {"type": "string", "format": "email"}},
+        {
+            "email": {"type": "string", "format": "email"},
+            "order": {
+                "type": "object",
+                "properties": {"id": {"type": "string"}},
+                "required": ["id"],
+            },
+        },
         {"type": "string", "pattern": "^re_"},
     )
-    assert task.inputs["email"].is_valid("a@b")
+    assert {slot.path for slot in task.held["email"]} == {()}
+    assert {slot.path for slot in task.held["order"]} == {(), ("id",)}
+    assert task.held["email"][0].values.is_valid("a@b")
     assert task.goal.is_valid("re_1")
     assert not task.goal.is_valid("ch_1")
     assert task.goal_schema == {"type": "string", "pattern": "^re_"}
