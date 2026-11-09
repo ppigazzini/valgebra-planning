@@ -1,75 +1,149 @@
-# Technical writing
+# Writing rules
 
-Three surfaces, one standard: state what is true, with the evidence, in as few words as
-carry it.
+These govern every text the tree carries, the README, `AGENTS.md`, the pages under `docs/`,
+the comments and docstrings in the sources, and every commit message. One standard: state
+what is true, with the evidence, in as few words as carry it.
 
-## The standard
+The working notes, the paper shelf and any analysis asked for stay out of the tree. **Do not
+converge the two surfaces.** A page carries no campaign history, a note is never the only
+place a shipped fact lives, and nothing tracked names where the notes are: the reference
+dangles for every reader but its author. `tools/docs_lint.py` sweeps every tracked file and
+every commit message for one.
 
-**Authoritative.** Write the fact, not the journey to it. "A guarded call narrows its value by
-set difference" — not "we tried a second search and then realized".
+## The rules
 
-**No history.** Not in pages, not in comments, not in commit messages. A text describes
-what is, not what was or how it came to be known. Where a past defect is load-bearing,
-state the property that prevents it: "an undecided cell is kept and covered, so a program
-proven over the cells holds on every value the contracts admit" — never "we saw a wrong
-program and then discovered".
+**State the page contract first.** The shortest accurate sentence saying what the page
+covers. A reader on the wrong page learns it in one line.
+
+**Say what a program means as inclusions.** A program, a link or a rule appears with the
+sets it rests on: which value lies inside which argument, which record inside which input
+set, which path reaches which state of a policy. "The planner handles errors" is not a
+meaning; "a call is retried only where the tool's annotations say it is read-only or
+idempotent" is.
+
+**Separate a verified fact from a decision made here.** "valgebra proves the record inside
+the input set" is checkable against valgebra. "A retry trusts the annotations" is a choice
+this package makes. Blur them and nobody can tell what they are allowed to change.
+
+**Describe a gap as a gap, never as a design.** Say undecided, say what it costs, cells kept
+or a program refused, and say where it belongs: valgebra, the companion, or here. Framing a
+hole as a decision is what keeps it alive.
+
+**Never rationalize a defect into a convention.** When you find yourself writing the sentence
+that makes the odd thing sound intended, stop and check whether it is.
+
+**Name the owner and the invariant, not just the mechanism.** "The planner drops a call whose
+result no later step reads" is accurate; what a reader needs is that a call can act on the
+world, so a call a policy reads is kept even where nothing reads its result. Write the
+sentence a reader needs before they delete your line.
+
+**Verify the claim against the tree; run it when it is behavioral.** `git grep -n` for the
+symbol, the study's `--check` for a count, `uv run --no-sync pytest -k` for a behavior.
+
+**A run is not a proof, and a proof is not a run.**
+
+| the claim is about | check it against |
+|---|---|
+| what a program does on some values | a run, `valgebra_planning/run.py`, a test |
+| whether a program holds for every value its contracts admit | the verifier's links, `valgebra_planning/verify.py` |
+| what a set holds, or whether two sets meet | valgebra's decision, never a sample |
+
+A run that breaks no contract on 40 draws shows 40 values. A sentence claiming more rests on
+the verifier, and says so.
+
+**Every published number is a study row.** A count on a page is a row of a file under
+`docs/studies/` that a command's `--check` reproduces, and the command stands beside it.
+Never pin a number no study holds, a test count, a line count, a timing: a stale number tells
+a reader to hold the wrong invariant.
+
+**Never pin a list a gate owns.** The commands of the gate are `AGENTS.md`'s, the steps of a
+CI job the workflow's, the commit scopes `SCOPES` in `tools/docs_lint.py`. Name the file that
+owns the list beside it.
+
+**State the limit.** A page that omits its boundary invites over-trust. Say what the thing
+does not cover: the search bounds, the side effects no policy reads, a field the output
+schema does not guarantee.
+
+**Show the command.** A claim ships with what produced it, so the next reader re-runs it
+instead of trusting you.
+
+**No history.** "It used to be X", "this was fixed in Y", "we tried Z" is out of date the day
+after it is written. A text states what is, not what was or how it came to be known; where a
+past defect is load-bearing, state the property that prevents it. `HISTORY` in
+`tools/docs_lint.py` holds a narrow list of those words over every page, every comment and
+docstring, and every commit message. `CHANGELOG.md` is a record of releases and is exempt,
+as is this page, which spells the words to forbid them.
 
 **No meta.** Do not describe the text, the process, or who did what. No "this section
-covers", no "as mentioned above", no agent, tool or author names, no counts of how long
-something went unnoticed.
+covers", no "as mentioned above", no agent, tool or author names.
 
-**No marketing.** No "powerful", "robust", "seamless", "comprehensive", "state of the art".
-A property either has a number or is not claimed.
+**No marketing.** No "powerful", "robust", "seamless", "comprehensive", "state of the art". A
+property either has a number or is not claimed.
 
-**Lean.** Every sentence carries a fact, a number, or a consequence. Cut anything that
-would survive being deleted.
+**American English.** Every text is American English: pages, comments, docstrings, messages,
+names and file names. `-ize` and `-yze` (`serialize`, `analyze`), `-or` (`behavior`), `-er`
+(`center`), `-ense` (`license`, `defense`), one `l` before a suffix (`modeled`, `labeled`),
+`toward` and `afterward`, `while` and `among`, and a date month first (`Oct 29, 2026`) or as
+ISO 8601 (`2026-10-29`). A quotation, a published title and a third party's name keep the
+spelling they were published with. `tools/docs_lint.py` refuses a British word in every
+tracked file, its path and every commit message.
 
-**American English.** Every text here is American English: pages, comments, docstrings,
-messages, names and commit messages. `-ize` and `-yze` (`serialize`, `analyze`), `-or` (`behavior`), `-er` (`center`), `-ense` (`license`,
-`defense`), one `l` before a suffix (`modeled`, `labeled`), `toward` and `afterward`,
-`while` and `among`, and a date month first (`Oct 29, 2026`) or as ISO 8601
-(`2026-10-29`). A quotation, a published title and a third party's name keep the
-spelling they were published with.
+**One example beats three paragraphs**, and **pair every prohibition with an alternative.**
+"Do not pin the count" leaves a reader stuck; "do not pin the count, name the study file that
+holds it" does not.
+
+**Cut anything that does not help implement or verify.** Every sentence carries a fact, a
+number, or a consequence. Add no section that exists to look complete: a summary restating
+the section above it, a recap of what a command prints, a next-steps list nobody asked for.
 
 ## Claims
 
 A claim needs evidence in the same sentence or the next one.
 
-- **Measured** — give the number and the command that prints it, with the study file its
+- **Measured**: give the number and the command that prints it, with the study file its
   `--check` holds.
-- **Inferred** — say so first, not in a trailing caveat. "The mechanism is X" and "X is
+- **Inferred**: say so first, not in a trailing caveat. "The mechanism is X" and "X is
   consistent with the data" are different claims.
-- **Untested** — say the gap and what would close it. A gap described as a gap is
+- **Untested**: say the gap and what would close it. A gap described as a gap is
   information; a gap left implicit is a defect.
 
-Never write a comparative result from one seed without the words "seed N, one sample" in
-the same sentence as the number.
+Never write a comparative result from one seed without the words "seed N, one sample" in the
+same sentence as the number.
 
 ## Numbers
 
-Every published number needs a committed command. Prose is not a study: if a number cannot
-be grepped out of a command's output, it is not a result.
+Every published number needs a committed command. If a number cannot be grepped out of a
+command's output, it is not a result.
 
 Quote a rate with its denominator: 14 of 14 links proven, not "100 %".
 
 A study records counts; a ratio is computed where it is printed, to one decimal place of a
 percentage. The counts are the record, and they compare exactly.
 
-## Pages
+## Hot and cold
 
-Structure by what the reader is doing, not by how the code is organized.
+A page is **hot** when it describes code that moves, **cold** when what it describes barely
+does. **Change hot code, fix its page in the same commit.** A page is wrong from the moment
+the code lands, and nobody knows which claim broke better than the person who broke it.
 
-State the limit of what a page covers. A page that silently omits a case reads as though
-the case does not exist.
+| page | temperature |
+|---|---|
+| [`README.md`](../README.md) | warm: its module table moves with a module |
+| [`AGENTS.md`](../AGENTS.md) | warm: a gate command added there is a workflow step |
+| [01-method.md](01-method.md) | hot: a rule, a cut or a search change is an edit there |
+| [04-results.md](04-results.md) | hot: every count moves with its study |
+| this page | cold |
+| [11-references.md](11-references.md) | cold: a citation added in the code adds its work there |
 
-Link with relative paths; `tools/docs_lint.py` fails the build on a dead one.
+Cold does not mean unowned. It means the claim outlives a release, so when it is wrong it has
+usually been wrong for a long time.
 
-### Markdown that GitHub renders
+## Markdown that GitHub renders
 
 The renderer is strict and the failures are silent. `tools/docs_lint.py` catches these.
 
-- Never split a token across the math boundary: write the whole symbol in one span, or
-  plain text.
+- Never split a token across the math boundary: write the whole symbol in one span, or plain
+  text.
 - No bare sub- or superscript spans.
 - No spacing macros in inline `$...$`. They render literally.
 - Keep a numeric range in one span. `$\sim10^4\text{ to }10^5$`, or plain text.
@@ -78,10 +152,12 @@ The renderer is strict and the failures are silent. `tools/docs_lint.py` catches
 - No images, anywhere. A committed plot stops tracking the code that produced it and cannot
   be grepped against a study row.
 
+Link with relative paths; the lint fails on a dead one.
+
 ## Code comments
 
 **The default is no comment.** Code states what it does; a comment is for what the code
-cannot state. Most lines need none.
+cannot state.
 
 Comment when the reason is not recoverable from the line:
 
@@ -91,28 +167,47 @@ Comment when the reason is not recoverable from the line:
 - an invariant a later edit would silently break
 - a cheaper-looking alternative that is wrong
 
-**Imperative mood.** "Keep the cell", not "This keeps the cell" or "Keeps the cell". Same
-for docstring summaries, which `ruff` enforces.
+**Imperative mood, leading with a verb.** "Keep the cell", not "This keeps the cell" or
+"Keeps the cell". The same for docstring summaries, which ruff enforces.
 
-Name the owner, the invariant and the failure:
+**Name the invariant, and what breaks without it:**
 
 ```python
 # Keep the cell. Dropping one valgebra cannot prove empty would let a program skip values a
 # tool may return, and every strong program found over the cells would be unsound.
 ```
 
-That names the action, what breaks without it, and how far the damage reaches. `# keep it to be safe` carries none of it.
+That names the action, what breaks without it, and how far the damage reaches.
+`# keep it to be safe` carries none of it.
 
-Do not restate the signature, narrate the obvious, or leave commented-out code.
+**No history, no meta.** Not "was a list", not "added for the policy work", not "the
+following block does". A comment describes the code as it is, to someone who has never seen
+it. Do not restate the signature, narrate the obvious, or leave commented-out code.
 
 Docstrings follow the numpy convention. A module docstring states what the module is
 responsible for and what it must not do. A function docstring states the contract, not the
 implementation.
 
+## Citing a paper
+
+**Cite a work by its key**: the surnames of its one or two authors, or its first author's
+with `et al.`, then the year, as in `Graf and Saidi 1997` and `Cimatti et al. 2003`. The
+system a work names may lead the key, as in `(SyPet, Feng et al. 2017)`. The key is the bold
+lead of an entry on [11-references.md](11-references.md), the one place a work's authors,
+title, venue and identifier are written.
+
+**Every module implementing a published result cites it**, in its docstring, at the clause
+the result supports and before its punctuation. A step that departs from the result cites
+it and names the departure beside it.
+
+`tools/docs_lint.py` refuses a key of two surnames or of one with `et al.` that the page does
+not list, and an entry no tracked text cites. A key of one surname is not read.
+
 ## Commit messages
 
-A commit states what the change does and what it measures. Same standard as everything
-else: fact, no history, no meta.
+A commit states what the change does and what it measures. Same standard as everything else:
+fact, no history, no meta. `AGENTS.md` states the rule on trailers, and the commit-msg hook
+and `tools/docs_lint.py --commits` hold it with the form below.
 
 ```
 scope: what the change does
@@ -121,13 +216,15 @@ The defect, stated as a property of the code. What the change does about it. The
 measurement. What remains open.
 ```
 
-- **Subject**: lowercase after the scope, no trailing period, under 72 characters. Scope is
-  the module touched — `contracts`, `cells`, `planner`, `verify`, `run`, `critic`, `policy`,
-  `docs`, `tools`, `build`, `ci` — or `repo` for the whole tree.
-- **Body**: wrapped at 88. Give the numbers.
-- One logical change per commit. A subject needing "and" is two commits.
+- **Subject**: `scope: ` and a lowercase summary, no trailing period, 72 characters at most.
+  The scope is the module touched, by its file stem, as `planner` for
+  `valgebra_planning/planner.py`; a change across modules takes the module whose contract it
+  changes. Beside the modules, `SCOPES` in `tools/docs_lint.py` names the others: `study` for
+  an example with its driver and counts, `docs`, `tools`, `tests`, `build`, `ci`, `repo`.
+- **Body**: wrapped at 88 columns, in authoritative present tense. Give the numbers.
+- One logical change per commit. A subject needing "and" is usually two commits.
 - No provenance: not who found it, not how, not what was tried first, not how long it stood.
-- No references to uncommitted files, external trackers, or the tooling that produced the
+- No references to untracked files, external trackers, or the tooling that produced the
   change.
 
 A defect is described in the present tense as a property:
@@ -139,10 +236,31 @@ argument record is proven inside the input schema; `tests/test_verify.py` pins t
 ```
 
 Not: "this was introduced by the previous fix", "found while investigating X", "had been
-wrong for four milestones".
+wrong for four milestones". If a cause is not established, state what is established and
+what is open. Do not narrate the search.
 
-If a cause is not established, state what is established and what is open. Do not narrate
-the search.
+## The lint, and what it cannot see
+
+```bash
+uv run --no-sync python tools/docs_lint.py
+uv run --no-sync python tools/docs_lint.py --commits
+```
+
+It fails on the mechanical half of documentation rot: a page GitHub renders wrongly, a dead
+link, a British spelling, a history word, a reference into the untracked notes, a citation
+and the references page disagreeing, and a commit message off its form or carrying a
+trailer. The script's docstring holds every rule; a second copy here would drift.
+
+**Three classes stay out of its reach, and they are the common ones:**
+
+- a real symbol attributed to the **wrong file**;
+- a list with the wrong **count or order**, each entry real;
+- a behavior described as absent from code that has it.
+
+It cannot tell you a sentence is false. A page can link cleanly, spell every word the
+American way and cite every work it names, and still describe code replaced three commits
+ago. Prefer the claim that stays true: name the owner and the invariant, name the file that
+owns the number, and say what the thing does not cover.
 
 ## What not to write
 
