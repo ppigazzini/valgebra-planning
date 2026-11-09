@@ -26,10 +26,10 @@ from valgebra_planning._valgebra import (
     complement,
     intersection,
 )
-from valgebra_planning.contracts import Contract, Slot, Task, listed
+from valgebra_planning.contracts import Contract, Slot, Task, item_slots, listed
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Policy
-from valgebra_planning.program import Block, Branch, Call, Const, Ref, Return, Stop
+from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 
 Verdict = Literal["proven", "refuted", "undecided"]
 
@@ -95,6 +95,8 @@ class _Walk:
     policies: tuple[Policy, ...]
     flows: tuple[Flow, ...]
     links: list[Link] = field(default_factory=list)
+    #: The policy states each iteration of the loop being walked ends in.
+    ends: list[_States] | None = None
     gaps: list[Gap] = field(default_factory=list)
 
     def block(self, block: Block, env: dict[Ref, _Held], where: str, path: _Path) -> None:
@@ -109,8 +111,54 @@ class _Walk:
         elif isinstance(end, Stop):
             self.gaps.append(Gap(where, str(end.ref)))
             self.obeyed(where, path.states)
+        elif isinstance(end, Next):
+            if self.ends is not None:
+                self.ends.append(path.states)
+        elif isinstance(end, For):
+            self.loop(end, env, where, path)
         else:
             self.branch(end, env, where, path)
+
+    def loop(self, end: For, env: dict[Ref, _Held], where: str, path: _Path) -> None:
+        """Walk a loop's body for an arbitrary item, the policies at a fixpoint; then what follows.
+
+        Nothing crosses iterations, so one walk over the item's set holds for every item. The
+        body may run any number of times, so the states a policy may be in when it starts are
+        taken to a fixpoint, the states being finite. How many times it runs is the array's, so
+        its calls run under a test on the array's source.
+        """
+        held = self.held(env, end.ref, where)
+        items = () if held is None else item_slots(held.origin)
+        if held is None or not items:
+            if held is not None:
+                claim = f"{end.ref} is an array of one item schema"
+                self.links.append(Link(where, claim, "refuted"))
+            return
+        base = len(held.origin.path) + 1
+        inner = env | {Ref(end.item, s.path[base:]): _Held(s.values, s) for s in items}
+        inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
+        states = path.states
+        while self.policies:
+            ends = self.iterate(end.body, inner, inside, _Path(states, tested), silent=True)
+            grown = tuple(s.union(*(e[i] for e in ends)) for i, s in enumerate(states))
+            if grown == states:
+                break
+            states = grown
+        self.iterate(end.body, inner, inside, _Path(states, tested), silent=False)
+        self.block(end.after, env, where, _Path(states, path.tested))
+
+    def iterate(
+        self, body: Block, env: dict[Ref, _Held], where: str, path: _Path, *, silent: bool
+    ) -> list[_States]:
+        """Walk a loop's body; return the policy states its iterations end in."""
+        links, gaps, ends = self.links, self.gaps, self.ends
+        self.ends = []
+        if silent:
+            self.links, self.gaps = [], []
+        self.block(body, env, where, path)
+        found = self.ends
+        self.links, self.gaps, self.ends = links, gaps, ends
+        return found
 
     def obeyed(self, where: str, states: _States) -> None:
         """Add a link per policy: whether this path may reach one of its bad states."""

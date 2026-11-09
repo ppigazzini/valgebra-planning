@@ -169,6 +169,19 @@ def _result_slots(
     return slots
 
 
+def item_slots(slot: Slot) -> tuple[Slot, ...]:
+    """Return the slots of an item of the array ``slot`` holds: the item and what it guarantees.
+
+    The item is read from ``items`` against the slot's own root, its path the array's and
+    ``[]``; an array naming no single ``items`` schema, or ``prefixItems``, has none.
+    """
+    compiler = Compiler(slot.root)
+    node = _object_node(compiler, slot.schema)
+    if node is None or "prefixItems" in node or not isinstance(node.get("items"), (dict, bool)):
+        return ()
+    return tuple(_result_slots(slot.tool, compiler, node["items"], (*slot.path, "[]")))
+
+
 def _idempotent(annotations: object) -> bool:
     if not isinstance(annotations, Mapping):
         return False

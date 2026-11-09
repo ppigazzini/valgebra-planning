@@ -18,7 +18,7 @@ from typing import Any
 
 from valgebra_planning.contracts import Contract, Task, listed
 from valgebra_planning.policy import Monitor, Policy
-from valgebra_planning.program import Block, Branch, Call, Const, Ref, Return, Stop
+from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 
 #: How many times a retried call is made before the run gives up on it.
 ATTEMPTS = 8
@@ -55,10 +55,11 @@ class _Runner:
             return Run(None, None, tuple(self.broken), refused=check)
         return None
 
-    def block(self, block: Block, env: dict[str, Any]) -> Run:
+    def block(self, block: Block, env: dict[str, Any]) -> Run | None:
+        """Run a block; return the run it ends, or None where an iteration of a loop ends."""
         for call in block.calls:
             outcome = self.call(call, env)
-            if isinstance(outcome, Run):
+            if outcome is None or isinstance(outcome, Run):
                 return outcome
             env = outcome
         end = block.end
@@ -71,10 +72,23 @@ class _Runner:
             return Run(value, None, tuple(self.broken))
         if isinstance(end, Stop):
             return Run(_read(env, end.ref), str(end.ref), tuple(self.broken))
+        if isinstance(end, Next):
+            return None
+        if isinstance(end, For):
+            return self.loop(end, env)
         return self.branch(end, env)
 
-    def call(self, call: Call, env: dict[str, Any]) -> dict[str, Any] | Run:
-        """Make one call; return the values held after it, or the run it ended."""
+    def loop(self, end: For, env: dict[str, Any]) -> Run | None:
+        """Run a loop's body for each item, then what follows; a body ending the run ends it."""
+        items = _read(env, end.ref)
+        for item in items if isinstance(items, list) else ():
+            ended = self.block(end.body, {**env, end.item: item})
+            if ended is not None:
+                return ended
+        return self.block(end.after, env)
+
+    def call(self, call: Call, env: dict[str, Any]) -> dict[str, Any] | Run | None:
+        """Make one call; return the values held after it, the run it ended, or None (`block`)."""
         contract = self.contracts[call.tool]
         arguments = {
             name: ref.value if isinstance(ref, Const) else _read(env, ref)
@@ -84,7 +98,7 @@ class _Runner:
         if refused is not None:
             return refused
         made = self.attempts(call, arguments, env)
-        if isinstance(made, Run):
+        if made is None or isinstance(made, Run):
             return made
         result = made[0]
         if contract.returns is not None and not contract.returns.is_valid(result):
@@ -108,8 +122,8 @@ class _Runner:
 
     def attempts(
         self, call: Call, arguments: dict[str, Any], env: dict[str, Any]
-    ) -> tuple[Any] | Run:
-        """Make the call, retried as it says; return its result, or the run its error ended."""
+    ) -> tuple[Any] | Run | None:
+        """Make the call, retried as it says; return its result, or how its error block ended."""
         for _ in range(ATTEMPTS if call.retry else 1):
             try:
                 return (self.tools[call.tool](**arguments),)
@@ -120,7 +134,7 @@ class _Runner:
         self.broken.append(f"{call.tool} answered with an error nothing handles")
         return Run(None, f"an error of {call.tool}", tuple(self.broken))
 
-    def branch(self, branch: Branch, env: dict[str, Any]) -> Run:
+    def branch(self, branch: Branch, env: dict[str, Any]) -> Run | None:
         if branch.key:
             value = _read(env, branch.ref)
             holds = isinstance(value, dict) and branch.key in value
@@ -157,4 +171,9 @@ def run(
     the run, named in `Run.refused`; without it every break is recorded and the run goes on.
     """
     monitors = [Monitor(policy) for policy in policies]
-    return _Runner(contracts, tools, task, monitors, enforce).block(program, dict(inputs))
+    runner = _Runner(contracts, tools, task, monitors, enforce)
+    ended = runner.block(program, dict(inputs))
+    if ended is None:
+        runner.broken.append("the program ends an iteration outside a loop")
+        return Run(None, "the end of an iteration", tuple(runner.broken))
+    return ended

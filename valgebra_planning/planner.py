@@ -31,7 +31,18 @@ from valgebra_planning.contracts import Contract, Slot, Task
 from valgebra_planning.flows import Flow
 from valgebra_planning.mining import SlotKey, Types
 from valgebra_planning.policy import Policy
-from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop, render, renumber
+from valgebra_planning.program import (
+    Block,
+    Branch,
+    Call,
+    For,
+    Next,
+    Ref,
+    Return,
+    Stop,
+    render,
+    renumber,
+)
 
 #: The calls and tests a path may take.
 DEPTH = 6
@@ -462,9 +473,12 @@ def _reads(block: Block) -> set[str]:
         if call.on_error is not None:
             read |= _reads(call.on_error)
     end = block.end
-    read.add(end.ref.variable)
+    if not isinstance(end, Next):
+        read.add(end.ref.variable)
     if isinstance(end, Branch):
         read |= _reads(end.then) | _reads(end.otherwise)
+    elif isinstance(end, For):
+        read |= _reads(end.body) | _reads(end.after)
     return read
 
 

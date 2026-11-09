@@ -13,8 +13,9 @@ an argument as a value the program holds or a JSON constant (``state="delivered"
 ``if``/``elif``/``else`` testing a value against a tool's argument (``ref in tool.argument``)
 or against listed constants (``==``, ``!=``, ``in``, ``not in``), or a key of a record
 (``"field" in ref``); ``retry(tool(...))``; and
-``try:`` around one call with ``except ToolError:``. Anything else is refused by line, never
-skipped.
+``try:`` around one call with ``except ToolError:``; ``for item in ref:`` over an array, whose
+body ends each iteration where its statements run out and never returns; and ``pass``. Anything
+else is refused by line, never skipped.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from valgebra_planning.contracts import Contract, Task
 from valgebra_planning.flows import Flow
 from valgebra_planning.mining import Types
 from valgebra_planning.policy import Policy
-from valgebra_planning.program import Block, Branch, Call, Const, Ref, Return, Stop
+from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 from valgebra_planning.verify import Verification, verify
 
 
@@ -94,7 +95,7 @@ def _named(node: ast.expr) -> str | None:
     return node.id if isinstance(node, ast.Name) else None
 
 
-def _guarded_call(statement: ast.Try) -> Call:
+def _guarded_call(statement: ast.Try, *, looping: bool = False) -> Call:
     """Read ``try: x = tool(...) except ToolError: <block>`` as a call with an error block."""
     if (
         len(statement.body) != 1
@@ -108,7 +109,8 @@ def _guarded_call(statement: ast.Try) -> Call:
     if handler.type is None or _tool(handler.type) != "ToolError":
         raise _fail(statement, "a try catches `ToolError` alone")
     call = _call(statement.body[0])
-    return Call(call.tool, call.bindings, call.result, call.retry, _block(handler.body, handler))
+    handled = _block(handler.body, handler, looping=looping)
+    return Call(call.tool, call.bindings, call.result, call.retry, handled)
 
 
 def _call(statement: ast.Assign) -> Call:
@@ -147,12 +149,13 @@ def _constants(node: ast.expr) -> tuple[Any, ...]:
     raise _fail(node, "a value is tested against a tool's argument or listed constants")
 
 
-def _branch(statement: ast.If) -> Branch:
+def _branch(statement: ast.If, *, looping: bool = False) -> Branch:
     test = statement.test
     if not (isinstance(test, ast.Compare) and len(test.ops) == 1):
         raise _fail(statement, "a test compares one value once")
     op, right = test.ops[0], test.comparators[0]
-    then, otherwise = _block(statement.body), _block(statement.orelse, statement)
+    then = _block(statement.body, looping=looping)
+    otherwise = _block(statement.orelse, statement, looping=looping)
     if isinstance(op, (ast.NotIn, ast.NotEq)):
         then, otherwise = otherwise, then
     left = test.left
@@ -177,34 +180,58 @@ def _with_else(statement: ast.If, rest: Sequence[ast.stmt]) -> ast.If:
     )
 
 
-def _block(statements: Sequence[ast.stmt], parent: ast.AST | None = None) -> Block:
-    if not statements:
-        raise _fail(parent or ast.Pass(), "a branch ends in a return, a stop or a test")
-    calls = []
-    for at, statement in enumerate(statements[:-1]):
-        if isinstance(statement, ast.If) and not statement.orelse:
-            # An `if` with no `else` before more statements: what follows is its other branch.
-            branch = _branch(_with_else(statement, statements[at + 1 :]))
-            return Block(tuple(calls), branch)
-        if isinstance(statement, ast.Try):
-            calls.append(_guarded_call(statement))
-            continue
-        if not isinstance(statement, ast.Assign):
-            raise _fail(statement, "only calls come before a block's last statement")
-        calls.append(_call(statement))
-    last = statements[-1]
+def _loop(statement: ast.For, rest: Block) -> For:
+    """Read ``for item in ref:`` as a loop whose body ends each iteration, then ``rest``."""
+    if not isinstance(statement.target, ast.Name) or statement.orelse:
+        raise _fail(statement, "a loop names one item and has no `else`")
+    body = _block(statement.body, statement, looping=True)
+    return For(_ref(statement.iter), statement.target.id, body, rest)
+
+
+def _ending(last: ast.stmt, *, looping: bool) -> Return | Stop | Branch:
     if isinstance(last, ast.Return) and last.value is not None:
-        return Block(tuple(calls), Return(_ref(last.value)))
+        if looping:
+            raise _fail(last, "a loop's body does not return")
+        return Return(_ref(last.value))
     if isinstance(last, ast.If):
-        return Block(tuple(calls), _branch(last))
+        return _branch(last, looping=looping)
     if (
         isinstance(last, ast.Expr)
         and isinstance(last.value, ast.Call)
         and _tool(last.value.func) == "stop"
         and len(last.value.args) == 1
     ):
-        return Block(tuple(calls), Stop(_ref(last.value.args[0])))
+        return Stop(_ref(last.value.args[0]))
     raise _fail(last, "a block ends in a return, a stop or a test")
+
+
+def _block(
+    statements: Sequence[ast.stmt], parent: ast.AST | None = None, *, looping: bool = False
+) -> Block:
+    """Read statements as a block; in a loop's body, running out of them ends the iteration."""
+    statements = [s for s in statements if not isinstance(s, ast.Pass)]
+    calls: list[Call] = []
+    for at, statement in enumerate(statements):
+        rest = statements[at + 1 :]
+        if isinstance(statement, ast.For):
+            return Block(tuple(calls), _loop(statement, _block(rest, statement, looping=looping)))
+        if isinstance(statement, ast.If) and not statement.orelse and rest:
+            # An `if` with no `else` before more statements: what follows is its other branch.
+            return Block(tuple(calls), _branch(_with_else(statement, rest), looping=looping))
+        if isinstance(statement, ast.Try):
+            calls.append(_guarded_call(statement, looping=looping))
+        elif isinstance(statement, ast.Assign):
+            calls.append(_call(statement))
+        elif rest:
+            raise _fail(statement, "only calls and loops come before a block's last statement")
+        else:
+            return Block(tuple(calls), _ending(statement, looping=looping))
+    if looping:
+        return Block(tuple(calls), Next())
+    raise _fail(
+        statements[-1] if statements else parent or ast.Pass(),
+        "a block ends in a return, a stop or a test",
+    )
 
 
 def read_program(source: str) -> Block:
@@ -296,6 +323,8 @@ def _crossed(block: Block, made: dict[str, str], types: Types) -> list[str]:
             notes += _crossed(call.on_error, made, types)
     if isinstance(block.end, Branch):
         notes += _crossed(block.end.then, made, types) + _crossed(block.end.otherwise, made, types)
+    elif isinstance(block.end, For):
+        notes += _crossed(block.end.body, made, types) + _crossed(block.end.after, made, types)
     return notes
 
 

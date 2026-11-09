@@ -105,11 +105,29 @@ class Branch:
 
 
 @dataclass(frozen=True, slots=True)
+class Next:
+    """End one iteration of a loop's body."""
+
+
+@dataclass(frozen=True, slots=True)
+class For:
+    """Run ``body`` once for each item of the array ``ref`` holds, named ``item``; then ``after``.
+
+    What the body calls is scoped to its iteration: ``after`` reads nothing of it.
+    """
+
+    ref: Ref
+    item: str
+    body: Block
+    after: Block
+
+
+@dataclass(frozen=True, slots=True)
 class Block:
-    """Calls in order, then one ending."""
+    """Calls in order, then one ending; a loop's body ends in `Next`."""
 
     calls: tuple[Call, ...]
-    end: Return | Stop | Branch
+    end: Return | Stop | Branch | For | Next
 
 
 def render(block: Block, indent: str = "") -> str:
@@ -128,6 +146,12 @@ def render(block: Block, indent: str = "") -> str:
         lines.append(f"{indent}return {end.ref}")
     elif isinstance(end, Stop):
         lines.append(f"{indent}stop({end.ref})")
+    elif isinstance(end, Next):
+        if not lines:
+            lines.append(f"{indent}pass")
+    elif isinstance(end, For):
+        lines += [f"{indent}for {end.item} in {end.ref}:", render(end.body, indent + "    ")]
+        lines.append(render(end.after, indent))
     else:
         tested = f"{json.dumps(end.key)} in {end.ref}" if end.key else f"{end.ref} in {end.against}"
         lines.append(f"{indent}if {tested}:")
@@ -141,6 +165,8 @@ def steps(block: Block) -> int:
     """Return the calls and tests on the longest path of a program, error paths included."""
     end = block.end
     below = 1 + max(steps(end.then), steps(end.otherwise)) if isinstance(end, Branch) else 0
+    if isinstance(end, For):
+        below = 1 + steps(end.body) + steps(end.after)
     longest = len(block.calls) + below
     for at, call in enumerate(block.calls, start=1):
         if call.on_error is not None:
@@ -175,9 +201,14 @@ def _renumber(block: Block, names: dict[str, str], first: int) -> Block:
     after = first + len(calls)
     end = block.end
     if isinstance(end, Return):
-        ending: Return | Stop | Branch = Return(_renamed(end.ref, names))
+        ending: Return | Stop | Branch | For | Next = Return(_renamed(end.ref, names))
     elif isinstance(end, Stop):
         ending = end if end.ref.variable not in names else Stop(_renamed(end.ref, names))
+    elif isinstance(end, Next):
+        ending = end
+    elif isinstance(end, For):
+        body, rest = _renumber(end.body, names, after), _renumber(end.after, names, after)
+        ending = For(_renamed(end.ref, names), end.item, body, rest)
     else:
         ending = Branch(
             _renamed(end.ref, names),

@@ -83,7 +83,7 @@ def test_the_naive_chain_gets_its_counterexamples_and_the_guards_to_add() -> Non
 
 def test_a_construct_the_reader_does_not_read_is_refused_by_line() -> None:
     with pytest.raises(ProgramError, match="line 2"):
-        read_program("c1 = find_parcel(tracking=tracking)\nfor x in c1:\n    pass\nreturn c1\n")
+        read_program("c1 = find_parcel(tracking=tracking)\nwhile c1:\n    pass\nreturn c1\n")
     with pytest.raises(ProgramError, match="by name"):
         read_program("c1 = find_parcel(tracking)\nreturn c1\n")
     with pytest.raises(ProgramError, match="equality"):

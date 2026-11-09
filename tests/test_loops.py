@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+from valgebra_planning.contracts import item_slots, read_contract, read_task
+from valgebra_planning.critic import ProgramError, read_program
+from valgebra_planning.flows import read_flow
+from valgebra_planning.policy import read_policy
+from valgebra_planning.program import render
+from valgebra_planning.run import run
+from valgebra_planning.verify import verify
+
+NAME = {"type": "string", "pattern": "^[a-z]+$"}
+TOOLS = {
+    contract.name: contract
+    for contract in map(
+        read_contract,
+        [
+            {
+                "name": "search",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "count": {"type": "integer", "minimum": 0},
+                        "entities": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {"name": NAME, "id": {"type": "string"}},
+                                "required": ["name"],
+                            },
+                        },
+                    },
+                    "required": ["count", "entities"],
+                },
+            },
+            {
+                "name": "notify",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"name": NAME},
+                    "required": ["name"],
+                },
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {"sent": {"type": "boolean"}},
+                    "required": ["sent"],
+                },
+            },
+            {
+                "name": "alert",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"message": {"type": "string"}},
+                    "required": ["message"],
+                },
+            },
+        ],
+    )
+}
+TASK = read_task("count", {"query": {"type": "string"}}, {"type": "integer"})
+LOOP = """\
+c1 = search(query=query)
+for entity in c1.entities:
+    c2 = notify(name=entity.name)
+return c1.count"""
+
+
+def _claims(source: str, **rules: Any) -> dict[str, str]:
+    checked = verify(read_program(source), TOOLS, TASK, **rules)
+    return {link.claim: link.verdict for link in checked.links}
+
+
+def test_an_item_of_an_array_is_read_with_the_fields_it_guarantees() -> None:
+    entities = TOOLS["search"].result("entities")
+    assert [slot.path for slot in item_slots(entities)] == [
+        ("entities", "[]"),
+        ("entities", "[]", "name"),
+    ]
+
+
+def test_a_loop_reads_back_and_its_body_is_proven_for_every_item() -> None:
+    assert render(read_program(LOOP)) == LOOP
+    claims = _claims(LOOP)
+    assert claims["entity.name <= notify.name"] == "proven"
+    assert set(claims.values()) == {"proven"}
+
+
+def test_a_binding_in_the_body_outside_its_argument_is_refuted() -> None:
+    claims = _claims(LOOP.replace("name=entity.name", "name=entity.id"))
+    assert claims["entity.id is a value the program holds"] == "refuted"
+
+
+def test_what_the_body_calls_is_scoped_to_its_iteration() -> None:
+    claims = _claims(LOOP.replace("return c1.count", "return c2.sent"))
+    assert claims["c2.sent is a value the program holds"] == "refuted"
+
+
+def test_a_policy_holds_over_any_number_of_iterations() -> None:
+    once = read_policy(
+        {
+            "name": "notify at most once",
+            "initial": "start",
+            "bad": ["twice"],
+            "transitions": [
+                {"from": "start", "tool": "notify", "to": "once"},
+                {"from": "once", "tool": "notify", "to": "twice"},
+            ],
+        }
+    )
+    single = "c1 = search(query=query)\nc2 = notify(name='a')\nreturn c1.count\n"
+    assert _claims(single, policies=[once])["policy notify at most once holds"] == "proven"
+    assert _claims(LOOP, policies=[once])["policy notify at most once holds"] == "undecided"
+
+
+def test_a_call_in_a_loop_over_an_untrusted_array_is_an_implicit_flow() -> None:
+    rule = read_flow(
+        {"name": "alerts", "sources": ["search"], "sink": "alert.message", "implicit": True}
+    )
+    looped = LOOP.replace("c2 = notify(name=entity.name)", "c2 = alert(message=query)")
+    claims = _claims(looped, flows=[rule])
+    assert claims["flow alerts: alert runs under a test on search"] == "refuted"
+
+
+def test_a_run_calls_the_body_once_for_each_item() -> None:
+    made: list[str] = []
+
+    def notify(**arguments: Any) -> Any:
+        made.append(arguments["name"])
+        return {"sent": True}
+
+    def tools(entities: list[Any]) -> dict[str, Any]:
+        return {
+            "search": lambda **_: {"count": len(entities), "entities": entities},
+            "notify": notify,
+        }
+
+    program = read_program(LOOP)
+    result = run(program, TOOLS, TASK, {"query": "q"}, tools([{"name": "a"}, {"name": "b"}]))
+    assert (result.value, made) == (2, ["a", "b"])
+    assert run(program, TOOLS, TASK, {"query": "q"}, tools([])).value == 0
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "c1 = search(query=query)\nfor e in c1.entities:\n    return c1.count\nreturn c1.count\n",
+        "c1 = search(query=query)\nfor e in c1.entities:\n    pass\nelse:\n    pass\nreturn 1\n",
+        "c1 = search(query=query)\nfor a, b in c1.entities:\n    pass\nreturn c1.count\n",
+    ],
+)
+def test_a_return_in_a_body_a_loop_else_and_two_items_are_refused(source: str) -> None:
+    with pytest.raises(ProgramError):
+        read_program(source)

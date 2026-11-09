@@ -33,6 +33,11 @@ refutes an undecided link. A constant's link is decided by membership alone, the
 its own counterexample where it lies outside. The verifier reads neither the cells nor the
 search.
 
+A loop, `for item in ref:` over an array, is walked once for an arbitrary item of the array's
+item set, the item's fields read as a result's are. Nothing crosses iterations, since what the
+body calls is scoped to its iteration and a body never returns, so the one walk holds for every
+item.
+
 ## The cells
 
 Every slot, input and goal is a predicate on JSON values, and the cells are their minterms
@@ -83,10 +88,12 @@ verifier, which adds a link for it.
 - **Policies** (`valgebra_planning/policy.py`). An automaton over a program's calls whose
   guards are valgebra sets over the argument record. Along each path a guard is taken surely,
   possibly or never, and a path surely reaching a bad state is refuted, possibly undecided. A
-  policy reads one program's calls in order and carries no value from one call to another.
+  loop's body may run any number of times, so the states a policy may be in when it starts are
+  taken to a fixpoint, the states being finite. A policy reads one program's calls in order and
+  carries no value from one call to another.
 - **Flows** (`valgebra_planning/flows.py`). A value from an untrusted source reaches a sink
   argument only inside the rule's endorsed set, and with `implicit` no sink call runs under a
-  test on such a value: the integrity half of CaMeL (Debenedetti et al. 2025), FIDES (Costa
+  test on such a value or in a loop over an array from such a source: the integrity half of CaMeL (Debenedetti et al. 2025), FIDES (Costa
   et al. 2025) and Progent (Shi et al. 2025), decided over sets.
 - **Mined types** (`valgebra_planning/mining.py`). Slots holding one observed value are one
   semantic type (APIphany, Guo et al. 2022), and a value fills an argument only where their
@@ -131,7 +138,8 @@ and goes on, a diagnosis rather than a guard.
   `format` does, takes any string; distinct schemas, patterns, enums and ranges are what make a
   plan mean what it should, and mined types narrow what observations support.
 - **What is not modeled.** Side effects beyond the calls a policy reads; a field the output
-  schema does not guarantee below another such field, or in a task's input; and a program the
-  planner writes holds no constant and tests no key. A program written elsewhere may do both, and
-  each is checked like any value.
+  schema does not guarantee below another such field, or in a task's input; an array with
+  `prefixItems`; and a program the planner writes holds no constant, tests no key and loops
+  over no array. A program written elsewhere may do all three, and each is checked like any
+  value.
 - **Search bounds.** Six calls and tests a path by default, and the first 16 bindings of a call.
