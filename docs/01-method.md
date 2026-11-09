@@ -190,6 +190,12 @@ refused, and a value from a task input with it, since a proxy sees no task.
   takes would put a value they make up where the tool's must be: the integrity leak a flow rule
   with `only` refutes. A stop on a task input says the task admits inputs no tool takes, which
   its input schema fixes before any run.
+- **A stop is not replanned.** The cells are exact for every argument set, so a run's value in
+  a stopped cell meets no argument the search did not try: a plan from the run's values gains
+  only past the depth bound, which a larger bound gives, or where valgebra left a cell
+  undecided. From every stop of the parcel library, its values held as constants, no plan exists
+  at depth 8. A resumed segment would also have to start from the run's policy states and keep
+  each held value's origin, or a flow rule would no longer see it.
 - **A policy carries no value between calls.** A rule about one parcel across two calls is read
   as one about any two, so a program approving one parcel and booking another passes a rule that
   a booking follows its own parcel's approval. That one call takes the value another returned
