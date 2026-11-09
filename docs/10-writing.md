@@ -130,6 +130,7 @@ the code lands, and nobody knows which claim broke better than the person who br
 |---|---|
 | [`README.md`](../README.md) | warm: its module table moves with a module |
 | [`AGENTS.md`](../AGENTS.md) | warm: a gate command added there is a workflow step |
+| [00-using.md](00-using.md) | hot: a command, an option or a file of a library is an edit there |
 | [01-method.md](01-method.md) | hot: a rule, a cut or a search change is an edit there |
 | [04-results.md](04-results.md) | hot: every count moves with its study |
 | this page | cold |

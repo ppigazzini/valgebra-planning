@@ -17,11 +17,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from valgebra_planning.contracts import read_contract, read_task
-from valgebra_planning.flows import read_flow
-from valgebra_planning.mining import mine
+from valgebra_planning.library import read_library
 from valgebra_planning.planner import plan
-from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Block, Branch, Stop, render, steps
 from valgebra_planning.verify import verify
 
@@ -48,34 +45,12 @@ def _count(block: Block) -> tuple[int, int, int]:
 
 def study(example: Path) -> tuple[dict[str, Any], list[str]]:
     """Return the study of an example and the text printed for it."""
-    tools = {
-        contract.name: contract
-        for contract in map(
-            read_contract, json.loads((example / "tools.json").read_text())["tools"]
-        )
-    }
-    listed = example / "policies.json"
-    policies = {
-        policy.name: policy
-        for policy in map(
-            read_policy, json.loads(listed.read_text())["policies"] if listed.exists() else []
-        )
-    }
-    rules = example / "flows.json"
-    flows = {
-        flow.name: flow
-        for flow in map(read_flow, json.loads(rules.read_text())["flows"] if rules.exists() else [])
-    }
+    library = read_library(example)
+    tools = library.tools
     rows, text = [], []
-    for spec in json.loads((example / "tasks.json").read_text())["tasks"]:
-        task = read_task(spec["name"], spec["inputs"], spec["goal"])
-        errors = bool(spec.get("errors", False))
-        under = [policies[name] for name in spec.get("policies", [])]
-        ruled = [flows[name] for name in spec.get("flows", [])]
-        log = spec.get("types")
-        types = (
-            None if log is None else mine(json.loads((example / log).read_text())["calls"], tools)
-        )
+    for problem in library.problems:
+        task, errors, types = problem.task, problem.errors, problem.types
+        under, ruled = list(problem.policies), list(problem.flows)
         found = plan(tools, task, errors=errors, policies=under, flows=ruled, types=types)
         cells = found.abstraction.cells
         row: dict[str, Any] = {

@@ -25,7 +25,9 @@ Status: pre-alpha, not on an index.
 | read a program written in Python, verify it and critique it | `valgebra_planning/critic.py` |
 | hold a program to tool errors, policies, flow rules and mined types | `planner.py`, `policy.py`, `flows.py`, `mining.py` |
 | run a program, failing closed on every contract and policy | `valgebra_planning/run.py` |
+| plan a library's tasks or critique a program from the command line | `valgebra_planning/cli.py` |
 
+[`docs/00-using.md`](docs/00-using.md) shows the command line,
 [`docs/01-method.md`](docs/01-method.md) states the method and its limits, and
 [`docs/04-results.md`](docs/04-results.md) the studies: on a parcel-returns library of ten
 tools, eight tasks get programs whose every link valgebra proves, from 3 of 3 to 24 of 24.

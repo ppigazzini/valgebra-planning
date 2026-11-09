@@ -28,6 +28,9 @@ dependencies = [
     "valgebra-jsonschema>=0.0.1",
 ]
 
+[project.scripts]
+valgebra-planning = "valgebra_planning.cli:main"
+
 [project.urls]
 Repository = "https://github.com/ppigazzini/valgebra-planning"
 
