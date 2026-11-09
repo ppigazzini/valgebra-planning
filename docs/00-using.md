@@ -38,8 +38,10 @@ uv run valgebra-planning critique examples/parcels --task "return a parcel" prog
 ```
 
 reads `program.py`, the Python an agent writes against typed tool APIs (`valgebra_planning/critic.py`
-states what it reads), verifies every link, and prints each link not proven with the value that
-refutes it and the test that would make the call safe. The exit status is 0 when the program is
+states what it reads), verifies every link under the rules the task names, and prints each link not
+proven with the value that refutes it and what to change: the test that makes a call safe, the call
+a policy needs first, the source a flow rule trusts, the error block a call needs. A binding crossing
+two types the task's observed calls tell apart is a note, and decides nothing. The exit status is 0 when the program is
 accepted, 1 when it is not, and 2 when the reader refuses its text.
 
 ## A live server
@@ -63,5 +65,4 @@ value with no break. `tests/parcel_server.py` serves the example's tools over st
 
 ## Limits
 
-- `critique` holds a program to the contracts. It does not hold it to the rules the task names.
 - With `--server`, the tasks, policies, flow rules and observed calls are still the library's files.

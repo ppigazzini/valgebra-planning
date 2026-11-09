@@ -105,7 +105,15 @@ def _plan(library: Library, names: Sequence[str], *, as_json: bool) -> int:
 def _critique(library: Library, name: str, source: Path, *, as_json: bool) -> int:
     problem = library.problem(name)
     try:
-        checked = critique(source.read_text(encoding="utf-8"), library.tools, problem.task)
+        checked = critique(
+            source.read_text(encoding="utf-8"),
+            library.tools,
+            problem.task,
+            errors=problem.errors,
+            policies=problem.policies,
+            flows=problem.flows,
+            types=problem.types,
+        )
     except ProgramError as error:
         print(f"{source}: {error}", file=sys.stderr)
         return 2

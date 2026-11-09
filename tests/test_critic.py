@@ -7,7 +7,10 @@ import pytest
 
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import ProgramError, critique, read_program
+from valgebra_planning.flows import read_flow
+from valgebra_planning.mining import mine
 from valgebra_planning.planner import plan
+from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Branch, render
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
@@ -85,3 +88,62 @@ def test_a_construct_the_reader_does_not_read_is_refused_by_line() -> None:
         read_program("c1 = find_parcel(tracking)\nreturn c1\n")
     with pytest.raises(ProgramError, match="equality"):
         read_program("if a == b:\n    return a\nelse:\n    return b\n")
+
+
+FREIGHT = read_policy(json.loads((EXAMPLE / "policies.json").read_text())["policies"][0])
+VERIFIED = read_flow(json.loads((EXAMPLE / "flows.json").read_text())["flows"][0])
+OBSERVED = json.loads((EXAMPLE / "observed.json").read_text())["calls"]
+DIRECT_NOTICE = """\
+c1 = find_parcel(tracking=tracking)
+c2 = notify(email=c1.parcel.contact)
+return c2.notice_id
+"""
+
+
+def test_a_policy_the_program_breaks_is_refuted_with_its_remedy() -> None:
+    plain = plan(TOOLS, TASKS["settle a parcel"]).program
+    assert plain is not None
+    checked = critique(render(plain), TOOLS, TASKS["settle a parcel"], policies=[FREIGHT])
+    assert not checked.accepted
+    refused = [note for note in checked.notes if "policy freight approved first holds" in note]
+    assert refused
+    assert all(note.startswith("refuted: ") for note in refused)
+    assert all("make first the call it requires" in note for note in refused)
+
+
+def test_a_flow_the_program_breaks_is_refuted_with_its_remedy() -> None:
+    task = TASKS["notify a parcel's contact"]
+    assert critique(DIRECT_NOTICE, TOOLS, task).accepted
+    checked = critique(DIRECT_NOTICE, TOOLS, task, flows=[VERIFIED])
+    assert not checked.accepted
+    assert any(
+        note.startswith("refuted: flow notices go to verified addresses")
+        and "from a source the rule trusts" in note
+        for note in checked.notes
+    )
+
+
+def test_an_error_nothing_handles_names_the_block_to_add() -> None:
+    checked = critique(DIRECT_NOTICE, TOOLS, TASKS["notify a parcel's contact"], errors=True)
+    assert not checked.accepted
+    assert any(
+        note.startswith("uncovered: an error of notify; give the call a `try:`")
+        for note in checked.notes
+    )
+    retried = DIRECT_NOTICE.replace("notify(email", "retry(notify(email").replace(
+        "contact)", "contact))"
+    )
+    checked = critique(retried, TOOLS, TASKS["notify a parcel's contact"], errors=True)
+    assert any(
+        note.startswith("refuted: notify may be retried; retry only a read-only")
+        for note in checked.notes
+    )
+
+
+def test_mined_types_are_notes_and_decide_nothing() -> None:
+    task = TASKS["notify a parcel's contact"]
+    checked = critique(DIRECT_NOTICE, TOOLS, task, types=mine(OBSERVED, TOOLS))
+    assert checked.accepted
+    assert checked.notes == (
+        "assumed: the observed calls show c1.parcel.contact and notify.email as two types",
+    )

@@ -1,9 +1,10 @@
 """A program written elsewhere, read from Python, verified, and answered with a critique.
 
 A language model proposes, a sound critic checks (Kambhampati et al. 2024): the program's
-every link is asked of valgebra by `valgebra_planning.verify.verify`, and the answer names
-each link that is not proven, the value that refutes it where one is found, and, for an
-argument a value only overlaps, the test that makes the call safe.
+every link is asked of valgebra by `valgebra_planning.verify.verify`, under the rules the task
+is held to, and the answer names each link that is not proven, the value that refutes it where
+one is found, and what the author can change: for an argument a value only overlaps, the test
+that makes the call safe; for a rule, the order, the source or the error block it needs.
 
 The reader takes the Python an agent writes against typed tool APIs: a function or a bare
 block of statements; ``c1 = find_parcel(tracking=tracking)`` or ``tools.find_parcel(...)``,
@@ -22,6 +23,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from valgebra_planning.contracts import Contract, Task
+from valgebra_planning.flows import Flow
+from valgebra_planning.mining import Types
+from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop
 from valgebra_planning.verify import Verification, verify
 
@@ -212,19 +216,83 @@ def _guard(claim: str) -> str | None:
     return f"test `if {subject} in {slot}:` and make the call in that branch"
 
 
+_POLICY = (
+    "a call on this path reaches a bad state of the policy: make first the call it requires, "
+    "or leave out the call it forbids"
+)
+_IMPLICIT = "make the sink call outside the branch that tests the untrusted value"
+_EXPLICIT = (
+    "pass a value from a source the rule trusts, or test it into the rule's endorsed set first"
+)
+_RETRY = (
+    "retry only a read-only or idempotent tool; give this call a `try:`/`except ToolError:` block"
+)
+_UNHANDLED = (
+    "give the call a `try:`/`except ToolError:` block, or `retry(...)` a read-only or "
+    "idempotent tool"
+)
+
+
+def _remedy(claim: str) -> str | None:
+    """Return what a program's author can change to prove a rule's link, if the claim is one."""
+    if claim.startswith("policy "):
+        return _POLICY
+    if claim.startswith("flow ") and " runs under a test on " in claim:
+        return _IMPLICIT
+    if claim.startswith("flow "):
+        return _EXPLICIT
+    if claim.endswith(" may be retried"):
+        return _RETRY
+    return _guard(claim)
+
+
+def _crossed(block: Block, made: dict[str, str], types: Types) -> list[str]:
+    """Return each binding whose value and argument the observed calls show as two types."""
+    made = made | {call.result: call.tool for call in block.calls}
+    notes = []
+    for call in block.calls:
+        for name, ref in call.bindings:
+            if ref.variable not in made:
+                continue
+            source = ("result", ".".join((made[ref.variable], *ref.path)))
+            target = ("argument", f"{call.tool}.{name}")
+            if types.typed(source, target) and not types.agree(source, target):
+                notes.append(f"assumed: the observed calls show {ref} and {target[1]} as two types")
+        if call.on_error is not None:
+            notes += _crossed(call.on_error, made, types)
+    if isinstance(block.end, Branch):
+        notes += _crossed(block.end.then, made, types) + _crossed(block.end.otherwise, made, types)
+    return notes
+
+
+def _gap(ref: str) -> str:
+    if ref.startswith("an error of "):
+        return f"uncovered: {ref}; {_UNHANDLED}"
+    return f"uncovered: {ref}"
+
+
 def critique(
     source: str,
     contracts: Mapping[str, Contract],
     task: Task,
     *,
     examples: Mapping[str, Sequence[Any]] | None = None,
+    errors: bool = False,
+    policies: Sequence[Policy] = (),
+    flows: Sequence[Flow] = (),
+    types: Types | None = None,
 ) -> Critique:
-    """Read, verify and critique a program proposed for ``task``.
+    """Read, verify and critique a program proposed for ``task`` under the rules it is held to.
 
-    Raises `ProgramError` for a program the reader does not read.
+    ``errors``, ``policies`` and ``flows`` are held as `valgebra_planning.verify.verify` holds
+    them. Mined ``types`` decide nothing: a binding crossing two types the observed calls show is
+    a note, and the program is accepted or not on its links alone. Raises `ProgramError` for a
+    program the reader does not read.
     """
     program = read_program(source)
-    checked = verify(program, contracts, task, examples=examples)
+    checked = verify(
+        program, contracts, task, examples=examples, errors=errors, policies=policies, flows=flows
+    )
     notes = []
     for link in checked.links:
         if link.verdict == "proven":
@@ -233,9 +301,11 @@ def critique(
         note = f"{link.verdict}: {link.claim}{where}"
         if link.counterexample:
             note += f"; {link.counterexample[0]!r} lies outside"
-        guard = _guard(link.claim) if link.verdict != "proven" else None
-        if guard is not None:
-            note += f"; {guard}"
+        remedy = _remedy(link.claim)
+        if remedy is not None:
+            note += f"; {remedy}"
         notes.append(note)
-    notes += [f"uncovered: {gap.ref} (at {gap.where or 'top'})" for gap in checked.gaps]
+    notes += [f"{_gap(gap.ref)} (at {gap.where or 'top'})" for gap in checked.gaps]
+    if types is not None:
+        notes += _crossed(program, {}, types)
     return Critique(program, checked, tuple(notes))

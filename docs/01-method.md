@@ -91,9 +91,12 @@ verifier, which adds a link for it.
 ## The critic
 
 `valgebra_planning/critic.py` reads a program written elsewhere, in the Python an agent writes
-against typed tool APIs, verifies it and returns a critique: each link not proven, the value
-refuting it, and for a binding the test that makes the call safe. A language model proposes, a
-sound critic checks (Kambhampati et al. 2024).
+against typed tool APIs, verifies it under the rules the task is held to and returns a critique:
+each link not proven, the value refuting it, and what the author can change, the test that makes a
+call safe for a binding, the call a policy needs first, the source a flow rule trusts, the error
+block a call needs. A language model proposes, a sound critic checks (Kambhampati et al. 2024).
+Mined types decide nothing here either: a binding crossing two types the observed calls tell apart
+is a note, and the program is accepted on its links alone.
 
 ## Running a program
 
