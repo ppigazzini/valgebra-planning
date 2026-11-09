@@ -28,7 +28,7 @@ from valgebra_planning._valgebra import (
 from valgebra_planning.contracts import Contract, Slot, Task, listed
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Policy
-from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop
+from valgebra_planning.program import Block, Branch, Call, Const, Ref, Return, Stop
 
 Verdict = Literal["proven", "refuted", "undecided"]
 
@@ -142,14 +142,7 @@ class _Walk:
             return env, path
         self.flowing(call, env, where, path)
         states = path.states
-        bound: dict[str, _Held] = {}
-        for name, ref in call.bindings:
-            slot = self.argument(call.tool, name, where)
-            held = self.held(env, ref, where)
-            if slot is None or held is None:
-                continue
-            bound[name] = held
-            self.inclusion(where, f"{ref} <= {slot.name}", ref, held, slot.values)
+        bound = self.bind(call, env, where)
         for slot in contract.arguments:
             if slot.required and slot.path[0] not in dict(call.bindings):
                 self.links.append(Link(where, f"{slot.name} is bound", "refuted"))
@@ -170,6 +163,23 @@ class _Walk:
             defined[Ref(call.result, slot.path)] = _Held(slot.values, slot)
         return defined, _Path(after, path.tested)
 
+    def bind(self, call: Call, env: dict[Ref, _Held], where: str) -> dict[str, _Held]:
+        """Add the link of each binding inside its argument; return the set each argument holds."""
+        bound: dict[str, _Held] = {}
+        for name, ref in call.bindings:
+            slot = self.argument(call.tool, name, where)
+            if isinstance(ref, Const):
+                if slot is not None:
+                    bound[name] = _Held(listed([ref.value]), slot)
+                    self.constant(where, ref, slot)
+                continue
+            held = self.held(env, ref, where)
+            if slot is None or held is None:
+                continue
+            bound[name] = held
+            self.inclusion(where, f"{ref} <= {slot.name}", ref, held, slot.values)
+        return bound
+
     def flowing(self, call: Call, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         """Add a link for every flow rule whose sink this call fills."""
         for flow in self.flows:
@@ -180,6 +190,8 @@ class _Walk:
                 claim = f"flow {flow.name}: {call.tool} runs under a test on {', '.join(tested)}"
                 self.links.append(Link(where, claim, "refuted"))
             for name, ref in call.bindings:
+                if isinstance(ref, Const):
+                    continue
                 held = env.get(ref)
                 if name != flow.argument or held is None or held.origin.tool not in flow.sources:
                     continue
@@ -239,6 +251,14 @@ class _Walk:
         except (Unsupported, RecursionError):
             drawn = []
         return given + [v for v in drawn if held.values.is_valid(v)]
+
+    def constant(self, where: str, const: Const, slot: Slot) -> None:
+        """Add the link of a constant inside the argument it fills, decided by membership."""
+        inside = slot.values.is_valid(const.value)
+        found = () if inside else (const.value,)
+        self.links.append(
+            Link(where, f"{const} <= {slot.name}", "proven" if inside else "refuted", found)
+        )
 
     def held(self, env: dict[Ref, _Held], ref: Ref, where: str) -> _Held | None:
         if ref not in env:

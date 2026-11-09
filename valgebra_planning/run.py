@@ -18,7 +18,7 @@ from typing import Any
 
 from valgebra_planning.contracts import Contract, Task, listed
 from valgebra_planning.policy import Monitor, Policy
-from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop
+from valgebra_planning.program import Block, Branch, Call, Const, Ref, Return, Stop
 
 #: How many times a retried call is made before the run gives up on it.
 ATTEMPTS = 8
@@ -76,7 +76,10 @@ class _Runner:
     def call(self, call: Call, env: dict[str, Any]) -> dict[str, Any] | Run:
         """Make one call; return the values held after it, or the run it ended."""
         contract = self.contracts[call.tool]
-        arguments = {name: _read(env, ref) for name, ref in call.bindings}
+        arguments = {
+            name: ref.value if isinstance(ref, Const) else _read(env, ref)
+            for name, ref in call.bindings
+        }
         refused = self.admitted(call.tool, contract, arguments)
         if refused is not None:
             return refused

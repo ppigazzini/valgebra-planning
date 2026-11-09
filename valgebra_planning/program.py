@@ -1,9 +1,10 @@
 """A program of tool calls and type tests, and its text.
 
-A program is a block: calls, each binding arguments to references and naming its result,
-then one ending. A return hands a reference back, a stop marks a value the program does not
-cover, and a test branches on whether a reference lies in a tool's argument, each branch a
-block of its own. A reference is a variable and a path of fields below it, ``c1.order.status``.
+A program is a block: calls, each binding arguments to references or to constants and naming
+its result, then one ending. A return hands a reference back, a stop marks a value the program
+does not cover, and a test branches on whether a reference lies in a tool's argument, each
+branch a block of its own. A reference is a variable and a path of fields below it,
+``c1.order.status``; a constant is a JSON value, ``"delivered"``.
 
 The text reads as Python, so a program written elsewhere in that form is read back by
 `valgebra_planning.critic`.
@@ -28,8 +29,28 @@ class Ref:
 
 
 @dataclass(frozen=True, slots=True)
+class Const:
+    """A JSON value written into a call, held as its JSON text so a program stays hashable."""
+
+    text: str
+
+    @staticmethod
+    def of(value: Any) -> Const:
+        """Return the constant ``value``, a JSON value."""
+        return Const(json.dumps(value, sort_keys=True))
+
+    @property
+    def value(self) -> Any:
+        """Return the value the constant holds."""
+        return json.loads(self.text)
+
+    def __str__(self) -> str:
+        return repr(self.value)
+
+
+@dataclass(frozen=True, slots=True)
 class Call:
-    """Call ``tool`` with each argument bound to a reference, the result named ``result``.
+    """Call ``tool``, each argument bound to a reference or a constant, the result ``result``.
 
     A tool may answer with an error. ``retry`` makes the call again until it succeeds, which
     only a tool that is read-only or idempotent allows; ``on_error`` is the block run instead
@@ -37,7 +58,7 @@ class Call:
     """
 
     tool: str
-    bindings: tuple[tuple[str, Ref], ...]
+    bindings: tuple[tuple[str, Ref | Const], ...]
     result: str
     retry: bool = False
     on_error: Block | None = None
@@ -140,7 +161,10 @@ def _renumber(block: Block, names: dict[str, str], first: int) -> Block:
     names = dict(names)
     calls = []
     for at, call in enumerate(block.calls, start=first):
-        bindings = tuple((name, _renamed(ref, names)) for name, ref in call.bindings)
+        bindings = tuple(
+            (name, ref if isinstance(ref, Const) else _renamed(ref, names))
+            for name, ref in call.bindings
+        )
         on_error = None if call.on_error is None else _renumber(call.on_error, names, at)
         names[call.result] = f"c{at}"
         calls.append(Call(call.tool, bindings, names[call.result], call.retry, on_error))

@@ -408,7 +408,7 @@ def _assumed(block: Block, types: Types | None, made: Mapping[str, str] | None =
     found = []
     for call in block.calls:
         for name, ref in call.bindings:
-            if ref.variable in made:
+            if isinstance(ref, Ref) and ref.variable in made:
                 key = _result_key(made[ref.variable], ref)
                 if types.typed(key, ("argument", f"{call.tool}.{name}")):
                     found.append(f"{ref} -> {call.tool}.{name}")
@@ -455,7 +455,9 @@ def _predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate
 
 def _reads(block: Block) -> set[str]:
     """Return every variable a block reads, in its calls, its ending and below."""
-    read = {ref.variable for call in block.calls for _, ref in call.bindings}
+    read = {
+        ref.variable for call in block.calls for _, ref in call.bindings if isinstance(ref, Ref)
+    }
     for call in block.calls:
         if call.on_error is not None:
             read |= _reads(call.on_error)

@@ -17,7 +17,8 @@ only once the whole argument record is proven inside the input set.
 ## The verifier
 
 A program is calls, then one ending: a return, a stop, or a branch on whether a value lies in a
-tool's argument or in listed constants (`valgebra_planning/program.py`). Its text reads as
+tool's argument or in listed constants (`valgebra_planning/program.py`). A call binds each
+argument to a value the program holds or to a JSON constant written into it. Its text reads as
 Python.
 
 The verifier (`valgebra_planning/verify.py`) walks a program with the set each value lies in,
@@ -26,7 +27,9 @@ program rests on: a value inside the argument it fills, the record where the arg
 related, the returned value inside the goal. Each link reads proven, refuted or undecided, and a
 refuted or undecided one carries a value outside the inclusion where the examples given or the
 values drawn from the value's own schema hold one. A concrete member is a proof, so such a value
-refutes an undecided link. The verifier reads neither the cells nor the search.
+refutes an undecided link. A constant's link is decided by membership alone, the constant being
+its own counterexample where it lies outside. The verifier reads neither the cells nor the
+search.
 
 ## The cells
 
@@ -113,6 +116,7 @@ and goes on, a diagnosis rather than a guard.
 - **Types are the specification.** A slot whose schema admits any string, as an unasserted
   `format` does, takes any string; distinct schemas, patterns, enums and ranges are what make a
   plan mean what it should, and mined types narrow what observations support.
-- **What is not modeled.** Side effects beyond the calls a policy reads, constants written into
-  a call, and a result field the output schema does not guarantee.
+- **What is not modeled.** Side effects beyond the calls a policy reads, and a result field the
+  output schema does not guarantee. The planner writes no constant; a program written elsewhere
+  may, and its constant is checked like any value.
 - **Search bounds.** Six calls and tests a path by default, and the first 16 bindings of a call.

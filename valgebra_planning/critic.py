@@ -9,6 +9,7 @@ that makes the call safe; for a rule, the order, the source or the error block i
 The reader takes the Python an agent writes against typed tool APIs: a function or a bare
 block of statements; ``c1 = find_parcel(tracking=tracking)`` or ``tools.find_parcel(...)``,
 awaited or not; fields as attributes or as string subscripts; ``return``; ``stop(ref)``; and
+an argument as a value the program holds or a JSON constant (``state="delivered"``);
 ``if``/``elif``/``else`` testing a value against a tool's argument (``ref in tool.argument``)
 or against listed constants (``==``, ``!=``, ``in``, ``not in``); ``retry(tool(...))``; and
 ``try:`` around one call with ``except ToolError:``. Anything else is refused by line, never
@@ -18,6 +19,7 @@ skipped.
 from __future__ import annotations
 
 import ast
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -26,7 +28,7 @@ from valgebra_planning.contracts import Contract, Task
 from valgebra_planning.flows import Flow
 from valgebra_planning.mining import Types
 from valgebra_planning.policy import Policy
-from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop
+from valgebra_planning.program import Block, Branch, Call, Const, Ref, Return, Stop
 from valgebra_planning.verify import Verification, verify
 
 
@@ -53,6 +55,30 @@ def _ref(node: ast.expr) -> Ref:
             return Ref(node.id, tuple(reversed(path)))
         else:
             raise _fail(node, "a value is a variable and the fields below it")
+
+
+def _argument(node: ast.expr) -> Ref | Const:
+    """Read an argument: a reference, or a JSON constant written in Python."""
+    if isinstance(node, (ast.Name, ast.Attribute, ast.Subscript)):
+        return _ref(node)
+    try:
+        value = ast.literal_eval(node)
+    except ValueError:
+        raise _fail(node, "an argument is a value the program holds or a JSON constant") from None
+    if not _json(value):
+        raise _fail(node, "a constant is a JSON value: no tuple, set, bytes or complex number")
+    return Const.of(value)
+
+
+def _json(value: Any) -> bool:
+    """Return whether a Python value is a JSON value, in the types `json.loads` returns."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return not isinstance(value, float) or math.isfinite(value)
+    if isinstance(value, list):
+        return all(map(_json, value))
+    if isinstance(value, dict):
+        return all(isinstance(key, str) and _json(item) for key, item in value.items())
+    return False
 
 
 def _tool(node: ast.expr) -> str:
@@ -106,7 +132,7 @@ def _call(statement: ast.Assign) -> Call:
     for keyword in value.keywords:
         if keyword.arg is None:
             raise _fail(statement, "a call passes every argument by name")
-        bindings.append((keyword.arg, _ref(keyword.value)))
+        bindings.append((keyword.arg, _argument(keyword.value)))
     return Call(_tool(value.func), tuple(bindings), statement.targets[0].id, retry=retry)
 
 
@@ -213,6 +239,8 @@ def _guard(claim: str) -> str | None:
     subject, _, slot = claim.partition(" <= ")
     if not slot or subject.startswith("return ") or "." not in slot:
         return None
+    if subject[0] in "'\"-0123456789[{" or subject in ("True", "False", "None"):
+        return f"write a constant {slot} admits"
     return f"test `if {subject} in {slot}:` and make the call in that branch"
 
 
@@ -252,7 +280,7 @@ def _crossed(block: Block, made: dict[str, str], types: Types) -> list[str]:
     notes = []
     for call in block.calls:
         for name, ref in call.bindings:
-            if ref.variable not in made:
+            if isinstance(ref, Const) or ref.variable not in made:
                 continue
             source = ("result", ".".join((made[ref.variable], *ref.path)))
             target = ("argument", f"{call.tool}.{name}")

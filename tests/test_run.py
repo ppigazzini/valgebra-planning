@@ -8,6 +8,7 @@ from typing import Any
 
 from valgebra_planning._valgebra import Sampler
 from valgebra_planning.contracts import Contract, Task, read_contract, read_task
+from valgebra_planning.critic import read_program
 from valgebra_planning.planner import plan
 from valgebra_planning.program import Block, Call, Ref, Return
 from valgebra_planning.run import run
@@ -181,3 +182,23 @@ def test_without_enforcement_every_break_is_recorded_and_the_run_goes_on() -> No
     assert result.refused is None
     assert result.value == "not a label"
     assert len(result.broken) == 3
+
+
+def test_a_constant_is_passed_to_the_tool_as_written() -> None:
+    made: list[str] = []
+    seen: list[dict[str, Any]] = []
+    delivered = {**PARCEL, "state": "delivered"}
+
+    def book_return(**arguments: Any) -> Any:
+        seen.append(arguments)
+        return {"label_id": "lbl_2"}
+
+    tools = _recording({"find_parcel": {"parcel": delivered}}, made) | {"book_return": book_return}
+    program = read_program(
+        "c1 = find_parcel(tracking=tracking)\n"
+        'c2 = book_return(parcel_id=c1.parcel.parcel_id, state="delivered", weight_g=500)\n'
+        "return c2.label_id\n"
+    )
+    result = run(program, TOOLS, TASKS["return a parcel"], {"tracking": "AB123456789IT"}, tools)
+    assert result.value == "lbl_2"
+    assert seen == [{"parcel_id": "pcl_1", "state": "delivered", "weight_g": 500}]

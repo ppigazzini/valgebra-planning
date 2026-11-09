@@ -147,3 +147,42 @@ def test_mined_types_are_notes_and_decide_nothing() -> None:
     assert checked.notes == (
         "assumed: the observed calls show c1.parcel.contact and notify.email as two types",
     )
+
+
+LITERAL = """\
+c1 = find_parcel(tracking=tracking)
+c2 = book_return(parcel_id=c1.parcel.parcel_id, state="delivered", weight_g=500)
+return c2.label_id
+"""
+
+
+def test_a_constant_is_read_rendered_and_proven_by_membership() -> None:
+    program = read_program(LITERAL)
+    assert render(program) == LITERAL.replace('"delivered"', "'delivered'").rstrip("\n")
+    assert render(read_program(render(program))) == render(program)
+    claims = {
+        link.claim: link.verdict
+        for link in critique(LITERAL, TOOLS, TASKS["return a parcel"]).verification.links
+    }
+    assert claims["'delivered' <= book_return.state"] == "proven"
+    assert claims["500 <= book_return.weight_g"] == "proven"
+
+
+def test_a_constant_outside_its_argument_is_refuted_by_itself() -> None:
+    checked = critique(LITERAL.replace("500", "99999"), TOOLS, TASKS["return a parcel"])
+    assert not checked.accepted
+    note = "refuted: 99999 <= book_return.weight_g; 99999 lies outside"
+    assert checked.notes == (f"{note}; write a constant book_return.weight_g admits",)
+
+
+def test_a_constant_is_one_json_value_in_either_spelling() -> None:
+    checked = critique(LITERAL.replace("500", "500.0"), TOOLS, TASKS["return a parcel"])
+    assert "500.0 <= book_return.weight_g" in {
+        link.claim for link in checked.verification.links if link.verdict == "proven"
+    }
+
+
+@pytest.mark.parametrize("written", ["(1, 2)", "{1, 2}", "b'x'", "float('nan')", "1e999"])
+def test_a_constant_that_is_no_json_value_is_refused(written: str) -> None:
+    with pytest.raises(ProgramError, match="line 2"):
+        read_program(LITERAL.replace("500", written))
