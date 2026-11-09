@@ -5,6 +5,7 @@
     valgebra-planning run LIBRARY --task NAME --inputs JSON --server SERVER [--json]
     valgebra-planning check LIBRARY [--server SERVER] [--json]
     valgebra-planning privileges OLD NEW [--json]
+    valgebra-planning proxy --server SERVER [--library LIBRARY]
 
 ``LIBRARY`` is a directory `valgebra_planning.library.read_library` reads. ``plan`` prints each
 task's program and its verification; it exits 1 when a task gets no program. ``critique`` reads a
@@ -13,7 +14,8 @@ exits 1 when the program is not accepted. ``run`` plans a task and runs the prog
 live server, failing closed; it exits 1 when the run does not return a value inside the goal.
 ``check`` lists every specification that holds vacuously and exits 1 when it finds one.
 ``privileges`` compares two privilege policies in Progent's format and exits 1 unless the new one
-narrows the old for every tool it names.
+narrows the old for every tool it names. ``proxy`` serves an MCP server over stdio in front of
+``SERVER``, holding every call to the contracts and to the library's policies and flow rules.
 ``SERVER`` is a URL or a command starting a stdio server; its tools replace ``tools.json``, and
 it needs the ``mcp`` extra. With ``--json`` each prints one JSON document.
 """
@@ -231,6 +233,23 @@ def _privileges(old: Path, new: Path, *, as_json: bool) -> int:
     return 0 if all(u.change == "narrowing" for u in found) else 1
 
 
+def _proxy(server: str, directory: Path | None) -> int:
+    """Serve a proxy over stdio in front of a server, holding calls to a library's rules."""
+    from valgebra_planning.proxy import serve  # noqa: PLC0415 - the mcp extra
+    from valgebra_planning.servers import connect  # noqa: PLC0415
+
+    library = None if directory is None else read_library(directory)
+    policies = () if library is None else tuple(library.policies.values())
+    flows = () if library is None else tuple(library.flows.values())
+
+    async def served() -> None:
+        async with connect(server) as upstream:
+            await serve(upstream, policies=policies, flows=flows)
+
+    asyncio.run(served())
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command the arguments name and return its exit status."""
     parser = argparse.ArgumentParser(prog="valgebra-planning", description=__doc__.splitlines()[0])
@@ -256,11 +275,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     privileged.add_argument("old", type=Path)
     privileged.add_argument("new", type=Path)
     privileged.add_argument("--json", action="store_true")
-    for command in (planning, critic, running, checking):
-        command.add_argument("--server", required=command is running, help="a URL or a command")
+    proxied = commands.add_parser("proxy", help="serve an MCP proxy holding calls to the rules")
+    proxied.add_argument("--library", type=Path, help="a library whose policies and flows hold")
+    for command in (planning, critic, running, checking, proxied):
+        required = command in (running, proxied)
+        command.add_argument("--server", required=required, help="a URL or a command")
     args = parser.parse_args(argv)
     if args.command == "privileges":
         return _privileges(args.old, args.new, as_json=args.json)
+    if args.command == "proxy":
+        return _proxy(args.server, args.library)
     try:
         if args.command == "run":
             return _run(args.library, args.task, args.inputs, args.server, as_json=args.json)

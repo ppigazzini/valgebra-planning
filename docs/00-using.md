@@ -87,6 +87,21 @@ it returns, an `isError` result a tool error, and the run fails closed on any ar
 step or result outside its contract. It prints how the run ended and exits 1 unless it returned a
 value with no break. `tests/parcel_server.py` serves the example's tools over stdio.
 
+## A proxy in front of a server
+
+```bash
+uv run valgebra-planning proxy --server "uv run python tests/parcel_server.py" --library examples/parcels
+```
+
+serves an MCP server over stdio, in front of `--server`, that lists its tools as they are and
+answers a call only after holding it to the tool's contract, to every policy and flow rule the
+library defines, and, the call made, its result to the output schema
+(`valgebra_planning/proxy.py`). A broken check answers the call with a tool error naming it, and
+the call never reaches the server, or its result the agent. A refused call leaves every policy
+where it was. A flow rule reads provenance from values: an argument equal to a value an untrusted
+tool returned is taken as that tool's, an assumption. An agent connects to the proxy as to any
+stdio server, and no agent changes.
+
 ## Limits
 
 - With `--server`, the tasks, policies, flow rules and observed calls are still the library's files.

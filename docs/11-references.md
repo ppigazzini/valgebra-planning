@@ -52,6 +52,10 @@ directions.
 
 ## Information flow and privilege for agents
 
+- **Sah et al. 2026.** T. Sah, V. Srivastava, D. Sah, K. Jordan. The verifier tax: horizon
+  dependent safety success tradeoffs in tool using LLM agents. ACM CAIS 2026.
+  [arXiv:2603.19328](https://arxiv.org/abs/2603.19328). Deterministic grounding gates for
+  identifiers, which the proxy's flow check is.
 - **Debenedetti et al. 2025.** E. Debenedetti, I. Shumailov, T. Fan, J. Hayes, N. Carlini,
   D. Fabian, C. Kern, C. Shi, A. Terzis, F. Tramèr. Defeating prompt injections by design.
   [arXiv:2503.18813](https://arxiv.org/abs/2503.18813), 2025. CaMeL.
