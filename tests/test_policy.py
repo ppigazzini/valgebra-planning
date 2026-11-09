@@ -104,3 +104,28 @@ def test_a_run_under_the_monitor_reports_what_the_static_check_refutes() -> None
     assert plain_broken
     assert set(plain_broken) == {"freight approved first: book_freight_return reached violated"}
     assert policed_broken == []
+
+
+def test_an_enforced_run_never_makes_the_call_a_policy_forbids() -> None:
+    plain = plan(TOOLS, SETTLE).program
+    assert plain is not None
+    rng = random.Random(4)
+    made: list[str] = []
+
+    def answer(name: str) -> Any:
+        whole = TOOLS[name].result()
+
+        def tool(**_: Any) -> Any:
+            made.append(name)
+            return rng.choice(Sampler(whole.root, rng).draw(whole.schema, 8))
+
+        return tool
+
+    tools = {name: answer(name) for name in TOOLS if TOOLS[name].returns is not None}
+    tracking = SETTLE.held["tracking"][0]
+    refused = set()
+    for _ in range(80):
+        inputs = {"tracking": rng.choice(Sampler(tracking.root, rng).draw(tracking.schema, 4))}
+        refused.add(run(plain, TOOLS, SETTLE, inputs, tools, policies=[FREIGHT]).refused)
+    assert refused == {None, "freight approved first: book_freight_return reached violated"}
+    assert "book_freight_return" not in made

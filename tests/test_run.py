@@ -103,3 +103,81 @@ def test_the_naive_chain_is_refuted_and_breaks_a_contract_when_run() -> None:
         run(naive, TOOLS, task, _inputs(task, rng), _random_tools(rng)).broken for _ in range(RUNS)
     ]
     assert any(broken)
+
+
+NAIVE = Block(
+    (
+        Call("find_parcel", (("tracking", Ref("tracking")),), "c1"),
+        Call(
+            "book_return",
+            (
+                ("parcel_id", Ref("c1", ("parcel", "parcel_id"))),
+                ("state", Ref("c1", ("parcel", "state"))),
+                ("weight_g", Ref("c1", ("parcel", "weight_g"))),
+            ),
+            "c2",
+        ),
+    ),
+    Return(Ref("c2", ("label_id",))),
+)
+PARCEL = {
+    "parcel_id": "pcl_1",
+    "state": "lost",
+    "weight_g": 500,
+    "country": "IT",
+    "contact": "a@b.c",
+}
+
+
+def _recording(answers: dict[str, Any], made: list[str]) -> dict[str, Callable[..., Any]]:
+    """Return tools answering fixed values, each call recorded in ``made``."""
+
+    def answering(name: str) -> Callable[..., Any]:
+        def tool(**_: Any) -> Any:
+            made.append(name)
+            return answers[name]
+
+        return tool
+
+    return {name: answering(name) for name in answers}
+
+
+def test_an_argument_record_outside_the_input_set_is_never_sent() -> None:
+    made: list[str] = []
+    tools = _recording(
+        {"find_parcel": {"parcel": PARCEL}, "book_return": {"label_id": "lbl_1"}}, made
+    )
+    task = TASKS["return a parcel"]
+    result = run(NAIVE, TOOLS, task, {"tracking": "AB123456789IT"}, tools)
+    assert made == ["find_parcel"]
+    assert result.value is None
+    assert result.refused is not None
+    assert result.refused.startswith("book_return refuses its arguments")
+    assert result.broken == (result.refused,)
+
+
+def test_a_result_outside_its_contract_is_never_bound() -> None:
+    made: list[str] = []
+    delivered = {**PARCEL, "state": "delivered"}
+    tools = _recording(
+        {"find_parcel": {"parcel": delivered}, "book_return": {"label_id": "not a label"}}, made
+    )
+    task = TASKS["return a parcel"]
+    result = run(NAIVE, TOOLS, task, {"tracking": "AB123456789IT"}, tools)
+    assert made == ["find_parcel", "book_return"]
+    assert result.value is None
+    assert result.refused is not None
+    assert "outside its contract" in result.refused
+
+
+def test_without_enforcement_every_break_is_recorded_and_the_run_goes_on() -> None:
+    made: list[str] = []
+    tools = _recording(
+        {"find_parcel": {"parcel": PARCEL}, "book_return": {"label_id": "not a label"}}, made
+    )
+    task = TASKS["return a parcel"]
+    result = run(NAIVE, TOOLS, task, {"tracking": "AB123456789IT"}, tools, enforce=False)
+    assert made == ["find_parcel", "book_return"]
+    assert result.refused is None
+    assert result.value == "not a label"
+    assert len(result.broken) == 3

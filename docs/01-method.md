@@ -95,6 +95,16 @@ against typed tool APIs, verifies it and returns a critique: each link not prove
 refuting it, and for a binding the test that makes the call safe. A language model proposes, a
 sound critic checks (Kambhampati et al. 2024).
 
+## Running a program
+
+`valgebra_planning/run.py` calls the tools a program names and checks each step as it is made:
+the argument record against the tool's input set, each policy's step, the result against the
+output set and the returned value against the goal. It fails closed: the first broken check
+ends the run before the call is made, the result bound or the value returned, and `Run.refused`
+names it. A proof of a program holds over the contracts, so a tool answering outside its own
+contract is the case a run must not pass on. With `enforce=False` the runner records every break
+and goes on, a diagnosis rather than a guard.
+
 ## Limits
 
 - **Types are the specification.** A slot whose schema admits any string, as an unasserted

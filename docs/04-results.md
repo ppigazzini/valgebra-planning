@@ -36,7 +36,8 @@ contact check and a notice. Each task is planned, then verified by valgebra alon
 - `tests/test_run.py`, `tests/test_outcomes.py` and `tests/test_policy.py` run these programs
   against tools answering with values drawn from their own output schemas, and failing three
   times in ten: no contract is broken, and the monitor reports every policy violation the
-  verifier refutes.
+  verifier refutes. Enforced, a run never makes the call a policy forbids, never sends an
+  argument record outside the input set and never binds a result outside its contract.
 
 ## Libraries of growing size
 
