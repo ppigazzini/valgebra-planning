@@ -17,6 +17,7 @@ inside it, and a cell outside a predicate above it lies outside it.
 
 from __future__ import annotations
 
+import itertools
 import json
 import random
 from collections.abc import Iterable, Sequence
@@ -77,6 +78,12 @@ EDGES: tuple[Any, ...] = (
 
 #: How many values are drawn from each predicate's schema.
 DRAWS = 24
+
+#: How many objects of each schema's draws are merged with every other schema's.
+MERGED = 2
+
+#: How many seeded merges of a random subset of the object schemas are tried.
+SUBSETS = 64
 
 Status = Literal["inhabited", "undecided"]
 
@@ -140,6 +147,19 @@ class Abstraction:
             )
         return self._members[predicate]
 
+    def members(self, cell: int) -> tuple[Any, ...]:
+        """Return the values a cell holds where a predicate it lies inside lists them all.
+
+        Elsewhere, the member found for it, if any.
+        """
+        held = self.cells[cell]
+        for i in sorted(held.inside):
+            predicate = self.predicates[i]
+            listed = finite(predicate.schema, predicate.root)
+            if listed is not None:
+                return tuple(v for v in listed if held.values.is_valid(v))
+        return held.witness
+
     def undecided(self, cells: Iterable[int]) -> int:
         """Return how many of ``cells`` may be empty."""
         return sum(self.cells[i].status == "undecided" for i in cells)
@@ -194,16 +214,35 @@ class _Relations:
 
 
 def _pool(predicates: Sequence[Predicate], rng: random.Random) -> list[Any]:
-    """Return candidate members: the edges, every listed value, and draws from each schema."""
+    """Return candidate members: the edges, every listed value, and draws from each schema.
+
+    An open record meets another wherever a value carries both their keys, which no draw from
+    one schema does, so the objects drawn are also merged: every pair, and seeded subsets of
+    up to every one. Membership alone judges each candidate.
+    """
     pool = list(EDGES)
+    objects: list[list[dict[str, Any]]] = []
     for predicate in predicates:
         listed = finite(predicate.schema, predicate.root)
         if listed:
             pool.extend(listed)
         try:
-            pool.extend(Sampler(predicate.root, rng).draw(predicate.schema, DRAWS))
+            drawn = Sampler(predicate.root, rng).draw(predicate.schema, DRAWS)
         except (Unsupported, RecursionError):
             continue
+        pool.extend(drawn)
+        records = [value for value in drawn if isinstance(value, dict)][:MERGED]
+        if records:
+            objects.append(records)
+    for first, second in itertools.combinations(objects, 2):
+        pool.extend({**a, **b} for a in first for b in second)
+    for _ in range(SUBSETS):
+        chosen = rng.sample(objects, rng.randint(2, len(objects))) if len(objects) > 1 else []
+        merged: dict[str, Any] = {}
+        for records in chosen:
+            merged.update(rng.choice(records))
+        if merged:
+            pool.append(merged)
     return pool
 
 
