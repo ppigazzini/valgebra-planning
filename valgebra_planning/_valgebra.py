@@ -15,6 +15,7 @@ from valgebra import (
     union,
 )
 from valgebra_jsonschema import (
+    ANNOTATIONS,
     ARRAY,
     BOOLEAN,
     INTEGER,
@@ -29,11 +30,14 @@ from valgebra_jsonschema import (
     compile_schema,
     finite,
     json_key,
+    older,
     read_tool,
+    upgrade,
 )
 from valgebra_jsonschema.sample import Sampler
 
 __all__ = [
+    "ANNOTATIONS",
     "ARRAY",
     "BOOLEAN",
     "INTEGER",
@@ -54,6 +58,8 @@ __all__ = [
     "intersection",
     "json_key",
     "nothing",
+    "older",
     "read_tool",
     "union",
+    "upgrade",
 ]
