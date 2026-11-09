@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -66,13 +67,20 @@ def test_a_program_the_reader_refuses_exits_2(
 SERVER = f"{sys.executable} {Path(__file__).parent / 'parcel_server.py'}"
 
 
-def test_run_plans_and_runs_a_task_against_a_live_server(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def _command(*argv: str) -> subprocess.CompletedProcess[str]:
+    """Run the command line in a process of its own, as a user does, its server a child of it."""
+    entry = "from valgebra_planning.cli import main; raise SystemExit(main())"
+    return subprocess.run(  # noqa: S603 - this interpreter, this package
+        [sys.executable, "-c", entry, *argv], capture_output=True, text=True, check=False
+    )
+
+
+def test_run_plans_and_runs_a_task_against_a_live_server() -> None:
     inputs = '{"tracking": "AB123456789IT"}'
     argv = ["run", PARCELS, "--task", "settle a parcel", "--inputs", inputs, "--server", SERVER]
-    assert main([*argv, "--json"]) == 0
-    row = json.loads(capsys.readouterr().out)
+    ran = _command(*argv, "--json")
+    assert ran.returncode == 0, ran.stderr
+    row = json.loads(ran.stdout)
     assert row["strong"] is True
     assert row["refused"] is None
     assert row["broken"] == []
@@ -80,10 +88,10 @@ def test_run_plans_and_runs_a_task_against_a_live_server(
 
 
 def test_plan_reads_the_tools_of_a_live_server(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["plan", PARCELS, "--task", "return a parcel", "--server", SERVER, "--json"]) == 0
-    live = json.loads(capsys.readouterr().out)
+    live = _command("plan", PARCELS, "--task", "return a parcel", "--server", SERVER, "--json")
+    assert live.returncode == 0, live.stderr
     assert main(["plan", PARCELS, "--task", "return a parcel", "--json"]) == 0
-    assert live == json.loads(capsys.readouterr().out)
+    assert json.loads(live.stdout) == json.loads(capsys.readouterr().out)
 
 
 def test_check_finds_no_vacuous_specification_in_the_parcels(
