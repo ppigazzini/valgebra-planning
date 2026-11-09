@@ -149,7 +149,12 @@ output set and the returned value against the goal. It fails closed: the first b
 ends the run before the call is made, the result bound or the value returned, and `Run.refused`
 names it. A proof of a program holds over the contracts, so a tool answering outside its own
 contract is the case a run must not pass on. With `enforce=False` the runner records every break
-and goes on, a diagnosis rather than a guard. `valgebra_planning/proxy.py` holds the same checks
+and goes on, a diagnosis rather than a guard. `blame` names why a run broke: a proven program
+breaks only where something it rests on fails, a server returning outside the output schema it
+declares, a schema inferred from observed calls not holding, an error outlasting a retry's
+attempts; an argument record, a policy step or a returned value breaking in a proven program is a
+defect to report, and in an unproven one its own unproven link. A lying annotation and a wrong
+mined type break no check a run can see. `valgebra_planning/proxy.py` holds the same checks
 as an MCP server in front of another, for an agent no program governs: each call is answered with
 a tool error naming the check it breaks, a refused call steps no policy, and a flow rule reads a
 value's source from equality with what an untrusted tool returned, the grounding gate of Sah et

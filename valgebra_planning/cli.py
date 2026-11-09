@@ -40,6 +40,7 @@ from valgebra_planning.library import Library, Problem, read_library
 from valgebra_planning.planner import Plan, plan
 from valgebra_planning.privilege import describe, read_privileges, updates
 from valgebra_planning.program import render
+from valgebra_planning.run import blame
 from valgebra_planning.vacuity import vacuities
 from valgebra_planning.verify import Verification, verify
 
@@ -185,6 +186,7 @@ def _run(directory: Path, name: str, inputs: dict[str, Any], server: str, *, as_
                 "stopped": result.stopped,
                 "refused": result.refused,
                 "broken": list(result.broken),
+                "blame": blame(result, library.tools, proven=row["proven"]),
             }
 
     row = asyncio.run(ran())
@@ -201,7 +203,8 @@ def _run(directory: Path, name: str, inputs: dict[str, Any], server: str, *, as_
                 f"stopped on {row['stopped']}" if row["stopped"] else f"returned {row['value']!r}"
             )
         )
-        print("\n".join([_text(row), "", ended, *row["broken"]]))
+        cause = [f"cause: {row['blame']}"] if row["blame"] else []
+        print("\n".join([_text(row), "", ended, *row["broken"], *cause]))
     return 0 if returned and not row["broken"] else 1
 
 

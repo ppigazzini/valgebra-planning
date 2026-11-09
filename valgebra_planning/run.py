@@ -42,6 +42,15 @@ class ToolError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class Refusal:
+    """Which check ended a run: `arguments`, `policy`, `result`, `goal` or `error`, and its tool."""
+
+    check: str
+    tool: str | None = None
+    retried: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Run:
     """What a run returned or where it stopped, and every contract it broke on the way."""
 
@@ -50,6 +59,8 @@ class Run:
     broken: tuple[str, ...]
     #: The broken check that ended the run before it went on, when contracts are enforced.
     refused: str | None = None
+    #: Which check ended the run, for `blame`; one field, so a run nothing ends pays for one.
+    why: Refusal | None = None
 
 
 @dataclass(slots=True)
@@ -61,11 +72,11 @@ class _Runner:
     enforce: bool
     broken: list[str] = field(default_factory=list)
 
-    def breaks(self, check: str) -> Run | None:
+    def breaks(self, message: str, check: str, tool: str | None = None) -> Run | None:
         """Record a broken check; return the run it ends when contracts are enforced."""
-        self.broken.append(check)
+        self.broken.append(message)
         if self.enforce:
-            return Run(None, None, tuple(self.broken), refused=check)
+            return Run(None, None, tuple(self.broken), message, Refusal(check, tool))
         return None
 
     def block(self, block: Block, env: dict[str, Any]) -> Run | None:
@@ -79,7 +90,7 @@ class _Runner:
         if isinstance(end, Return):
             value = _read(env, end.ref)
             if not self.task.goal.is_valid(value):
-                refused = self.breaks(f"returned {value!r:.120}, outside the goal")
+                refused = self.breaks(f"returned {value!r:.120}, outside the goal", "goal")
                 if refused is not None:
                     return refused
             return Run(value, None, tuple(self.broken))
@@ -120,7 +131,8 @@ class _Runner:
                 if contract.inferred
                 else "its contract"
             )
-            refused = self.breaks(f"{call.tool} returned {result!r:.120}, outside {outside}")
+            message = f"{call.tool} returned {result!r:.120}, outside {outside}"
+            refused = self.breaks(message, "result", call.tool)
             if refused is not None:
                 return refused
         return {**env, call.result: result}
@@ -128,12 +140,14 @@ class _Runner:
     def admitted(self, tool: str, contract: Contract, arguments: dict[str, Any]) -> Run | None:
         """Check a call before it is made: its argument record, then each policy's step."""
         if not contract.accepts.is_valid(arguments):
-            refused = self.breaks(f"{tool} refuses its arguments {arguments!r:.120}")
+            refused = self.breaks(
+                f"{tool} refuses its arguments {arguments!r:.120}", "arguments", tool
+            )
             if refused is not None:
                 return refused
         for monitor in self.monitors:
             if monitor.observe(tool, arguments, contract.hints):
-                refused = self.breaks(monitor.violations[-1])
+                refused = self.breaks(monitor.violations[-1], "policy", tool)
                 if refused is not None:
                     return refused
         return None
@@ -150,7 +164,8 @@ class _Runner:
         if call.on_error is not None:
             return self.block(call.on_error, env)
         self.broken.append(f"{call.tool} answered with an error nothing handles")
-        return Run(None, f"an error of {call.tool}", tuple(self.broken))
+        stopped = f"an error of {call.tool}"
+        return Run(None, stopped, tuple(self.broken), None, Refusal("error", call.tool, call.retry))
 
     def branch(self, branch: Branch, env: dict[str, Any]) -> Run | None:
         if branch.key:
@@ -195,3 +210,38 @@ def run(
         runner.broken.append("the program ends an iteration outside a loop")
         return Run(None, "the end of an iteration", tuple(runner.broken))
     return ended
+
+
+#: What each check a proven program should never break holds, as `blame` names it.
+_CHECKED = {
+    "arguments": "an argument record",
+    "policy": "a policy step",
+    "goal": "the value returned",
+}
+
+
+def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> str | None:
+    """Return why a run broke, given whether its program was proven; None if nothing broke.
+
+    A proven program breaks at run time only where something it rests on fails: a tool's result
+    outside the output schema its server declared is the server's, one outside a schema shaped
+    from observed calls is that assumption's, and an error a retry could not outlast is the
+    fairness a retry assumes. An argument record, a policy step or a returned value breaking in a
+    proven program is a check the verification proved: a defect of this package or of valgebra.
+    An unproven program's break is its own link's.
+    """
+    if result.why is None:
+        return None
+    check, tool = result.why.check, result.why.tool
+    if check == "result" and tool is not None:
+        if contracts[tool].inferred:
+            return f"the output schema of {tool} inferred from observed calls does not hold"
+        return f"{tool} broke the output schema its server declares"
+    if check == "error":
+        if result.why.retried:
+            return f"an error of {tool} outlasted {ATTEMPTS} attempts: the fairness a retry assumes"
+        return f"an error of {tool} the program does not handle"
+    broke = _CHECKED.get(check, check)
+    if proven:
+        return f"{broke} the verification proved broke: a defect to report"
+    return f"{broke} no link of the program proves broke"
