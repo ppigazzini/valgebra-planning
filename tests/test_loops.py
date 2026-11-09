@@ -120,6 +120,55 @@ def test_a_policy_holds_over_any_number_of_iterations() -> None:
     assert _claims(LOOP, policies=[once])["policy notify at most once holds"] == "undecided"
 
 
+def test_an_obligation_a_loop_may_leave_open_is_undecided_and_one_it_settles_proven() -> None:
+    answered = read_policy(
+        {
+            "name": "every notice is followed by an alert",
+            "initial": "clear",
+            "bad": [],
+            "pending": ["owed"],
+            "transitions": [
+                {"from": "clear", "tool": "notify", "to": "owed"},
+                {"from": "owed", "tool": "alert", "to": "clear"},
+            ],
+        }
+    )
+    claim = "policy every notice is followed by an alert holds"
+    assert _claims(LOOP, policies=[answered])[claim] == "undecided"
+    settled = LOOP.replace(
+        "    c2 = notify(name=entity.name)\n",
+        "    c2 = notify(name=entity.name)\n    c3 = alert(message=query)\n",
+    )
+    assert _claims(settled, policies=[answered])[claim] == "proven"
+    after = "c1 = search(query=query)\nc2 = notify(name='a')\nreturn c1.count\n"
+    assert _claims(after, policies=[answered])[claim] == "refuted"
+
+
+def test_every_call_on_an_item_the_user_listed_is_a_flow_rule_with_only() -> None:
+    # "Every cancellation is of an order the user listed" needs no value carried by a policy.
+    listed = read_task(
+        "notify the listed",
+        {"query": {"type": "string"}, "names": {"type": "array", "items": NAME}},
+        {"type": "integer"},
+    )
+    rule = read_flow(
+        {
+            "name": "notices go to listed names",
+            "sources": ["names"],
+            "sink": "notify.name",
+            "only": True,
+        }
+    )
+    given = (
+        "c1 = search(query=query)\nfor name in names:\n    c2 = notify(name=name)\nreturn c1.count"
+    )
+    checked = verify(read_program(given), TOOLS, listed, flows=[rule])
+    assert checked.count("proven") == len(checked.links)
+    found = verify(read_program(LOOP), TOOLS, listed, flows=[rule])
+    claim = "flow notices go to listed names: entity.name from search reaches notify.name"
+    assert {link.claim: link.verdict for link in found.links}[claim] == "refuted"
+
+
 def test_a_call_in_a_loop_over_an_untrusted_array_is_an_implicit_flow() -> None:
     rule = read_flow(
         {"name": "alerts", "sources": ["search"], "sink": "alert.message", "implicit": True}

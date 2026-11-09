@@ -159,15 +159,37 @@ class _Search:
     def values(self, cells: frozenset[int]) -> Validator[Any]:
         return union(*(self.abstraction.cells[i].values for i in sorted(cells)))
 
+    def settled(self, state: _State) -> bool:
+        """Return whether a path may end here: no policy holds an obligation open."""
+        return all(
+            policy.reach(held, ended=True) == "never"
+            for policy, held in zip(self.policies, state.policed, strict=True)
+        )
+
+    def settling(self, state: _State) -> list[Contract]:
+        """Return the tools, first those a transition out of a held pending state reads."""
+        leaving = [
+            transition
+            for policy, held in zip(self.policies, state.policed, strict=True)
+            for transition in policy.transitions
+            if transition.source in held & policy.pending
+        ]
+        return sorted(
+            self.contracts.values(),
+            key=lambda contract: not any(t.reads(contract.name, contract.hints) for t in leaving),
+        )
+
     def solve(self, state: _State, depth: int, *, weak: bool) -> Block | None:
-        for ref, cells in state.refs:
-            if cells <= self.goal:
-                return Block((), Return(ref))
+        goal = next((ref for ref, cells in state.refs if cells <= self.goal), None)
+        if goal is not None and (not self.policies or self.settled(state)):
+            return Block((), Return(goal))
         key = (state.signature(), depth, weak)
         if depth == 0 or key in self.failed:
             return None
         self.expanded += 1
-        for contract in self.contracts.values():
+        # Past the goal a path goes on only to settle an obligation, so the calls that may
+        # settle one are tried first, and no call another branch needed pads this one.
+        for contract in self.contracts.values() if goal is None else self.settling(state):
             found = self.call(state, contract, depth, weak=weak)
             if found is not None:
                 return found
@@ -254,7 +276,7 @@ class _Search:
             return Call(contract.name, bindings, result, retry=True)
         without = state.but(made=state.made | {(contract.name, bindings)})
         fallback = self.solve(without, depth - 1, weak=weak)
-        if fallback is None and weak and bindings:
+        if fallback is None and weak and bindings and self.settled(state):
             stop = Stop(bindings[0][1])
             self.stops[id(stop)] = state.cells(bindings[0][1])
             fallback = Block((), stop)
@@ -281,7 +303,7 @@ class _Search:
         if then is None:
             return None
         otherwise = self.solve(outside, depth - 1, weak=weak)
-        if otherwise is None and weak:
+        if otherwise is None and weak and self.settled(outside):
             stop = Stop(ref)
             self.stops[id(stop)] = outside.cells(ref)
             otherwise = Block((), stop)
@@ -614,7 +636,8 @@ def plan(
     With ``errors``, any tool may answer with an error, and every call is retried or given
     a block for it, as `valgebra_planning.verify.verify` holds with the same flag. A call is
     made only where valgebra proves it keeps every policy away from its bad states, and a
-    call a policy reads is kept even where no result of it is read. A value reaches a flow
+    call a policy reads is kept even where no result of it is read; a path ends, in a return or
+    a stop, only where no policy holds a pending state. A value reaches a flow
     rule's sink only as `valgebra_planning.verify.verify` holds it with the same rules. With
     mined ``types``, a value fills an argument only where their types agree, and the plan
     names every binding that rests on one.

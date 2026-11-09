@@ -26,6 +26,13 @@ directions.
 - **Kupferman and Vardi 2003.** O. Kupferman, M. Y. Vardi. Vacuity detection in temporal model
   checking. International Journal on Software Tools for Technology Transfer 4(2), 2003, 224-233.
   [doi:10.1007/s100090100062](https://doi.org/10.1007/s100090100062)
+- **Bauer et al. 2011.** A. Bauer, M. Leucker, C. Schallhart. Runtime verification for LTL and
+  TLTL. ACM Transactions on Software Engineering and Methodology 20(4), 2011.
+  [doi:10.1145/2000799.2000800](https://doi.org/10.1145/2000799.2000800). A monitor decides a
+  property on a prefix only by a bad or a good one, which a pending state is not.
+- **Roşu and Chen 2012.** G. Roşu, F. Chen. Semantics and algorithms for parametric monitoring.
+  Logical Methods in Computer Science 8(1:09), 2012. Parametric trace slicing, which a policy
+  does not read.
 
 ## Synthesis from typed components
 

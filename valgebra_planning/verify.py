@@ -165,9 +165,9 @@ class _Walk:
         return found
 
     def obeyed(self, where: str, states: _States) -> None:
-        """Add a link per policy: whether this path may reach one of its bad states."""
+        """Add a link per policy where a path ends: whether it may end in a bad or pending state."""
         for policy, held in zip(self.policies, states, strict=True):
-            verdict = _OBEYED[policy.reach(held)]
+            verdict = _OBEYED[policy.reach(held, ended=True)]
             hinted = policy.hints() and not all(c.trusted for c in self.contracts.values())
             assumed = (f"the annotation hints policy {policy.name} reads",) if hinted else ()
             self.links.append(Link(where, f"policy {policy.name} holds", verdict, (), assumed))

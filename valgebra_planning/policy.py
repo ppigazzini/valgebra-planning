@@ -2,20 +2,30 @@
 
 A policy is a symbolic automaton over call events (D'Antoni and Veanes 2017): a transition
 fires on a call to its tool whose argument record lies in its guard, a JSON Schema the
-companion reads into a set. Some states are bad, and reaching one is a violation; a call no
-guard of the current state matches keeps that state. It states what a domain policy says
+companion reads into a set. Some states are bad: reaching one is a violation, and a bad state
+is never left. Some are pending: a path may pass through one and must not end in one, an
+obligation still open, as a notice owed after a booking. A call no guard of the current state
+matches keeps that state. It states what a domain policy says
 in prose (τ-bench, Yao et al. 2024), and what a trace rule checks one prefix at a time
 (AgentLTL, Elkoussy and Perez 2026), as a set a whole program is decided against before it
 runs.
 
 Statically, a program's every path steps the automaton with the argument records it may
 pass: a guard is taken surely where valgebra proves the record inside it, never where it
-proves them disjoint, and possibly otherwise. A path reaching a bad state surely refutes
-the program, possibly leaves it undecided, and no path reaching one proves it. At run time
-the same automaton is a monitor stepping on concrete records.
+proves them disjoint, and possibly otherwise. A path ending in a bad or a pending state
+surely refutes the program, possibly leaves it undecided, and no path ending in one proves
+it; a bad state never left makes ending in one the same as reaching one. Every path of a
+program ends, a loop's after any number of items, so an obligation is decided over the whole
+program before it runs, where a monitor reading a run's prefix cannot decide it (Bauer et al.
+2011). At run time the same automaton is a monitor stepping on concrete records, and reading
+the pending states when the run ends.
 
 A policy reads one program's calls in order. It carries no value from one call to another,
-so a rule about the same parcel across two calls is read as a rule about any two calls.
+so a rule about the same parcel across two calls is read as a rule about any two calls: a
+program approving one parcel and booking another passes a rule that a booking follows its own
+parcel's approval. A rule that a call takes a value another returned is a flow rule with
+``only`` (`valgebra_planning.flows`). A policy instance per value, parametric monitoring
+(Roşu and Chen 2012), is not read.
 """
 
 from __future__ import annotations
@@ -50,12 +60,14 @@ class Transition:
 
 @dataclass(frozen=True, slots=True)
 class Policy:
-    """An automaton over call events: its states, where it starts, and which states are bad."""
+    """An automaton over call events: where it starts, its bad states and its pending ones."""
 
     name: str
     initial: str
     bad: frozenset[str]
     transitions: tuple[Transition, ...]
+    #: The states a path may pass through and must not end in: an obligation still open.
+    pending: frozenset[str] = frozenset()
 
     def tools(self) -> frozenset[str]:
         """Return every tool a transition names."""
@@ -75,10 +87,14 @@ class Policy:
         """Return the states the automaton may be in after a call whose record lies in ``record``.
 
         A transition taken surely leaves its source; one taken possibly adds its target and
-        keeps the source, as does a call no guard of the state surely matches.
+        keeps the source, as does a call no guard of the state surely matches. A bad state is
+        never left.
         """
         after: set[str] = set()
         for state in states:
+            if state in self.bad:
+                after.add(state)
+                continue
             stays = True
             for transition in self.transitions:
                 if transition.source != state or not transition.reads(tool, hints):
@@ -92,9 +108,12 @@ class Policy:
                 after.add(state)
         return frozenset(after)
 
-    def reach(self, states: frozenset[str]) -> Reach:
-        """Return whether a bad state is held: surely where every state is bad."""
-        bad = states & self.bad
+    def reach(self, states: frozenset[str], *, ended: bool = False) -> Reach:
+        """Return whether a bad state is held, or a pending one where a path ends: surely if all.
+
+        A path that has not ended may pass through a pending state.
+        """
+        bad = states & (self.bad | self.pending if ended else self.bad)
         if not bad:
             return "never"
         return "surely" if bad == states else "possibly"
@@ -109,7 +128,7 @@ def _taken(record: Validator[Any], guard: Validator[Any]) -> Reach:
 
 
 def read_policy(spec: Mapping[str, Any]) -> Policy:
-    """Read a policy: ``name``, ``initial``, ``bad`` states and ``transitions``.
+    """Read a policy: ``name``, ``initial``, ``bad`` states, ``transitions`` and ``pending``.
 
     Each transition names its ``from`` and ``to`` states and its ``tool``, or the annotation
     ``hint`` a tool must set, and optionally the JSON Schema its ``arguments`` record must meet,
@@ -125,7 +144,13 @@ def read_policy(spec: Mapping[str, Any]) -> Policy:
         )
         for t in spec["transitions"]
     )
-    return Policy(spec["name"], spec["initial"], frozenset(spec["bad"]), transitions)
+    return Policy(
+        spec["name"],
+        spec["initial"],
+        frozenset(spec["bad"]),
+        transitions,
+        frozenset(spec.get("pending", ())),
+    )
 
 
 @dataclass(slots=True)
@@ -142,7 +167,9 @@ class Monitor:
     def observe(
         self, tool: str, arguments: Mapping[str, Any], hints: frozenset[str] = frozenset()
     ) -> bool:
-        """Step on one call; return whether it reached a bad state."""
+        """Step on one call; return whether it reached a bad state, which it never leaves."""
+        if self.state in self.policy.bad:
+            return False
         for transition in self.policy.transitions:
             if (
                 transition.source == self.state
@@ -155,3 +182,10 @@ class Monitor:
             self.violations.append(f"{self.policy.name}: {tool} reached {self.state}")
             return True
         return False
+
+    def ended(self) -> bool:
+        """Return whether the run ends in a pending state: an obligation it leaves open."""
+        if self.state not in self.policy.pending:
+            return False
+        self.violations.append(f"{self.policy.name}: the run ended in {self.state}")
+        return True

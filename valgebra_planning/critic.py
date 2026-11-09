@@ -278,8 +278,8 @@ def _guard(claim: str) -> str | None:
 
 
 _POLICY = (
-    "a call on this path reaches a bad state of the policy: make first the call it requires, "
-    "or leave out the call it forbids"
+    "this path reaches a bad state of the policy or ends in a pending one: make the call it "
+    "requires where it requires it, or leave out the call it forbids"
 )
 _IMPLICIT = "make the sink call outside the branch that tests the untrusted value"
 _EXPLICIT = (

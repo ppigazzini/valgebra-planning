@@ -56,7 +56,7 @@ def test_a_guard_no_record_meets_leaves_the_policy_unbreakable(tmp_path: Path) -
     found = _found(_planted(tmp_path, "policies.json", dead))
     assert (
         "policy freight approved first",
-        "no transition that can fire reaches a bad state",
+        "no transition that can fire reaches a bad or pending state",
         "proven",
     ) in found
     assert any(
@@ -123,3 +123,12 @@ def test_a_guard_valgebra_cannot_part_is_undecided_and_the_policy_kept_live(
             "undecided",
         )
     }
+
+
+def test_a_policy_holding_only_pending_states_is_live(tmp_path: Path) -> None:
+    def owed(policies: Any) -> Any:
+        policies["policies"][0]["pending"] = policies["policies"][0]["bad"]
+        policies["policies"][0]["bad"] = []
+        return policies
+
+    assert _found(_planted(tmp_path, "policies.json", owed)) == set()

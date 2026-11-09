@@ -11,7 +11,7 @@ A library is a directory (`valgebra_planning/library.py` reads it):
 |---|---|
 | `tools.json` | a server's `tools/list` result: `{"tools": [...]}`, each tool its `name`, `inputSchema`, and the `outputSchema` and `annotations` it declares; `"trusted": true` where the server's annotations are trusted |
 | `tasks.json` | `{"tasks": [...]}`, each task a `name`, the JSON Schema of each value the agent starts with in `inputs`, the JSON Schema of the `goal`, and the rules it is held to: `errors` (any tool may fail), `policies` and `flows` by name, `types`, the file of observed calls its semantic types are mined from |
-| `policies.json` | `{"policies": [...]}`, each an automaton over calls (`valgebra_planning/policy.py`) |
+| `policies.json` | `{"policies": [...]}`, each an automaton over calls (`valgebra_planning/policy.py`): `initial`, the `bad` states no path may reach, the `pending` states no path may end in, and the `transitions` |
 | `flows.json` | `{"flows": [...]}`, each a flow rule (`valgebra_planning/flows.py`) |
 | a file `types` names | `{"calls": [...]}`, each an observed call: `tool`, `arguments`, `result`; a tool listed without an `outputSchema` gets one shaped from its results there, an assumption every binding resting on it names |
 

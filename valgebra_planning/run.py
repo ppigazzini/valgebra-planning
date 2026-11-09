@@ -93,9 +93,9 @@ class _Runner:
                 refused = self.breaks(f"returned {value!r:.120}, outside the goal", "goal")
                 if refused is not None:
                     return refused
-            return Run(value, None, tuple(self.broken))
+            return self.settled() or Run(value, None, tuple(self.broken))
         if isinstance(end, Stop):
-            return Run(_read(env, end.ref), str(end.ref), tuple(self.broken))
+            return self.settled() or Run(_read(env, end.ref), str(end.ref), tuple(self.broken))
         if isinstance(end, Next):
             return None
         if isinstance(end, For):
@@ -110,6 +110,15 @@ class _Runner:
             if ended is not None:
                 return ended
         return self.block(end.after, env)
+
+    def settled(self) -> Run | None:
+        """Check each policy where the run ends; return the run a pending state ends."""
+        for monitor in self.monitors:
+            if monitor.ended():
+                refused = self.breaks(monitor.violations[-1], "policy")
+                if refused is not None:
+                    return refused
+        return None
 
     def call(self, call: Call, env: dict[str, Any]) -> dict[str, Any] | Run | None:
         """Make one call; return the values held after it, the run it ended, or None (`block`)."""
@@ -200,8 +209,9 @@ def run(
     """Run ``program`` on ``inputs``, calling ``tools`` by name, checking every contract.
 
     Each policy is stepped on a call before it is made, and reaching a bad state is a broken
-    check like a broken contract. With ``enforce``, the default, the first broken check ends
-    the run, named in `Run.refused`; without it every break is recorded and the run goes on.
+    check like a broken contract, as is a run ending, in a return or a stop, in a pending one.
+    With ``enforce``, the default, the first broken check ends the run, named in `Run.refused`;
+    without it every break is recorded and the run goes on.
     """
     monitors = [Monitor(policy) for policy in policies]
     runner = _Runner(contracts, tools, task, monitors, enforce)
@@ -215,7 +225,7 @@ def run(
 #: What each check a proven program should never break holds, as `blame` names it.
 _CHECKED = {
     "arguments": "an argument record",
-    "policy": "a policy step",
+    "policy": "a policy",
     "goal": "the value returned",
 }
 
@@ -226,7 +236,7 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
     A proven program breaks at run time only where something it rests on fails: a tool's result
     outside the output schema its server declared is the server's, one outside a schema shaped
     from observed calls is that assumption's, and an error a retry could not outlast is the
-    fairness a retry assumes. An argument record, a policy step or a returned value breaking in a
+    fairness a retry assumes. An argument record, a policy or a returned value breaking in a
     proven program is a check the verification proved: a defect of this package or of valgebra.
     An unproven program's break is its own link's.
     """

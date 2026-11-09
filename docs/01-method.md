@@ -93,7 +93,11 @@ verifier, which adds a link for it.
   taken to a fixpoint, the states being finite. A policy reads one program's calls in order and
   carries no value from one call to another. A transition may read an annotation hint,
   `destructiveHint` or another, on any tool setting it; the policy's link then lists the hints it
-  reads as an assumption.
+  reads as an assumption. A pending state is an obligation: a path may pass through it and must
+  not end in it, as a booking owes a notice. Every path of a program ends, a loop's after any
+  number of items, so a pending state is decided before the run, where a monitor reading a prefix
+  cannot decide it (Bauer et al. 2011); the runner reads it when the run ends. A bad state is
+  never left.
 - **Flows** (`valgebra_planning/flows.py`). A value from an untrusted source reaches a sink
   argument only inside the rule's endorsed set, and with `implicit` no sink call runs under a
   test on such a value or in a loop over an array from such a source: the integrity half of
@@ -156,7 +160,7 @@ contract is the case a run must not pass on. With `enforce=False` the runner rec
 and goes on, a diagnosis rather than a guard. `blame` names why a run broke: a proven program
 breaks only where something it rests on fails, a server returning outside the output schema it
 declares, a schema inferred from observed calls not holding, an error outlasting a retry's
-attempts; an argument record, a policy step or a returned value breaking in a proven program is a
+attempts; an argument record, a policy or a returned value breaking in a proven program is a
 defect to report, and in an unproven one its own unproven link. A lying annotation and a wrong
 mined type break no check a run can see. `valgebra_planning/proxy.py` holds the same checks
 as an MCP server in front of another, for an agent no program governs: each call is answered with
@@ -175,4 +179,10 @@ refused, and a value from a task input with it, since a proxy sees no task.
   `prefixItems`; and a program the planner writes holds no constant, tests no key and loops
   over no array. A program written elsewhere may do all three, and each is checked like any
   value.
+- **A policy carries no value between calls.** A rule about one parcel across two calls is read
+  as one about any two, so a program approving one parcel and booking another passes a rule that
+  a booking follows its own parcel's approval. That one call takes the value another returned
+  is a flow rule with `only`; a policy instance per value, the parametric monitoring of Roşu and
+  Chen 2012, is not read, and a proxy reads no pending state, since a session has no end it
+  sees.
 - **Search bounds.** Six calls and tests a path by default, and the first 16 bindings of a call.

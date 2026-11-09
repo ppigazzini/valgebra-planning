@@ -108,7 +108,7 @@ def test_a_policy_the_program_breaks_is_refuted_with_its_remedy() -> None:
     refused = [note for note in checked.notes if "policy freight approved first holds" in note]
     assert refused
     assert all(note.startswith("refuted: ") for note in refused)
-    assert all("make first the call it requires" in note for note in refused)
+    assert all("make the call it requires where it requires it" in note for note in refused)
 
 
 def test_a_flow_the_program_breaks_is_refuted_with_its_remedy() -> None:

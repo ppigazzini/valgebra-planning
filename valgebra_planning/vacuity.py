@@ -2,7 +2,8 @@
 
 A goal no value meets makes every task over it unsolvable, and one every value meets makes any
 program a solution; a policy transition whose guard no argument record of its tool meets never
-fires, and a policy whose bad states no transition that can fire reaches is never violated; a
+fires, and a policy whose bad and pending states no transition that can fire reaches is never
+violated; a
 flow rule whose endorsed set misses the sink's argument lets nothing through, and one that holds
 it refuses nothing. Each is a specification satisfied vacuously (Kupferman and Vardi 2003), a
 check that passes without testing what its author meant, and each is a set question valgebra
@@ -25,7 +26,7 @@ from valgebra_planning.cells import EDGES
 from valgebra_planning.contracts import Contract
 from valgebra_planning.flows import Flow
 from valgebra_planning.library import Library
-from valgebra_planning.policy import Policy
+from valgebra_planning.policy import Policy, Transition
 
 Certainty = Literal["proven", "undecided"]
 
@@ -92,6 +93,20 @@ def _tools(tools: dict[str, Contract]) -> list[Finding]:
     return found
 
 
+def _reached(policy: Policy, live: list[Transition]) -> set[str]:
+    """Return the states the transitions that can fire reach; a bad state is never left."""
+    reached, frontier = {policy.initial}, [policy.initial]
+    while frontier:
+        state = frontier.pop()
+        if state in policy.bad:
+            continue
+        for transition in live:
+            if transition.source == state and transition.target not in reached:
+                reached.add(transition.target)
+                frontier.append(transition.target)
+    return reached
+
+
 def _policy(policy: Policy, tools: dict[str, Contract]) -> list[Finding]:
     where = f"policy {policy.name}"
     found, live = [], []
@@ -113,15 +128,10 @@ def _policy(policy: Policy, tools: dict[str, Contract]) -> list[Finding]:
         found += _found(step, f"no argument record of {transition.tool} meets its guard", dead)
         if dead != "proven":
             live.append(transition)
-    reached, frontier = {policy.initial}, [policy.initial]
-    while frontier:
-        state = frontier.pop()
-        for transition in live:
-            if transition.source == state and transition.target not in reached:
-                reached.add(transition.target)
-                frontier.append(transition.target)
-    if not reached & policy.bad:
-        found.append(Finding(where, "no transition that can fire reaches a bad state", "proven"))
+    if not _reached(policy, live) & (policy.bad | policy.pending):
+        found.append(
+            Finding(where, "no transition that can fire reaches a bad or pending state", "proven")
+        )
     return found
 
 

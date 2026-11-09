@@ -13,6 +13,7 @@ taken as coming from it, and refused unless it lies in the rule's endorsed set. 
 earlier in the session, the grounding gate Sah et al. 2026 ask for. Both are assumptions: a
 value equal by chance to an untrusted one is refused with it, and one equal by chance to a
 retrieved one passes. A proxy sees no task, so a value from a task input is from elsewhere.
+A session has no end a proxy sees, so a policy's pending states are not read there.
 Requires the ``mcp`` extra.
 """
 
