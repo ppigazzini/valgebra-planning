@@ -1,0 +1,11 @@
+{
+  "flows": [
+    {
+      "name": "notices go to verified addresses",
+      "sources": [
+        "find_parcel"
+      ],
+      "sink": "notify.email"
+    }
+  ]
+}

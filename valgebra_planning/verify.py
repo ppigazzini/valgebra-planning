@@ -26,6 +26,7 @@ from valgebra_planning._valgebra import (
     intersection,
 )
 from valgebra_planning.contracts import Contract, Slot, Task, listed
+from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop
 
@@ -91,23 +92,24 @@ class _Walk:
     rng: random.Random
     errors: bool
     policies: tuple[Policy, ...]
+    flows: tuple[Flow, ...]
     links: list[Link] = field(default_factory=list)
     gaps: list[Gap] = field(default_factory=list)
 
-    def block(self, block: Block, env: dict[Ref, _Held], where: str, states: _States) -> None:
+    def block(self, block: Block, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         for call in block.calls:
-            env, states = self.call(call, env, where, states)
+            env, path = self.call(call, env, where, path)
         end = block.end
         if isinstance(end, Return):
             held = self.held(env, end.ref, where)
             if held is not None:
                 self.inclusion(where, f"return {end.ref} <= goal", end.ref, held, self.task.goal)
-            self.obeyed(where, states)
+            self.obeyed(where, path.states)
         elif isinstance(end, Stop):
             self.gaps.append(Gap(where, str(end.ref)))
-            self.obeyed(where, states)
+            self.obeyed(where, path.states)
         else:
-            self.branch(end, env, where, states)
+            self.branch(end, env, where, path)
 
     def obeyed(self, where: str, states: _States) -> None:
         """Add a link per policy: whether this path may reach one of its bad states."""
@@ -115,7 +117,7 @@ class _Walk:
             verdict = _OBEYED[policy.reach(held)]
             self.links.append(Link(where, f"policy {policy.name} holds", verdict))
 
-    def branch(self, test: Branch, env: dict[Ref, _Held], where: str, states: _States) -> None:
+    def branch(self, test: Branch, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         held = self.held(env, test.ref, where)
         if test.tool:
             slot = self.argument(test.tool, test.argument, where)
@@ -126,16 +128,20 @@ class _Walk:
             return
         inside = _Held(intersection(held.values, tested), held.origin)
         outside = _Held(intersection(held.values, complement(tested)), held.origin)
-        self.block(test.then, {**env, test.ref: inside}, _join(where, "then"), states)
-        self.block(test.otherwise, {**env, test.ref: outside}, _join(where, "else"), states)
+        # Which branch runs carries the tested value's influence: an implicit flow.
+        tested = _Path(path.states, path.tested | {held.origin.tool})
+        self.block(test.then, {**env, test.ref: inside}, _join(where, "then"), tested)
+        self.block(test.otherwise, {**env, test.ref: outside}, _join(where, "else"), tested)
 
     def call(
-        self, call: Call, env: dict[Ref, _Held], where: str, states: _States
-    ) -> tuple[dict[Ref, _Held], _States]:
+        self, call: Call, env: dict[Ref, _Held], where: str, path: _Path
+    ) -> tuple[dict[Ref, _Held], _Path]:
         contract = self.contracts.get(call.tool)
         if contract is None:
             self.links.append(Link(where, f"{call.tool} is a tool", "refuted"))
-            return env, states
+            return env, path
+        self.flowing(call, env, where, path)
+        states = path.states
         bound: dict[str, _Held] = {}
         for name, ref in call.bindings:
             slot = self.argument(call.tool, name, where)
@@ -158,11 +164,30 @@ class _Walk:
             )
         # A tool that answered with an error may still have acted, so its block reads both.
         either = tuple(before | then for before, then in zip(states, after, strict=True))
-        self.failure(call, contract, env, where, either)
+        self.failure(call, contract, env, where, _Path(either, path.tested))
         defined = {ref: held for ref, held in env.items() if ref.variable != call.result}
         for slot in contract.results:
             defined[Ref(call.result, slot.path)] = _Held(slot.values, slot)
-        return defined, after
+        return defined, _Path(after, path.tested)
+
+    def flowing(self, call: Call, env: dict[Ref, _Held], where: str, path: _Path) -> None:
+        """Add a link for every flow rule whose sink this call fills."""
+        for flow in self.flows:
+            if flow.tool != call.tool:
+                continue
+            tested = sorted(path.tested & flow.sources)
+            if flow.implicit and tested:
+                claim = f"flow {flow.name}: {call.tool} runs under a test on {', '.join(tested)}"
+                self.links.append(Link(where, claim, "refuted"))
+            for name, ref in call.bindings:
+                held = env.get(ref)
+                if name != flow.argument or held is None or held.origin.tool not in flow.sources:
+                    continue
+                claim = f"flow {flow.name}: {ref} from {held.origin.tool} reaches {flow.sink}"
+                if flow.endorsed is None:
+                    self.links.append(Link(where, claim, "refuted"))
+                else:
+                    self.inclusion(where, claim, ref, held, flow.endorsed)
 
     def failure(
         self,
@@ -170,7 +195,7 @@ class _Walk:
         contract: Contract,
         env: dict[Ref, _Held],
         where: str,
-        states: _States,
+        path: _Path,
     ) -> None:
         """Check what a call does when its tool answers with an error."""
         if call.retry:
@@ -178,7 +203,7 @@ class _Walk:
             self.links.append(Link(where, f"{call.tool} may be retried", verdict))
         if call.on_error is not None:
             # The result is never bound on this path, so the block reads what the call read.
-            self.block(call.on_error, env, _join(where, f"error:{call.tool}"), states)
+            self.block(call.on_error, env, _join(where, f"error:{call.tool}"), path)
         elif not call.retry and self.errors:
             self.gaps.append(Gap(where, f"an error of {call.tool}"))
 
@@ -237,6 +262,15 @@ def _join(where: str, branch: str) -> str:
 #: The states of every policy a path may be in, one set per policy.
 _States = tuple[frozenset[str], ...]
 
+
+@dataclass(frozen=True, slots=True)
+class _Path:
+    """What a path carries beside its values: policy states, and the sources it tested."""
+
+    states: _States
+    tested: frozenset[str] = frozenset()
+
+
 #: Whether a path may reach a bad state, read as a verdict on the policy holding.
 _OBEYED: dict[str, Verdict] = {"never": "proven", "surely": "refuted", "possibly": "undecided"}
 
@@ -261,6 +295,7 @@ def verify(
     seed: int = 0,
     errors: bool = False,
     policies: Sequence[Policy] = (),
+    flows: Sequence[Flow] = (),
 ) -> Verification:
     """Ask every link of ``program`` of valgebra, for ``task`` over ``contracts``.
 
@@ -270,13 +305,17 @@ def verify(
     A retry is accepted only for a tool that is read-only or idempotent, since calling twice
     must act as calling once; it ends under fairness, the strong cyclic reading. Each policy
     adds a link at the end of every path: proven where no bad state can be reached there,
-    refuted where one surely is, undecided where one possibly is.
+    refuted where one surely is, undecided where one possibly is. Each flow rule adds a link
+    for every value from one of its sources bound to its sink, and, where implicit flows are
+    read, for every call to the sink under a test on such a value.
     """
-    walk = _Walk(contracts, task, examples or {}, random.Random(seed), errors, tuple(policies))
+    walk = _Walk(
+        contracts, task, examples or {}, random.Random(seed), errors, tuple(policies), tuple(flows)
+    )
     env = {
         Ref(var, slot.path): _Held(slot.values, slot)
         for var, slots in task.held.items()
         for slot in slots
     }
-    walk.block(program, env, "", tuple(frozenset({p.initial}) for p in policies))
+    walk.block(program, env, "", _Path(tuple(frozenset({p.initial}) for p in policies)))
     return Verification(tuple(walk.links), tuple(walk.gaps))

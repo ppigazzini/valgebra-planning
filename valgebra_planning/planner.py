@@ -23,12 +23,13 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from valgebra_planning._valgebra import Validator, intersection, nothing, union
 from valgebra_planning.cells import Abstraction, Predicate, abstract, gather
 from valgebra_planning.contracts import Contract, Slot, Task
+from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop, render, renumber
 
@@ -89,16 +90,26 @@ class _State:
     fresh: int
     #: The states each policy may be in, one set per policy.
     policed: tuple[frozenset[str], ...] = ()
+    #: Where each variable came from: a task input's name, or the tool whose result it is.
+    origins: tuple[tuple[str, str], ...] = ()
+    #: The sources of every value tested on the path so far.
+    tested: frozenset[str] = frozenset()
 
     def cells(self, ref: Ref) -> frozenset[int]:
         return dict(self.refs)[ref]
 
+    def origin(self, ref: Ref) -> str:
+        return dict(self.origins).get(ref.variable, ref.variable)
+
+    def but(self, **changes: Any) -> _State:
+        return replace(self, **changes)
+
     def narrowed(self, ref: Ref, cells: frozenset[int]) -> _State:
         refs = tuple((r, cells if r == ref else held) for r, held in self.refs)
-        return _State(refs, self.made, self.fresh, self.policed)
+        return self.but(refs=refs, tested=self.tested | {self.origin(ref)})
 
-    def signature(self) -> tuple[frozenset[frozenset[int]], tuple[frozenset[str], ...]]:
-        return frozenset(cells for _, cells in self.refs), self.policed
+    def signature(self) -> object:
+        return frozenset(cells for _, cells in self.refs), self.policed, self.tested
 
 
 @dataclass(slots=True)
@@ -108,6 +119,7 @@ class _Search:
     goal: frozenset[int]
     errors: bool = False
     policies: tuple[Policy, ...] = ()
+    flows: tuple[Flow, ...] = ()
     failed: set[tuple[object, int, bool]] = field(default_factory=set)
     expanded: int = 0
     #: The cells each stop leaves uncovered, by the stop's identity: a stop is made once
@@ -183,17 +195,17 @@ class _Search:
             ):
                 continue
             policed = self.policed(state, contract, bindings)
-            if policed is None:
+            if policed is None or not self.flowing(state, contract, bindings):
                 continue
             # A tool that answered with an error may still have acted, so the block run then
             # starts from either set of policy states.
             either = tuple(a | b for a, b in zip(state.policed, policed, strict=True))
             result = f"c{state.fresh}"
-            failing = _State(state.refs, state.made, state.fresh, either)
+            failing = state.but(policed=either)
             call = self.failure(failing, contract, bindings, result, depth, weak=weak)
             if call is None:
                 continue
-            stepped = _State(state.refs, state.made, state.fresh, policed)
+            stepped = state.but(policed=policed)
             after = self.after(stepped, contract, bindings, result)
             rest = self.solve(after, depth - 1, weak=weak)
             if rest is not None:
@@ -220,9 +232,7 @@ class _Search:
             return Call(contract.name, bindings, result)
         if contract.idempotent:
             return Call(contract.name, bindings, result, retry=True)
-        without = _State(
-            state.refs, state.made | {(contract.name, bindings)}, state.fresh, state.policed
-        )
+        without = state.but(made=state.made | {(contract.name, bindings)})
         fallback = self.solve(without, depth - 1, weak=weak)
         if fallback is None and weak and bindings:
             stop = Stop(bindings[0][1])
@@ -297,7 +307,30 @@ class _Search:
             if self.holds(_result_name(slot))
         )
         made = state.made | {(contract.name, bindings)}
-        return _State(state.refs + results, made, state.fresh + 1, state.policed)
+        return state.but(
+            refs=state.refs + results,
+            made=made,
+            fresh=state.fresh + 1,
+            origins=(*state.origins, (result, contract.name)),
+        )
+
+    def flowing(
+        self, state: _State, contract: Contract, bindings: tuple[tuple[str, Ref], ...]
+    ) -> bool:
+        """Return whether every flow rule lets this call's arguments reach it."""
+        for flow in self.flows:
+            if flow.tool != contract.name:
+                continue
+            if flow.implicit and state.tested & flow.sources:
+                return False
+            for name, ref in bindings:
+                if name != flow.argument or state.origin(ref) not in flow.sources:
+                    continue
+                if flow.endorsed is None:
+                    return False
+                if self.values(state.cells(ref)).relation_to(flow.endorsed) != "subset":
+                    return False
+        return True
 
 
 def _readable(values: Validator[Any], consumers: Sequence[Validator[Any]]) -> bool:
@@ -454,17 +487,26 @@ def plan(
     weak: bool = True,
     errors: bool = False,
     policies: Sequence[Policy] = (),
+    flows: Sequence[Flow] = (),
 ) -> Plan:
     """Search a program for ``task`` over ``contracts``: strong first, then weak if asked.
 
     With ``errors``, any tool may answer with an error, and every call is retried or given
     a block for it, as `valgebra_planning.verify.verify` holds with the same flag. A call is
     made only where valgebra proves it keeps every policy away from its bad states, and a
-    call a policy reads is kept even where no result of it is read.
+    call a policy reads is kept even where no result of it is read. A value reaches a flow
+    rule's sink only as `valgebra_planning.verify.verify` holds it with the same rules.
     """
     abstraction = abstract(_predicates(contracts, task), seed=seed)
     goal = abstraction.cells_of(abstraction.index(_GOAL))
-    search = _Search(contracts, abstraction, goal, errors=errors, policies=tuple(policies))
+    search = _Search(
+        contracts,
+        abstraction,
+        goal,
+        errors=errors,
+        policies=tuple(policies),
+        flows=tuple(flows),
+    )
     kept = frozenset(tool for policy in policies for tool in policy.tools())
     start = _State(
         tuple(

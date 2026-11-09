@@ -104,6 +104,35 @@
       "policies": [
         "freight approved first"
       ]
+    },
+    {
+      "name": "notify a parcel's contact",
+      "inputs": {
+        "tracking": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}[0-9]{9}[A-Z]{2}$"
+        }
+      },
+      "goal": {
+        "type": "string",
+        "pattern": "^ntc_[0-9]+$"
+      }
+    },
+    {
+      "name": "notify a parcel's contact, verified addresses only",
+      "inputs": {
+        "tracking": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}[0-9]{9}[A-Z]{2}$"
+        }
+      },
+      "goal": {
+        "type": "string",
+        "pattern": "^ntc_[0-9]+$"
+      },
+      "flows": [
+        "notices go to verified addresses"
+      ]
     }
   ]
 }

@@ -45,13 +45,18 @@
                   "DE",
                   "US"
                 ]
+              },
+              "contact": {
+                "type": "string",
+                "pattern": "^[^@ ]+@[^@ ]+$"
               }
             },
             "required": [
               "parcel_id",
               "state",
               "weight_g",
-              "country"
+              "country",
+              "contact"
             ]
           }
         },
@@ -314,18 +319,61 @@
       }
     },
     {
-      "name": "notify",
-      "description": "Send a notice; returns nothing structured.",
+      "name": "verify_contact",
+      "description": "Return the verified company address on file for a contact.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "email": {
             "type": "string",
-            "format": "email"
+            "pattern": "^[^@ ]+@[^@ ]+$"
           }
         },
         "required": [
           "email"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "pattern": "^[a-z0-9._-]+@parcels\\.example$"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "notify",
+      "description": "Send a notice to an address.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "pattern": "^[^@ ]+@[^@ ]+$"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "notice_id": {
+            "type": "string",
+            "pattern": "^ntc_[0-9]+$"
+          }
+        },
+        "required": [
+          "notice_id"
         ]
       }
     }

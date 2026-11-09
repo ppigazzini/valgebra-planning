@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from valgebra_planning.contracts import read_contract, read_task
+from valgebra_planning.flows import read_flow
 from valgebra_planning.planner import plan
 from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Block, Branch, Stop, render, steps
@@ -59,17 +60,24 @@ def study(example: Path) -> tuple[dict[str, Any], list[str]]:
             read_policy, json.loads(listed.read_text())["policies"] if listed.exists() else []
         )
     }
+    rules = example / "flows.json"
+    flows = {
+        flow.name: flow
+        for flow in map(read_flow, json.loads(rules.read_text())["flows"] if rules.exists() else [])
+    }
     rows, text = [], []
     for spec in json.loads((example / "tasks.json").read_text())["tasks"]:
         task = read_task(spec["name"], spec["inputs"], spec["goal"])
         errors = bool(spec.get("errors", False))
         under = [policies[name] for name in spec.get("policies", [])]
-        found = plan(tools, task, errors=errors, policies=under)
+        ruled = [flows[name] for name in spec.get("flows", [])]
+        found = plan(tools, task, errors=errors, policies=under, flows=ruled)
         cells = found.abstraction.cells
         row: dict[str, Any] = {
             "task": task.name,
             "errors": errors,
             "policies": len(under),
+            "flows": len(ruled),
             "predicates": len(found.abstraction.predicates),
             "cells": len(cells),
             "undecided cells": sum(cell.status == "undecided" for cell in cells),
@@ -77,7 +85,7 @@ def study(example: Path) -> tuple[dict[str, Any], list[str]]:
         }
         text.append(f"## {task.name}")
         if found.program is not None:
-            checked = verify(found.program, tools, task, errors=errors, policies=under)
+            checked = verify(found.program, tools, task, errors=errors, policies=under, flows=ruled)
             calls, tests, stops = _count(found.program)
             row |= {
                 "program": "strong" if found.strong else "weak",
