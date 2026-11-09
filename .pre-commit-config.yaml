@@ -1,4 +1,8 @@
 minimum_pre_commit_version: "4.0.0"
+# `pre-commit install` sets both hooks: the files at a commit, its message after.
+default_install_hook_types: [pre-commit, commit-msg]
+# A hook naming no stage runs on the files alone, never on the message.
+default_stages: [pre-commit]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -19,3 +23,17 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: docs-lint
+        name: every tracked text against docs/10-writing.md
+        entry: uv run --no-sync python tools/docs_lint.py
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: commit-msg
+        name: the commit message, its form and no trailer
+        entry: uv run --no-sync python tools/docs_lint.py --commit-msg
+        language: system
+        stages: [commit-msg]

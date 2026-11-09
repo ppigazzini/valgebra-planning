@@ -2,6 +2,8 @@
 
 The works the method and the modules cite, each under the key a text cites it by: the
 surnames of its one or two authors, or its first author's with `et al.`, and the year.
+`tools/docs_lint.py` holds this list and the citations in the tree equal, in both
+directions.
 
 ## Planning under nondeterminism
 

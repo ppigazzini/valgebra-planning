@@ -62,11 +62,11 @@ Structure by what the reader is doing, not by how the code is organized.
 State the limit of what a page covers. A page that silently omits a case reads as though
 the case does not exist.
 
-Link with relative paths; `tools/check_markdown.py` fails the build on a dead one.
+Link with relative paths; `tools/docs_lint.py` fails the build on a dead one.
 
 ### Markdown that GitHub renders
 
-The renderer is strict and the failures are silent. `tools/check_markdown.py` catches these.
+The renderer is strict and the failures are silent. `tools/docs_lint.py` catches these.
 
 - Never split a token across the math boundary: write the whole symbol in one span, or
   plain text.
