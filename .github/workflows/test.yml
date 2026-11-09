@@ -49,3 +49,17 @@ jobs:
         with: { version: "0.13.7", python-version: "3.11", enable-cache: true }
       - run: uv sync --locked
       - run: uv run --no-sync pytest
+
+  census:
+    name: the census of live MCP servers
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with: { version: "0.13.7", python-version: "3.15", enable-cache: true }
+      - run: uv sync --locked
+      # The servers are pinned in tools/census.py; uvx and npx fetch them.
+      - run: uv run --no-sync python tools/census.py --check docs/studies/census.json

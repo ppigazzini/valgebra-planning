@@ -54,6 +54,10 @@ uv run --no-sync python tools/bench.py --check docs/studies/bench.json
 **Every `uv run` carries `--no-sync`.** A run that syncs replaces the environment the change
 was tested in. Sync deliberately, with `uv sync --locked`.
 
+The job `census` of the same workflow starts seven live MCP servers and checks
+`docs/studies/census.json` with `tools/census.py`; it needs the network, `uvx` and `npx`, so it
+is not in the list above. Run it before a commit that changes the cells or the contracts.
+
 A change that moves a published count regenerates the study with `--json` in the same commit,
 and its message says why the count moved.
 

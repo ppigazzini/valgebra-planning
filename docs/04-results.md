@@ -49,3 +49,20 @@ Synthetic libraries of 8 to 256 tools hold a planted chain of four beside tools 
 call and tools whose results nothing reads, each size in three tool orders. At every size the
 reachability pruning leaves 5 predicates and 12 cells, and the strong program is found and
 proven, 5 of 5 links.
+
+## Real servers
+
+```bash
+uv run --no-sync python tools/census.py --check docs/studies/census.json
+```
+
+The seven official MCP reference servers, each pinned to one release (`SERVERS` in
+`tools/census.py`), list 66 tools. valgebra-jsonschema reads every one, and 31 carry an
+`outputSchema`, which is 12 distinct schemas, all 16 of filesystem's being one text wrapper. Of
+the 126 arguments, 72 carry a bare type and nothing more. Cut into cells together, as the planner cuts them,
+the 106 predicates give 1,177 cells, of which 1,142 are undecided, 1,141 of them array cells: a
+non-empty array of strings against an array of records valgebra does not part. They are kept,
+so no wrong program is admitted, and they cost the search. The cut asks valgebra 3,136 relations.
+
+The census needs the network, `uvx` and `npx`, so it runs as the CI job `census` and not in the
+local gate. A new release of a server is a new study.
