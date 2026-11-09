@@ -56,6 +56,18 @@ every value meets, a policy transition that never fires, a policy that can never
 flow rule that lets nothing or everything through, a rule no task is held to. A finding valgebra
 leaves undecided is marked so. The exit status is 1 when it finds one.
 
+## Compare two privilege policies
+
+```bash
+uv run valgebra-planning privileges old.json new.json
+```
+
+reads two privilege policies in Progent's format, `{"tool": [[priority, effect, condition,
+fallback], ...]}`, and prints for each tool the new one names whether it narrows the old one,
+expands it, with a call it newly allows, or is left undecided. The exit status is 0 only when
+every tool narrows. In Python, `valgebra_planning.privilege.as_policy` turns a policy into one the
+planner, the verifier and the runner hold a program to.
+
 ## A live server
 
 With the `mcp` extra (`uv sync --extra mcp`, or `pip install "valgebra-planning[mcp]"`), `--server`

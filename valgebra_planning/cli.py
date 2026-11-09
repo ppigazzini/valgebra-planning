@@ -4,6 +4,7 @@
     valgebra-planning critique LIBRARY --task NAME PROGRAM [--server SERVER] [--json]
     valgebra-planning run LIBRARY --task NAME --inputs JSON --server SERVER [--json]
     valgebra-planning check LIBRARY [--server SERVER] [--json]
+    valgebra-planning privileges OLD NEW [--json]
 
 ``LIBRARY`` is a directory `valgebra_planning.library.read_library` reads. ``plan`` prints each
 task's program and its verification; it exits 1 when a task gets no program. ``critique`` reads a
@@ -11,6 +12,8 @@ program written in Python, verifies it under the task's rules and prints what is
 exits 1 when the program is not accepted. ``run`` plans a task and runs the program against a
 live server, failing closed; it exits 1 when the run does not return a value inside the goal.
 ``check`` lists every specification that holds vacuously and exits 1 when it finds one.
+``privileges`` compares two privilege policies in Progent's format and exits 1 unless the new one
+narrows the old for every tool it names.
 ``SERVER`` is a URL or a command starting a stdio server; its tools replace ``tools.json``, and
 it needs the ``mcp`` extra. With ``--json`` each prints one JSON document.
 """
@@ -29,6 +32,7 @@ from valgebra_planning.contracts import Contract
 from valgebra_planning.critic import ProgramError, critique
 from valgebra_planning.library import Library, Problem, read_library
 from valgebra_planning.planner import Plan, plan
+from valgebra_planning.privilege import describe, read_privileges, updates
 from valgebra_planning.program import render
 from valgebra_planning.vacuity import vacuities
 from valgebra_planning.verify import Verification, verify
@@ -213,6 +217,20 @@ def _check(library: Library, *, as_json: bool) -> int:
     return 1 if found else 0
 
 
+def _privileges(old: Path, new: Path, *, as_json: bool) -> int:
+    """Compare two privilege policies in Progent's format, tool by tool."""
+    found = updates(
+        read_privileges(json.loads(old.read_text(encoding="utf-8"))),
+        read_privileges(json.loads(new.read_text(encoding="utf-8"))),
+    )
+    if as_json:
+        rows = [{"tool": u.tool, "change": u.change, "witness": list(u.witness)} for u in found]
+        print(json.dumps(rows, indent=2))
+    else:
+        print("\n".join(map(describe, found)))
+    return 0 if all(u.change == "narrowing" for u in found) else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command the arguments name and return its exit status."""
     parser = argparse.ArgumentParser(prog="valgebra-planning", description=__doc__.splitlines()[0])
@@ -234,9 +252,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     checking = commands.add_parser("check", help="find specifications that hold vacuously")
     checking.add_argument("library", type=Path)
     checking.add_argument("--json", action="store_true")
+    privileged = commands.add_parser("privileges", help="compare two Progent privilege policies")
+    privileged.add_argument("old", type=Path)
+    privileged.add_argument("new", type=Path)
+    privileged.add_argument("--json", action="store_true")
     for command in (planning, critic, running, checking):
         command.add_argument("--server", required=command is running, help="a URL or a command")
     args = parser.parse_args(argv)
+    if args.command == "privileges":
+        return _privileges(args.old, args.new, as_json=args.json)
     try:
         if args.command == "run":
             return _run(args.library, args.task, args.inputs, args.server, as_json=args.json)

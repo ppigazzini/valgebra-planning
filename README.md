@@ -28,6 +28,7 @@ Status: pre-alpha, not on an index.
 | plan a library's tasks or critique a program from the command line | `valgebra_planning/cli.py` |
 | read a live MCP server's tools and run a program against it (`mcp` extra) | `valgebra_planning/servers.py` |
 | find the specifications of a library that hold vacuously | `valgebra_planning/vacuity.py` |
+| read Progent's privilege policies as sets: narrowing, expansion, a program held to one | `valgebra_planning/privilege.py` |
 
 [`docs/00-using.md`](docs/00-using.md) shows the command line,
 [`docs/01-method.md`](docs/01-method.md) states the method and its limits, and

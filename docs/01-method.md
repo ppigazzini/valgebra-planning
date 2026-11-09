@@ -107,6 +107,12 @@ verifier, which adds a link for it.
   observed one holds required, nothing narrower guessed. It is an assumption as a mined type is:
   every link resting on it lists it beside valgebra's verdict, the plan names each binding that
   rests on it, and a run refuses a result outside it, naming it.
+- **Privileges** (`valgebra_planning/privilege.py`). A privilege policy in Progent's format
+  (Shi et al. 2025) is a set of calls per tool: each allowing rule's condition, minus every rule
+  tried before it, the first rule matching deciding and every other call denied. Whether an update
+  narrows a policy is an inclusion between two such sets, which valgebra decides or refutes with a
+  call one allows and the other does not, every rule and argument at once. As an automaton whose
+  bad state a call outside its tool's set reaches, the policy holds a program like any other.
 
 ## The critic
 

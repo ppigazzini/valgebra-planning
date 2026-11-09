@@ -99,3 +99,15 @@ def test_check_finds_no_vacuous_specification_in_the_parcels(
 ) -> None:
     assert main(["check", PARCELS]) == 0
     assert capsys.readouterr().out == "no specification holds vacuously\n"
+
+
+def test_privileges_exits_1_on_an_expansion(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    old, new = tmp_path / "old.json", tmp_path / "new.json"
+    old.write_text(json.dumps({"send": [[1, 0, {"to": {"const": "ann"}}, 0]]}), encoding="utf-8")
+    new.write_text(json.dumps({"send": [[1, 0, {}, 0]]}), encoding="utf-8")
+    assert main(["privileges", str(new), str(old)]) == 0
+    assert capsys.readouterr().out == "send: narrowing\n"
+    assert main(["privileges", str(old), str(new)]) == 1
+    assert capsys.readouterr().out.startswith("send: expansion, allowing ")
