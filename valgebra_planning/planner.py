@@ -26,7 +26,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from valgebra_planning._valgebra import Validator, union
+from valgebra_planning._valgebra import Validator, intersection, nothing, union
 from valgebra_planning.cells import Abstraction, Predicate, abstract, gather
 from valgebra_planning.contracts import Contract, Slot, Task
 from valgebra_planning.policy import Policy
@@ -116,6 +116,14 @@ class _Search:
 
     def cells_of(self, name: str) -> frozenset[int]:
         return self.abstraction.cells_of(self.abstraction.index(name))
+
+    def holds(self, name: str) -> bool:
+        """Return whether a named set is one the cells were cut by."""
+        try:
+            self.abstraction.index(name)
+        except KeyError:
+            return False
+        return True
 
     def values(self, cells: frozenset[int]) -> Validator[Any]:
         return union(*(self.abstraction.cells[i].values for i in sorted(cells)))
@@ -284,27 +292,41 @@ class _Search:
         result: str,
     ) -> _State:
         results = tuple(
-            (Ref(result, slot.path), self.cells_of(_result_name(slot))) for slot in contract.results
+            (Ref(result, slot.path), self.cells_of(_result_name(slot)))
+            for slot in contract.results
+            if self.holds(_result_name(slot))
         )
         made = state.made | {(contract.name, bindings)}
         return _State(state.refs + results, made, state.fresh + 1, state.policed)
 
 
+def _readable(values: Validator[Any], consumers: Sequence[Validator[Any]]) -> bool:
+    """Return whether some argument or the goal may hold a value of ``values``."""
+    return any(
+        intersection(values, consumer).relation_to(nothing) != "subset" for consumer in consumers
+    )
+
+
 def _predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate]:
-    entries = [
-        (_argument_name(slot), slot.values, slot.schema, slot.root)
-        for contract in contracts.values()
-        for slot in contract.arguments
-    ]
+    """Return every argument and the goal, and each result or input some of them may read.
+
+    A value no argument and no goal can hold is never passed on, so its cells cost the
+    search and decide nothing; it is left out, with its reference.
+    """
+    arguments = [slot for contract in contracts.values() for slot in contract.arguments]
+    consumers = [slot.values for slot in arguments] + [task.goal]
+    entries = [(_argument_name(slot), slot.values, slot.schema, slot.root) for slot in arguments]
     entries += [
         (_result_name(slot), slot.values, slot.schema, slot.root)
         for contract in contracts.values()
         for slot in contract.results
+        if _readable(slot.values, consumers)
     ]
     entries += [
         (_held_name(slot), slot.values, slot.schema, slot.root)
         for slots in task.held.values()
         for slot in slots
+        if _readable(slot.values, consumers)
     ]
     entries.append((_GOAL, task.goal, task.goal_schema, task.goal_schema))
     return gather(entries)
@@ -449,6 +471,7 @@ def plan(
             (Ref(var, slot.path), search.cells_of(_held_name(slot)))
             for var, slots in task.held.items()
             for slot in slots
+            if search.holds(_held_name(slot))
         ),
         frozenset(),
         1,
