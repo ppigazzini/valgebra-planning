@@ -93,3 +93,40 @@ def steps(block: Block) -> int:
     end = block.end
     below = 1 + max(steps(end.then), steps(end.otherwise)) if isinstance(end, Branch) else 0
     return len(block.calls) + below
+
+
+def renumber(block: Block, first: int = 1) -> Block:
+    """Return the program with its results named ``c1``, ``c2`` ... in order along each path.
+
+    Two branches that differ only in the names of their results read the same once both are
+    numbered from where they start.
+    """
+    return _renumber(block, {}, first)
+
+
+def _renamed(ref: Ref, names: dict[str, str]) -> Ref:
+    return Ref(names.get(ref.variable, ref.variable), ref.path)
+
+
+def _renumber(block: Block, names: dict[str, str], first: int) -> Block:
+    names = dict(names)
+    calls = []
+    for at, call in enumerate(block.calls, start=first):
+        bindings = tuple((name, _renamed(ref, names)) for name, ref in call.bindings)
+        names[call.result] = f"c{at}"
+        calls.append(Call(call.tool, bindings, names[call.result]))
+    after = first + len(calls)
+    end = block.end
+    if isinstance(end, Return):
+        ending: Return | Stop | Branch = Return(_renamed(end.ref, names))
+    elif isinstance(end, Stop):
+        ending = end if end.ref.variable not in names else Stop(_renamed(end.ref, names))
+    else:
+        ending = Branch(
+            _renamed(end.ref, names),
+            end.tool,
+            end.argument,
+            _renumber(end.then, names, after),
+            _renumber(end.otherwise, names, after),
+        )
+    return Block(tuple(calls), ending)

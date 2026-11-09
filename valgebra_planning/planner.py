@@ -29,7 +29,7 @@ from typing import Any
 from valgebra_planning._valgebra import Validator, union
 from valgebra_planning.cells import Abstraction, Predicate, abstract, gather
 from valgebra_planning.contracts import Contract, Slot, Task
-from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop
+from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop, render, renumber
 
 #: The calls and tests a path may take.
 DEPTH = 6
@@ -138,6 +138,8 @@ class _Search:
             arg = self.cells_of(_argument_name(slot))
             full[slot.path[0]] = [r for r, c in state.refs if c and c <= arg]
             partial[slot.path[0]] = [r for r, c in state.refs if c & arg and not c <= arg]
+        if any(not full[name] and not partial[name] for name in full):
+            return None
         if all(full.values()):
             block = self.direct(state, contract, full, depth, weak=weak)
             if block is not None:
@@ -145,8 +147,6 @@ class _Search:
         if depth < _GUARD:
             return None
         for name, refs in partial.items():
-            if not all(full[other] for other in full if other != name):
-                continue
             for ref in refs:
                 block = self.guarded(state, contract, name, ref, depth, weak=weak)
                 if block is not None:
@@ -189,14 +189,9 @@ class _Search:
         arg = self.cells_of(_argument_name(contract.argument(name)))
         cells = state.cells(ref)
         inside, outside = state.narrowed(ref, cells & arg), state.narrowed(ref, cells - arg)
-        choices = {
-            slot.path[0]: [ref]
-            if slot.path[0] == name
-            else [r for r, c in inside.refs if c and c <= self.cells_of(_argument_name(slot))]
-            for slot in contract.arguments
-            if slot.required
-        }
-        then = self.direct(inside, contract, choices, depth - 1, weak=weak)
+        # The narrowed value now fills `name`; another argument still overlapping is guarded
+        # in turn, inside this branch.
+        then = self.call(inside, contract, depth - 1, weak=weak)
         if then is None:
             return None
         otherwise = self.solve(outside, depth - 1, weak=weak)
@@ -250,6 +245,74 @@ def _predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate
     return gather(entries)
 
 
+def _reads(block: Block) -> set[str]:
+    """Return every variable a block reads, in its calls, its ending and below."""
+    read = {ref.variable for call in block.calls for _, ref in call.bindings}
+    end = block.end
+    read.add(end.ref.variable)
+    if isinstance(end, Branch):
+        read |= _reads(end.then) | _reads(end.otherwise)
+    return read
+
+
+def _pair_stops(first: Block, second: Block, stops: dict[int, frozenset[int]]) -> None:
+    """Give each stop of ``first`` the uncovered cells of the stop beside it in ``second``."""
+    if isinstance(first.end, Stop) and isinstance(second.end, Stop):
+        held = stops.get(id(first.end), frozenset())
+        stops[id(first.end)] = held | stops.get(id(second.end), frozenset())
+    elif isinstance(first.end, Branch) and isinstance(second.end, Branch):
+        _pair_stops(first.end.then, second.end.then, stops)
+        _pair_stops(first.end.otherwise, second.end.otherwise, stops)
+
+
+def _prune(block: Block, stops: dict[int, frozenset[int]]) -> Block:
+    """Drop calls nothing reads, then collapse a branch whose two sides read the same.
+
+    A call can act on the world, so one whose result no later step reads is not made. A
+    branch whose sides are one program holds on the union of the two narrowed values, since
+    each link held on each side; its test is dropped and its stops cover both sides.
+    """
+    end = block.end
+    if isinstance(end, Branch):
+        then, otherwise = _prune(end.then, stops), _prune(end.otherwise, stops)
+        if render(then) == render(otherwise):
+            _pair_stops(then, otherwise, stops)
+            block = Block((*block.calls, *then.calls), then.end)
+        else:
+            block = Block(block.calls, Branch(end.ref, end.tool, end.argument, then, otherwise))
+    calls = list(block.calls)
+    for at in range(len(calls) - 1, -1, -1):
+        later = Block(tuple(calls[at + 1 :]), block.end)
+        if calls[at].result not in _reads(later):
+            del calls[at]
+    return Block(tuple(calls), block.end)
+
+
+def _carry(old: Block, new: Block, stops: dict[int, frozenset[int]]) -> None:
+    """Move each stop's uncovered cells to the stop beside it in a renumbered copy."""
+    if isinstance(old.end, Stop) and isinstance(new.end, Stop):
+        stops[id(new.end)] = stops.get(id(old.end), frozenset())
+    elif isinstance(old.end, Branch) and isinstance(new.end, Branch):
+        _carry(old.end.then, new.end.then, stops)
+        _carry(old.end.otherwise, new.end.otherwise, stops)
+
+
+def _numbered(block: Block, stops: dict[int, frozenset[int]]) -> Block:
+    numbered = renumber(block)
+    _carry(block, numbered, stops)
+    return numbered
+
+
+def _tidy(block: Block, stops: dict[int, frozenset[int]]) -> Block:
+    """Prune and renumber until the program no longer changes."""
+    block = _numbered(block, stops)
+    while True:
+        tidied = _numbered(_prune(block, stops), stops)
+        if render(tidied) == render(block):
+            return tidied
+        block = tidied
+
+
 def _uncovered(block: Block, search: _Search, where: str = "") -> list[Uncovered]:
     """Return every stop of a program with the values it leaves uncovered."""
     end = block.end
@@ -260,11 +323,7 @@ def _uncovered(block: Block, search: _Search, where: str = "") -> list[Uncovered
     if not isinstance(end, Stop):
         return []
     cells = search.stops.get(id(end), frozenset())
-    examples = tuple(
-        search.abstraction.cells[i].witness[0]
-        for i in sorted(cells)
-        if search.abstraction.cells[i].witness
-    )
+    examples = tuple(v for i in sorted(cells) for v in search.abstraction.members(i))
     return [Uncovered(where, str(end.ref), examples, search.abstraction.undecided(cells))]
 
 
@@ -291,6 +350,7 @@ def plan(
     for bound in range(1, depth + 1):
         program = search.solve(start, bound, weak=False)
         if program is not None:
+            program = _tidy(program, search.stops)
             return Plan(
                 program,
                 strong=True,
@@ -304,6 +364,7 @@ def plan(
         search.failed.clear()
         program = search.solve(start, depth, weak=True)
         if program is not None:
+            program = _tidy(program, search.stops)
             gaps = tuple(_uncovered(program, search))
             return Plan(
                 program,
