@@ -1,0 +1,51 @@
+{
+  "format": 1,
+  "example": "parcels",
+  "rows": [
+    {
+      "task": "return a parcel",
+      "predicates": 23,
+      "cells": 84,
+      "undecided cells": 16,
+      "program": "weak",
+      "calls": 3,
+      "tests": 2,
+      "stops": 1,
+      "steps": 4,
+      "links": 9,
+      "proven": 9,
+      "refuted": 0,
+      "undecided": 0
+    },
+    {
+      "task": "settle a parcel",
+      "predicates": 24,
+      "cells": 84,
+      "undecided cells": 18,
+      "program": "strong",
+      "calls": 6,
+      "tests": 4,
+      "stops": 0,
+      "steps": 5,
+      "links": 18,
+      "proven": 18,
+      "refuted": 0,
+      "undecided": 0
+    },
+    {
+      "task": "customs for a parcel",
+      "predicates": 23,
+      "cells": 84,
+      "undecided cells": 16,
+      "program": "weak",
+      "calls": 2,
+      "tests": 1,
+      "stops": 1,
+      "steps": 3,
+      "links": 3,
+      "proven": 3,
+      "refuted": 0,
+      "undecided": 0
+    }
+  ]
+}

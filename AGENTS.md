@@ -22,9 +22,11 @@ uv run --no-sync ruff format --check
 uv run --no-sync ty check
 uv run --no-sync python tools/check_markdown.py
 uv run --no-sync pytest
+uv run --no-sync python tools/case.py examples/parcels --check docs/studies/parcels.json
 ```
 
-All of them must exit 0 before a commit.
+All of them must exit 0 before a commit. A change that moves a published count regenerates
+the study with `--json` in the same commit and says why the count moved.
 
 ## Conventions
 

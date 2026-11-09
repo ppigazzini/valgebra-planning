@@ -29,6 +29,8 @@ jobs:
       - run: uv run ty check
       - run: uv run python tools/check_markdown.py
       - run: uv run pytest
+      # Every published count is one this code still produces.
+      - run: uv run python tools/case.py examples/parcels --check docs/studies/parcels.json
 
   floor:
     name: the suite on the oldest interpreter
