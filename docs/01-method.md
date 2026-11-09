@@ -7,8 +7,10 @@ An agent fills each argument of a call from a value it holds, so a tool is read 
 no property declares included, and one per field its `outputSchema` guarantees, nested to three
 levels, beside the whole result. valgebra-jsonschema compiles each slot against the tool's own
 schema as root, so a `$ref` resolves where the tool wrote it and an older draft reads as it
-means. A task holds the slots of each value the agent starts with, read as a result's are, and
-the set its goal is.
+means. A field the output schema declares and does not guarantee is a slot held apart: a
+program holds it only in the branch of a test showing its key, `if "note" in c1.parcel:`
+(occurrence typing, the test refining the record). A task holds the slots of each value the agent
+starts with, read as a result's are, and the set its goal is.
 
 Where the input schema relates its arguments, through `oneOf`, `dependentRequired` or any
 keyword beside `type`, `properties`, `required` and `additionalProperties`, a call is accepted
@@ -128,7 +130,8 @@ and goes on, a diagnosis rather than a guard.
 - **Types are the specification.** A slot whose schema admits any string, as an unasserted
   `format` does, takes any string; distinct schemas, patterns, enums and ranges are what make a
   plan mean what it should, and mined types narrow what observations support.
-- **What is not modeled.** Side effects beyond the calls a policy reads, and a result field the
-  output schema does not guarantee. The planner writes no constant; a program written elsewhere
-  may, and its constant is checked like any value.
+- **What is not modeled.** Side effects beyond the calls a policy reads; a field the output
+  schema does not guarantee below another such field, or in a task's input; and a program the
+  planner writes holds no constant and tests no key. A program written elsewhere may do both, and
+  each is checked like any value.
 - **Search bounds.** Six calls and tests a path by default, and the first 16 bindings of a call.

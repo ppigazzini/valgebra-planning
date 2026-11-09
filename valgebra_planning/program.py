@@ -80,10 +80,12 @@ class Stop:
 
 @dataclass(frozen=True, slots=True)
 class Branch:
-    """Branch on whether ``ref`` lies in a set: a tool's argument, or JSON values listed.
+    """Branch on whether ``ref`` lies in a set: a tool's argument, JSON values listed, or a key.
 
-    With ``tool`` empty the set is ``values``, read as a JSON Schema ``enum``: ``1`` and
-    ``1.0`` are one value there. Otherwise it is the argument ``argument`` of ``tool``.
+    With ``key`` set the set is every object holding that key, and the branch where it holds
+    reads the fields the key opens. With ``tool`` empty the set is ``values``, read as a JSON
+    Schema ``enum``: ``1`` and ``1.0`` are one value there. Otherwise it is the argument
+    ``argument`` of ``tool``.
     """
 
     ref: Ref
@@ -92,6 +94,7 @@ class Branch:
     then: Block
     otherwise: Block
     values: tuple[Any, ...] = ()
+    key: str = ""
 
     @property
     def against(self) -> str:
@@ -126,7 +129,8 @@ def render(block: Block, indent: str = "") -> str:
     elif isinstance(end, Stop):
         lines.append(f"{indent}stop({end.ref})")
     else:
-        lines.append(f"{indent}if {end.ref} in {end.against}:")
+        tested = f"{json.dumps(end.key)} in {end.ref}" if end.key else f"{end.ref} in {end.against}"
+        lines.append(f"{indent}if {tested}:")
         lines.append(render(end.then, indent + "    "))
         lines.append(f"{indent}else:")
         lines.append(render(end.otherwise, indent + "    "))
@@ -182,5 +186,6 @@ def _renumber(block: Block, names: dict[str, str], first: int) -> Block:
             _renumber(end.then, names, after),
             _renumber(end.otherwise, names, after),
             end.values,
+            end.key,
         )
     return Block(tuple(calls), ending)

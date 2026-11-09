@@ -11,7 +11,8 @@ block of statements; ``c1 = find_parcel(tracking=tracking)`` or ``tools.find_par
 awaited or not; fields as attributes or as string subscripts; ``return``; ``stop(ref)``; and
 an argument as a value the program holds or a JSON constant (``state="delivered"``);
 ``if``/``elif``/``else`` testing a value against a tool's argument (``ref in tool.argument``)
-or against listed constants (``==``, ``!=``, ``in``, ``not in``); ``retry(tool(...))``; and
+or against listed constants (``==``, ``!=``, ``in``, ``not in``), or a key of a record
+(``"field" in ref``); ``retry(tool(...))``; and
 ``try:`` around one call with ``except ToolError:``. Anything else is refused by line, never
 skipped.
 """
@@ -151,10 +152,15 @@ def _branch(statement: ast.If) -> Branch:
     if not (isinstance(test, ast.Compare) and len(test.ops) == 1):
         raise _fail(statement, "a test compares one value once")
     op, right = test.ops[0], test.comparators[0]
-    ref = _ref(test.left)
     then, otherwise = _block(statement.body), _block(statement.orelse, statement)
     if isinstance(op, (ast.NotIn, ast.NotEq)):
         then, otherwise = otherwise, then
+    left = test.left
+    if isinstance(left, ast.Constant) and isinstance(left.value, str):
+        if not isinstance(op, (ast.In, ast.NotIn)):
+            raise _fail(statement, "a key is tested with `in` or `not in`")
+        return Branch(_ref(right), "", "", then, otherwise, key=left.value)
+    ref = _ref(left)
     if isinstance(op, (ast.In, ast.NotIn)) and isinstance(right, ast.Attribute):
         tool, argument = _tool(right.value), right.attr
         return Branch(ref, tool, argument, then, otherwise)

@@ -495,7 +495,7 @@ def _prune(block: Block, stops: dict[int, frozenset[int]], kept: frozenset[str])
             _pair_stops(then, otherwise, stops)
             block = Block((*block.calls, *then.calls), then.end)
         else:
-            branch = Branch(end.ref, end.tool, end.argument, then, otherwise, end.values)
+            branch = Branch(end.ref, end.tool, end.argument, then, otherwise, end.values, end.key)
             block = Block(block.calls, branch)
     calls = [
         call

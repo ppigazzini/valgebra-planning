@@ -77,6 +77,9 @@ class Contract:
     #: Whether calling twice acts as calling once: the tool's annotations say it is
     #: read-only or idempotent. A hint the server gives; a retry trusts it.
     idempotent: bool = False
+    #: Each field the output schema declares and does not guarantee, below guaranteed objects,
+    #: with the fields it guarantees in turn: held only where a test shows the field present.
+    optional: tuple[Slot, ...] = ()
 
     def argument(self, name: str) -> Slot:
         """Return the argument slot called ``name``, or raise `KeyError`."""
@@ -139,9 +142,17 @@ def _plain(node: dict[str, Any]) -> bool:
 
 
 def _result_slots(
-    tool: str, compiler: Compiler, schema: object, path: tuple[str, ...]
+    tool: str,
+    compiler: Compiler,
+    schema: object,
+    path: tuple[str, ...],
+    optional: list[Slot] | None = None,
 ) -> list[Slot]:
-    """Return the slot of ``schema`` at ``path`` and of every field it guarantees below."""
+    """Return the slot of ``schema`` at ``path`` and of every field it guarantees below.
+
+    With ``optional``, each field an object declares and does not guarantee is gathered there in
+    the same walk, with the fields it guarantees in turn; one below another such field is not.
+    """
     slots = [Slot(tool, path, schema, compiler.compile(schema), required=True, root=compiler.root)]
     if len(path) >= RESULT_DEPTH:
         return slots
@@ -149,8 +160,12 @@ def _result_slots(
     if node is None:
         return slots
     properties, required = _properties(node)
-    for name in sorted(required & set(properties)):
-        slots.extend(_result_slots(tool, compiler, properties[name], (*path, name)))
+    for name in sorted(properties):
+        below = (*path, name)
+        if name in required:
+            slots.extend(_result_slots(tool, compiler, properties[name], below, optional))
+        elif optional is not None:
+            optional.extend(_result_slots(tool, compiler, properties[name], below))
     return slots
 
 
@@ -189,9 +204,12 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
     )
     output = spec.get("outputSchema")
     results: tuple[Slot, ...] = ()
+    optional: tuple[Slot, ...] = ()
     if output is not None:
         out_root = _root(output)
-        results = tuple(_result_slots(tool.name, Compiler(out_root), out_root, ()))
+        gathered: list[Slot] = []
+        results = tuple(_result_slots(tool.name, Compiler(out_root), out_root, (), gathered))
+        optional = tuple(gathered)
     return Contract(
         name=tool.name,
         arguments=arguments,
@@ -200,6 +218,7 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
         returns=tool.result,
         plain=_plain(node),
         idempotent=_idempotent(spec.get("annotations")),
+        optional=optional,
     )
 
 

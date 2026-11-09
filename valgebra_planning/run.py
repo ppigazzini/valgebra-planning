@@ -121,6 +121,10 @@ class _Runner:
         return Run(None, f"an error of {call.tool}", tuple(self.broken))
 
     def branch(self, branch: Branch, env: dict[str, Any]) -> Run:
+        if branch.key:
+            value = _read(env, branch.ref)
+            holds = isinstance(value, dict) and branch.key in value
+            return self.block(branch.then if holds else branch.otherwise, env)
         if branch.tool:
             tested = self.contracts[branch.tool].argument(branch.argument).values
         else:

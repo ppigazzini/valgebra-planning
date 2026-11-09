@@ -22,6 +22,7 @@ from valgebra_planning._valgebra import (
     Sampler,
     Unsupported,
     Validator,
+    compile_schema,
     complement,
     intersection,
 )
@@ -119,7 +120,12 @@ class _Walk:
 
     def branch(self, test: Branch, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         held = self.held(env, test.ref, where)
-        if test.tool:
+        opened: dict[Ref, _Held] = {}
+        if test.key:
+            tested = compile_schema({"type": "object", "required": [test.key]})
+            if held is not None:
+                opened = self.opened(test.ref, held, test.key)
+        elif test.tool:
             slot = self.argument(test.tool, test.argument, where)
             tested = None if slot is None else slot.values
         else:
@@ -130,7 +136,7 @@ class _Walk:
         outside = _Held(intersection(held.values, complement(tested)), held.origin)
         # Which branch runs carries the tested value's influence: an implicit flow.
         tested = _Path(path.states, path.tested | {held.origin.tool})
-        self.block(test.then, {**env, test.ref: inside}, _join(where, "then"), tested)
+        self.block(test.then, {**env, test.ref: inside, **opened}, _join(where, "then"), tested)
         self.block(test.otherwise, {**env, test.ref: outside}, _join(where, "else"), tested)
 
     def call(
@@ -243,6 +249,32 @@ class _Walk:
             found = tuple(outside[:1])
         self.links.append(Link(where, claim, "refuted" if found else verdict, found))
 
+    def opened(self, ref: Ref, held: _Held, key: str) -> dict[Ref, _Held]:
+        """Return the optional fields a test showing ``key`` in ``ref`` makes the program hold."""
+        contract = self.contracts.get(held.origin.tool)
+        base = (*held.origin.path, key)
+        return {
+            Ref(ref.variable, (*ref.path, *slot.path[len(held.origin.path) :])): _Held(
+                slot.values, slot
+            )
+            for slot in (() if contract is None else contract.optional)
+            if slot.path[: len(base)] == base
+        }
+
+    def absent(self, env: dict[Ref, _Held], ref: Ref) -> tuple[Any, ...]:
+        """Return a value of the nearest field the program holds above ``ref`` lacking the next."""
+        for depth in range(len(ref.path) - 1, -1, -1):
+            parent = Ref(ref.variable, ref.path[:depth])
+            if parent not in env:
+                continue
+            for value in self.candidates(parent, env[parent]):
+                if isinstance(value, dict):
+                    lacking = {k: v for k, v in value.items() if k != ref.path[depth]}
+                    if env[parent].values.is_valid(lacking):
+                        return (lacking,)
+            return ()
+        return ()
+
     def candidates(self, ref: Ref, held: _Held) -> list[Any]:
         """Return values the reference may hold there: the examples given, then draws."""
         given = [v for v in self.examples.get(str(ref), ()) if held.values.is_valid(v)]
@@ -262,7 +294,8 @@ class _Walk:
 
     def held(self, env: dict[Ref, _Held], ref: Ref, where: str) -> _Held | None:
         if ref not in env:
-            self.links.append(Link(where, f"{ref} is a value the program holds", "refuted"))
+            claim = f"{ref} is a value the program holds"
+            self.links.append(Link(where, claim, "refuted", self.absent(env, ref)))
             return None
         return env[ref]
 
