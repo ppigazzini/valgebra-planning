@@ -7,6 +7,7 @@
       "errors": false,
       "policies": 0,
       "flows": 0,
+      "mined": false,
       "predicates": 8,
       "cells": 14,
       "undecided cells": 0,
@@ -18,13 +19,15 @@
       "links": 9,
       "proven": 9,
       "refuted": 0,
-      "undecided": 0
+      "undecided": 0,
+      "assumed": 0
     },
     {
       "task": "settle a parcel",
       "errors": false,
       "policies": 0,
       "flows": 0,
+      "mined": false,
       "predicates": 14,
       "cells": 18,
       "undecided cells": 0,
@@ -36,13 +39,15 @@
       "links": 18,
       "proven": 18,
       "refuted": 0,
-      "undecided": 0
+      "undecided": 0,
+      "assumed": 0
     },
     {
       "task": "customs for a parcel",
       "errors": false,
       "policies": 0,
       "flows": 0,
+      "mined": false,
       "predicates": 4,
       "cells": 11,
       "undecided cells": 0,
@@ -54,13 +59,15 @@
       "links": 3,
       "proven": 3,
       "refuted": 0,
-      "undecided": 0
+      "undecided": 0,
+      "assumed": 0
     },
     {
       "task": "settle a parcel, tools may fail",
       "errors": true,
       "policies": 0,
       "flows": 0,
+      "mined": false,
       "predicates": 14,
       "cells": 18,
       "undecided cells": 0,
@@ -72,13 +79,15 @@
       "links": 22,
       "proven": 22,
       "refuted": 0,
-      "undecided": 0
+      "undecided": 0,
+      "assumed": 0
     },
     {
       "task": "settle a parcel, freight approved first",
       "errors": false,
       "policies": 1,
       "flows": 0,
+      "mined": false,
       "predicates": 14,
       "cells": 18,
       "undecided cells": 0,
@@ -90,13 +99,15 @@
       "links": 24,
       "proven": 24,
       "refuted": 0,
-      "undecided": 0
+      "undecided": 0,
+      "assumed": 0
     },
     {
       "task": "notify a parcel's contact",
       "errors": false,
       "policies": 0,
       "flows": 0,
+      "mined": false,
       "predicates": 4,
       "cells": 11,
       "undecided cells": 0,
@@ -108,13 +119,15 @@
       "links": 3,
       "proven": 3,
       "refuted": 0,
-      "undecided": 0
+      "undecided": 0,
+      "assumed": 0
     },
     {
       "task": "notify a parcel's contact, verified addresses only",
       "errors": false,
       "policies": 0,
       "flows": 1,
+      "mined": false,
       "predicates": 4,
       "cells": 11,
       "undecided cells": 0,
@@ -126,7 +139,28 @@
       "links": 4,
       "proven": 4,
       "refuted": 0,
-      "undecided": 0
+      "undecided": 0,
+      "assumed": 0
+    },
+    {
+      "task": "notify a parcel's contact, types mined from observed calls",
+      "errors": false,
+      "policies": 0,
+      "flows": 0,
+      "mined": true,
+      "predicates": 4,
+      "cells": 11,
+      "undecided cells": 0,
+      "program": "strong",
+      "calls": 3,
+      "tests": 0,
+      "stops": 0,
+      "steps": 3,
+      "links": 4,
+      "proven": 4,
+      "refuted": 0,
+      "undecided": 0,
+      "assumed": 2
     }
   ]
 }

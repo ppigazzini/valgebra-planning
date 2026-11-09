@@ -19,6 +19,7 @@ from typing import Any
 
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.flows import read_flow
+from valgebra_planning.mining import mine
 from valgebra_planning.planner import plan
 from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Block, Branch, Stop, render, steps
@@ -71,13 +72,18 @@ def study(example: Path) -> tuple[dict[str, Any], list[str]]:
         errors = bool(spec.get("errors", False))
         under = [policies[name] for name in spec.get("policies", [])]
         ruled = [flows[name] for name in spec.get("flows", [])]
-        found = plan(tools, task, errors=errors, policies=under, flows=ruled)
+        log = spec.get("types")
+        types = (
+            None if log is None else mine(json.loads((example / log).read_text())["calls"], tools)
+        )
+        found = plan(tools, task, errors=errors, policies=under, flows=ruled, types=types)
         cells = found.abstraction.cells
         row: dict[str, Any] = {
             "task": task.name,
             "errors": errors,
             "policies": len(under),
             "flows": len(ruled),
+            "mined": types is not None,
             "predicates": len(found.abstraction.predicates),
             "cells": len(cells),
             "undecided cells": sum(cell.status == "undecided" for cell in cells),
@@ -97,11 +103,13 @@ def study(example: Path) -> tuple[dict[str, Any], list[str]]:
                 "proven": checked.count("proven"),
                 "refuted": checked.count("refuted"),
                 "undecided": checked.count("undecided"),
+                "assumed": len(found.assumed),
             }
             text += ["", "```", render(found.program), "```", ""]
             text += [
                 f"- uncovered at {u.where}: {u.ref}, {list(u.examples)}" for u in found.uncovered
             ]
+            text += [f"- assumed from the observed calls: {binding}" for binding in found.assumed]
         rows.append(row)
     return {"format": FORMAT, "example": example.name, "rows": rows}, text
 

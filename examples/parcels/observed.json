@@ -1,0 +1,91 @@
+{
+  "calls": [
+    {
+      "tool": "find_parcel",
+      "arguments": {
+        "tracking": "IT123456789FR"
+      },
+      "result": {
+        "parcel": {
+          "parcel_id": "pcl_17",
+          "state": "lost",
+          "weight_g": 900,
+          "country": "IT",
+          "contact": "anna@mail.it"
+        }
+      }
+    },
+    {
+      "tool": "verify_contact",
+      "arguments": {
+        "email": "anna@mail.it"
+      },
+      "result": {
+        "email": "anna@parcels.example"
+      }
+    },
+    {
+      "tool": "notify",
+      "arguments": {
+        "email": "anna@parcels.example"
+      },
+      "result": {
+        "notice_id": "ntc_4"
+      }
+    },
+    {
+      "tool": "open_claim",
+      "arguments": {
+        "parcel_id": "pcl_17",
+        "state": "lost"
+      },
+      "result": {
+        "claim_id": "clm_9"
+      }
+    },
+    {
+      "tool": "find_parcel",
+      "arguments": {
+        "tracking": "DE987654321US"
+      },
+      "result": {
+        "parcel": {
+          "parcel_id": "pcl_20",
+          "state": "delivered",
+          "weight_g": 1200,
+          "country": "DE",
+          "contact": "bo@post.de"
+        }
+      }
+    },
+    {
+      "tool": "verify_contact",
+      "arguments": {
+        "email": "bo@post.de"
+      },
+      "result": {
+        "email": "bo@parcels.example"
+      }
+    },
+    {
+      "tool": "notify",
+      "arguments": {
+        "email": "bo@parcels.example"
+      },
+      "result": {
+        "notice_id": "ntc_5"
+      }
+    },
+    {
+      "tool": "book_return",
+      "arguments": {
+        "parcel_id": "pcl_20",
+        "state": "delivered",
+        "weight_g": 1200
+      },
+      "result": {
+        "label_id": "lbl_3"
+      }
+    }
+  ]
+}

@@ -93,7 +93,9 @@ ignore = [
 convention = "numpy"
 
 [tool.ruff.lint.pylint]
-max-args = 8
+# `plan` takes each rule a program can be held to as a keyword of its own: errors, policies,
+# flows and mined types, beside the depth, the seed and whether a weak program will do.
+max-args = 10
 max-positional-args = 8
 max-returns = 8
 

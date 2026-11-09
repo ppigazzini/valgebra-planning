@@ -30,6 +30,7 @@ from valgebra_planning._valgebra import Validator, intersection, nothing, union
 from valgebra_planning.cells import Abstraction, Predicate, abstract, gather
 from valgebra_planning.contracts import Contract, Slot, Task
 from valgebra_planning.flows import Flow
+from valgebra_planning.mining import SlotKey, Types
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop, render, renumber
 
@@ -74,13 +75,18 @@ class Uncovered:
 
 @dataclass(frozen=True, slots=True)
 class Plan:
-    """A program for a task, whether it is strong, and what its stops leave uncovered."""
+    """A program for a task, whether it is strong, and what its stops leave uncovered.
+
+    ``assumed`` names each binding that rests on a mined semantic type rather than on its
+    sets alone.
+    """
 
     program: Block | None
     strong: bool
     uncovered: tuple[Uncovered, ...]
     abstraction: Abstraction
     expanded: int
+    assumed: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +126,7 @@ class _Search:
     errors: bool = False
     policies: tuple[Policy, ...] = ()
     flows: tuple[Flow, ...] = ()
+    types: Types | None = None
     failed: set[tuple[object, int, bool]] = field(default_factory=set)
     expanded: int = 0
     #: The cells each stop leaves uncovered, by the stop's identity: a stop is made once
@@ -161,8 +168,9 @@ class _Search:
         partial: dict[str, list[Ref]] = {}
         for slot in required:
             arg = self.cells_of(_argument_name(slot))
-            full[slot.path[0]] = [r for r, c in state.refs if c and c <= arg]
-            partial[slot.path[0]] = [r for r, c in state.refs if c & arg and not c <= arg]
+            refs = [(r, c) for r, c in state.refs if self.agree(state, r, slot)]
+            full[slot.path[0]] = [r for r, c in refs if c and c <= arg]
+            partial[slot.path[0]] = [r for r, c in refs if c & arg and not c <= arg]
         if any(not full[name] and not partial[name] for name in full):
             return None
         if all(full.values()):
@@ -314,6 +322,12 @@ class _Search:
             origins=(*state.origins, (result, contract.name)),
         )
 
+    def agree(self, state: _State, ref: Ref, slot: Slot) -> bool:
+        """Return whether the mined types let ``ref`` fill ``slot``; always, with none mined."""
+        if self.types is None:
+            return True
+        return self.types.agree(_result_key(state.origin(ref), ref), ("argument", slot.name))
+
     def flowing(
         self, state: _State, contract: Contract, bindings: tuple[tuple[str, Ref], ...]
     ) -> bool:
@@ -380,6 +394,32 @@ def _reachable(
         for name, contract in contracts.items()
         if name in mattering or (name in kept and name in callable_)
     }
+
+
+def _result_key(origin: str, ref: Ref) -> SlotKey:
+    """Return the slot a reference reads, as the miner names it."""
+    return ("result", ".".join((origin, *ref.path)))
+
+
+def _assumed(block: Block, types: Types | None, made: Mapping[str, str] | None = None) -> list[str]:
+    """Return every binding of a program whose two slots both carry a mined type."""
+    if types is None:
+        return []
+    made = dict(made or {})
+    found = []
+    for call in block.calls:
+        for name, ref in call.bindings:
+            if ref.variable in made:
+                key = _result_key(made[ref.variable], ref)
+                if types.typed(key, ("argument", f"{call.tool}.{name}")):
+                    found.append(f"{ref} -> {call.tool}.{name}")
+        if call.on_error is not None:
+            found += _assumed(call.on_error, types, made)
+        made[call.result] = call.tool
+    end = block.end
+    if isinstance(end, Branch):
+        found += _assumed(end.then, types, made) + _assumed(end.otherwise, types, made)
+    return found
 
 
 def _readable(values: Validator[Any], consumers: Sequence[Validator[Any]]) -> bool:
@@ -537,6 +577,7 @@ def plan(
     errors: bool = False,
     policies: Sequence[Policy] = (),
     flows: Sequence[Flow] = (),
+    types: Types | None = None,
 ) -> Plan:
     """Search a program for ``task`` over ``contracts``: strong first, then weak if asked.
 
@@ -544,7 +585,9 @@ def plan(
     a block for it, as `valgebra_planning.verify.verify` holds with the same flag. A call is
     made only where valgebra proves it keeps every policy away from its bad states, and a
     call a policy reads is kept even where no result of it is read. A value reaches a flow
-    rule's sink only as `valgebra_planning.verify.verify` holds it with the same rules.
+    rule's sink only as `valgebra_planning.verify.verify` holds it with the same rules. With
+    mined ``types``, a value fills an argument only where their types agree, and the plan
+    names every binding that rests on one.
     """
     kept = frozenset(tool for policy in policies for tool in policy.tools())
     contracts = _reachable(contracts, task, kept)
@@ -557,6 +600,7 @@ def plan(
         errors=errors,
         policies=tuple(policies),
         flows=tuple(flows),
+        types=types,
     )
     start = _State(
         tuple(
@@ -579,6 +623,7 @@ def plan(
                 uncovered=(),
                 abstraction=abstraction,
                 expanded=search.expanded,
+                assumed=tuple(_assumed(program, types)),
             )
     if weak:
         # One search at the full bound: a branch stops only where no continuation exists
@@ -594,5 +639,6 @@ def plan(
                 uncovered=gaps,
                 abstraction=abstraction,
                 expanded=search.expanded,
+                assumed=tuple(_assumed(program, types)),
             )
     return Plan(None, strong=False, uncovered=(), abstraction=abstraction, expanded=search.expanded)
