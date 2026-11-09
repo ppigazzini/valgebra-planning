@@ -333,6 +333,55 @@ class _Search:
         return True
 
 
+def _meets(one: Validator[Any], other: Validator[Any]) -> bool:
+    """Return whether two sets may share a value: not proven disjoint."""
+    return intersection(one, other).relation_to(nothing) != "subset"
+
+
+def _reachable(
+    contracts: Mapping[str, Contract], task: Task, kept: frozenset[str]
+) -> dict[str, Contract]:
+    """Return the tools a program for ``task`` may call to some end, and those in ``kept``.
+
+    Forward, a tool can be called once every required argument meets a value the agent may
+    hold: the task's inputs, then the results of each tool found callable. Backward, a tool
+    matters once one of its results meets the goal or an argument of a tool that matters.
+    A tool failing either is never part of a program, so its slots are never cut into cells:
+    the reachability pruning of component synthesis (SyPet, Feng et al. 2017), with valgebra
+    deciding each overlap.
+    """
+    held = [slot.values for slots in task.held.values() for slot in slots]
+    callable_: dict[str, Contract] = {}
+    grown = True
+    while grown:
+        grown = False
+        for name, contract in contracts.items():
+            if name in callable_:
+                continue
+            required = [slot for slot in contract.arguments if slot.required]
+            if all(any(_meets(slot.values, value) for value in held) for slot in required):
+                callable_[name] = contract
+                held += [slot.values for slot in contract.results]
+                grown = True
+    needed = [task.goal]
+    mattering: dict[str, Contract] = {}
+    grown = True
+    while grown:
+        grown = False
+        for name, contract in callable_.items():
+            if name in mattering:
+                continue
+            if any(_meets(slot.values, want) for slot in contract.results for want in needed):
+                mattering[name] = contract
+                needed += [slot.values for slot in contract.arguments]
+                grown = True
+    return {
+        name: contract
+        for name, contract in contracts.items()
+        if name in mattering or (name in kept and name in callable_)
+    }
+
+
 def _readable(values: Validator[Any], consumers: Sequence[Validator[Any]]) -> bool:
     """Return whether some argument or the goal may hold a value of ``values``."""
     return any(
@@ -497,6 +546,8 @@ def plan(
     call a policy reads is kept even where no result of it is read. A value reaches a flow
     rule's sink only as `valgebra_planning.verify.verify` holds it with the same rules.
     """
+    kept = frozenset(tool for policy in policies for tool in policy.tools())
+    contracts = _reachable(contracts, task, kept)
     abstraction = abstract(_predicates(contracts, task), seed=seed)
     goal = abstraction.cells_of(abstraction.index(_GOAL))
     search = _Search(
@@ -507,7 +558,6 @@ def plan(
         policies=tuple(policies),
         flows=tuple(flows),
     )
-    kept = frozenset(tool for policy in policies for tool in policy.tools())
     start = _State(
         tuple(
             (Ref(var, slot.path), search.cells_of(_held_name(slot)))

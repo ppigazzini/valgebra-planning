@@ -31,6 +31,7 @@ jobs:
       - run: uv run pytest
       # Every published count is one this code still produces.
       - run: uv run python tools/case.py examples/parcels --check docs/studies/parcels.json
+      - run: uv run python tools/bench.py --check docs/studies/bench.json
 
   floor:
     name: the suite on the oldest interpreter

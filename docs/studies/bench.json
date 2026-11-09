@@ -1,0 +1,185 @@
+{
+  "format": 1,
+  "rows": [
+    {
+      "tools": 8,
+      "seed": 0,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 8,
+      "seed": 1,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 8,
+      "seed": 2,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 16,
+      "seed": 0,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 16,
+      "seed": 1,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 16,
+      "seed": 2,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 32,
+      "seed": 0,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 32,
+      "seed": 1,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 32,
+      "seed": 2,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 64,
+      "seed": 0,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 64,
+      "seed": 1,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 64,
+      "seed": 2,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 128,
+      "seed": 0,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 128,
+      "seed": 1,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 128,
+      "seed": 2,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 256,
+      "seed": 0,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 256,
+      "seed": 1,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    },
+    {
+      "tools": 256,
+      "seed": 2,
+      "predicates": 5,
+      "cells": 12,
+      "program": "strong",
+      "proven": 5,
+      "links": 5,
+      "expanded": 10
+    }
+  ]
+}

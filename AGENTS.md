@@ -23,6 +23,7 @@ uv run --no-sync ty check
 uv run --no-sync python tools/check_markdown.py
 uv run --no-sync pytest
 uv run --no-sync python tools/case.py examples/parcels --check docs/studies/parcels.json
+uv run --no-sync python tools/bench.py --check docs/studies/bench.json
 ```
 
 All of them must exit 0 before a commit. A change that moves a published count regenerates

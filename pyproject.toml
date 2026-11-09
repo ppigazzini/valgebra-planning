@@ -65,6 +65,8 @@ faulthandler_exit_on_timeout = true
 
 [tool.ty.environment]
 python-version = "3.11"
+# `tests/test_reachable.py` imports the bench's library generator.
+extra-paths = ["tools"]
 
 [tool.ruff]
 line-length = 100
