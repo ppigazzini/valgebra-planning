@@ -96,8 +96,12 @@ verifier, which adds a link for it.
   reads as an assumption.
 - **Flows** (`valgebra_planning/flows.py`). A value from an untrusted source reaches a sink
   argument only inside the rule's endorsed set, and with `implicit` no sink call runs under a
-  test on such a value or in a loop over an array from such a source: the integrity half of CaMeL (Debenedetti et al. 2025), FIDES (Costa
-  et al. 2025) and Progent (Shi et al. 2025), decided over sets.
+  test on such a value or in a loop over an array from such a source: the integrity half of
+  CaMeL (Debenedetti et al. 2025), FIDES (Costa et al. 2025) and Progent (Shi et al. 2025),
+  decided over sets. With `only`, the rule holds every origin but its sources, so a sink takes
+  a value from a named tool or input on every path, and a literal or another tool's value only
+  inside the endorsed set: an identifier the program did not retrieve, the integrity leak of
+  Sah et al. 2026, is refuted before the run.
 - **Mined types** (`valgebra_planning/mining.py`). Slots holding one observed value are one
   semantic type (APIphany, Guo et al. 2022), and a value fills an argument only where their
   types agree. A mined type is an assumption: the verifier reads none, and a plan names each
@@ -157,8 +161,9 @@ defect to report, and in an unproven one its own unproven link. A lying annotati
 mined type break no check a run can see. `valgebra_planning/proxy.py` holds the same checks
 as an MCP server in front of another, for an agent no program governs: each call is answered with
 a tool error naming the check it breaks, a refused call steps no policy, and a flow rule reads a
-value's source from equality with what an untrusted tool returned, the grounding gate of Sah et
-al. 2026, an assumption.
+value's source from equality with what a source tool returned, an assumption. With `only` that is
+the grounding gate of Sah et al. 2026: an argument equal to no value its sources returned is
+refused, and a value from a task input with it, since a proxy sees no task.
 
 ## Limits
 

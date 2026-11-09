@@ -118,3 +118,23 @@ def test_a_value_an_untrusted_tool_returned_does_not_reach_the_sink() -> None:
     )
     assert not results[3].is_error
     assert made == ["find_parcel", "verify_contact", "notify"]
+
+
+def test_an_identifier_no_source_returned_never_reaches_the_server() -> None:
+    found = read_flow(
+        {
+            "name": "approvals are for the parcel found",
+            "sources": ["find_parcel"],
+            "sink": "approve_freight.parcel_id",
+            "only": True,
+        }
+    )
+    approval = ("approve_freight", {"parcel_id": "pcl_1"})
+    calls = [approval, ("find_parcel", {"tracking": "AB123456789IT"}), approval]
+    made, (early, _, grounded) = _session(calls, flows=[found])
+    assert _refused(early) == (
+        "refused: flow approvals are for the parcel found: approve_freight.parcel_id holds a"
+        " value none of find_parcel returned"
+    )
+    assert not grounded.is_error
+    assert made == ["find_parcel", "approve_freight"]

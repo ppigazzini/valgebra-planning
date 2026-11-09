@@ -347,10 +347,10 @@ class _Search:
         for flow in self.flows:
             if flow.tool != contract.name:
                 continue
-            if flow.implicit and state.tested & flow.sources:
+            if flow.implicit and any(map(flow.holds, state.tested)):
                 return False
             for name, ref in bindings:
-                if name != flow.argument or state.origin(ref) not in flow.sources:
+                if name != flow.argument or not flow.holds(state.origin(ref)):
                     continue
                 if flow.endorsed is None:
                     return False

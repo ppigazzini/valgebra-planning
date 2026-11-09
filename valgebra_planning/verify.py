@@ -245,21 +245,31 @@ class _Walk:
         for flow in self.flows:
             if flow.tool != call.tool:
                 continue
-            tested = sorted(path.tested & flow.sources)
-            if flow.implicit and tested:
+            if flow.implicit and (tested := sorted(filter(flow.holds, path.tested))):
                 claim = f"flow {flow.name}: {call.tool} runs under a test on {', '.join(tested)}"
                 self.links.append(Link(where, claim, "refuted"))
             for name, ref in call.bindings:
+                if name != flow.argument:
+                    continue
                 if isinstance(ref, Const):
+                    if flow.holds(None):
+                        self.literal(where, flow, ref)
                     continue
                 held = env.get(ref)
-                if name != flow.argument or held is None or held.origin.tool not in flow.sources:
+                if held is None or not flow.holds(held.origin.tool):
                     continue
                 claim = f"flow {flow.name}: {ref} from {held.origin.tool} reaches {flow.sink}"
                 if flow.endorsed is None:
                     self.links.append(Link(where, claim, "refuted"))
                 else:
                     self.inclusion(where, claim, ref, held, flow.endorsed)
+
+    def literal(self, where: str, flow: Flow, const: Const) -> None:
+        """Add the link of a literal a rule holds: proven only inside the endorsed set."""
+        inside = flow.endorsed is not None and flow.endorsed.is_valid(const.value)
+        found = () if inside else (const.value,)
+        claim = f"flow {flow.name}: the literal {const} reaches {flow.sink}"
+        self.links.append(Link(where, claim, "proven" if inside else "refuted", found))
 
     def failure(
         self,

@@ -11,6 +11,12 @@ is the integrity half of information-flow control for agents (CaMeL, Debenedetti
 
 With ``implicit``, a sink call made under a test on a value from a source is refused too:
 which branch runs carries that value's influence, the implicit flow CaMeL names.
+
+With ``only``, the rule holds every origin but its sources: a value from a tool it does not
+name, from a task input it does not name, or written into the program as a literal reaches the
+sink only inside the endorsed set. That is integrity as provenance: an identifier must come
+from the tool that retrieved it, on every path, which refutes the identifier a model makes up to
+pass an authentication step, the integrity leak Sah et al. 2026 measure.
 """
 
 from __future__ import annotations
@@ -24,7 +30,10 @@ from valgebra_planning._valgebra import Validator, compile_schema
 
 @dataclass(frozen=True, slots=True)
 class Flow:
-    """Values from ``sources`` reach ``tool.argument`` only inside ``endorsed``, if named."""
+    """Values from the origins the rule holds reach ``tool.argument`` only inside ``endorsed``.
+
+    It holds ``sources``, or, with ``only``, every origin but them.
+    """
 
     name: str
     sources: frozenset[str]
@@ -32,6 +41,11 @@ class Flow:
     argument: str
     endorsed: Validator[Any] | None
     implicit: bool
+    only: bool = False
+
+    def holds(self, origin: str | None) -> bool:
+        """Return whether a value from ``origin`` is held to the rule; None is a literal."""
+        return (origin in self.sources) != self.only
 
     @property
     def sink(self) -> str:
@@ -43,8 +57,8 @@ def read_flow(spec: Mapping[str, Any]) -> Flow:
     """Read a flow rule from its JSON form.
 
     It holds ``name``, ``sources``, ``sink`` as ``tool.argument``, and optionally the
-    ``endorsed`` JSON Schema and ``implicit``. A source is a tool's name, its results
-    untrusted, or a task input's.
+    ``endorsed`` JSON Schema, ``implicit`` and ``only``. A source is a tool's name or a task
+    input's.
     """
     tool, _, argument = spec["sink"].partition(".")
     endorsed = spec.get("endorsed")
@@ -55,4 +69,5 @@ def read_flow(spec: Mapping[str, Any]) -> Flow:
         argument=argument,
         endorsed=None if endorsed is None else compile_schema(endorsed),
         implicit=bool(spec.get("implicit", False)),
+        only=bool(spec.get("only", False)),
     )

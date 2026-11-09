@@ -110,9 +110,10 @@ answers a call only after holding it to the tool's contract, to every policy and
 library defines, and, the call made, its result to the output schema
 (`valgebra_planning/proxy.py`). A broken check answers the call with a tool error naming it, and
 the call never reaches the server, or its result the agent. A refused call leaves every policy
-where it was. A flow rule reads provenance from values: an argument equal to a value an untrusted
-tool returned is taken as that tool's, an assumption. An agent connects to the proxy as to any
-stdio server, and no agent changes.
+where it was. A flow rule reads provenance from values: an argument equal to a value a source
+tool returned is taken as that tool's, an assumption. Under `only` an argument equal to no value
+its sources returned is refused, and so is a value from a task input, since a proxy sees no
+task. An agent connects to the proxy as to any stdio server, and no agent changes.
 
 ## Limits
 

@@ -8,9 +8,12 @@ so the agent can try another way; nothing breaking it reaches the upstream serve
 
 A flow rule is held by provenance read from values: the proxy sees values, not a program's
 references, so an argument equal, as one JSON value, to a value an untrusted tool returned is
-taken as coming from it, and refused unless it lies in the rule's endorsed set. That is the
-grounding gate Sah et al. 2026 ask for, and an assumption: a value equal by chance to an
-untrusted one is refused with it. Requires the ``mcp`` extra.
+taken as coming from it, and refused unless it lies in the rule's endorsed set. A rule with
+``only`` refuses an argument equal to no value its sources returned: an identifier not retrieved
+earlier in the session, the grounding gate Sah et al. 2026 ask for. Both are assumptions: a
+value equal by chance to an untrusted one is refused with it, and one equal by chance to a
+retrieved one passes. A proxy sees no task, so a value from a task input is from elsewhere.
+Requires the ``mcp`` extra.
 """
 
 from __future__ import annotations
@@ -60,9 +63,17 @@ class Gate:
                 continue
             value = arguments[flow.argument]
             sources = self.seen.get(json_key(value), set()) & flow.sources
-            if sources and (flow.endorsed is None or not flow.endorsed.is_valid(value)):
-                named = ", ".join(sorted(sources))
-                return f"flow {flow.name}: {flow.sink} holds a value {named} returned"
+            # A value equal to one a source returned is taken as that source's, and any other
+            # as from elsewhere: the rule holds the first, or with ``only`` the second.
+            if bool(sources) == flow.only or (
+                flow.endorsed is not None and flow.endorsed.is_valid(value)
+            ):
+                continue
+            if flow.only:
+                named = ", ".join(sorted(flow.sources))
+                return f"flow {flow.name}: {flow.sink} holds a value none of {named} returned"
+            named = ", ".join(sorted(sources))
+            return f"flow {flow.name}: {flow.sink} holds a value {named} returned"
         # A refused call is never made, so no policy steps on it: the session goes on as before.
         states = [monitor.state for monitor in self.monitors]
         for monitor in self.monitors:
