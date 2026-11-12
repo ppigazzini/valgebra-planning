@@ -32,10 +32,13 @@ Status: pre-alpha, not on an index.
 | serve an MCP proxy holding every call to the contracts, policies and flow rules | `valgebra_planning/proxy.py` |
 | give a model typed stubs, and repair its program with the critique | `valgebra_planning/codemode.py` |
 
-[`docs/00-using.md`](docs/00-using.md) shows the command line,
-[`docs/01-method.md`](docs/01-method.md) states the method and its limits, and
-[`docs/04-results.md`](docs/04-results.md) the studies: on a parcel-returns library of ten
-tools, eight tasks get programs whose every link valgebra proves, from 3 of 3 to 24 of 24.
+[`docs/00-using.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/00-using.md)
+shows the command line,
+[`docs/01-method.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/01-method.md)
+states the method and its limits, and
+[`docs/04-results.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/04-results.md)
+the studies: on a parcel-returns library of ten tools, eight tasks get programs whose every
+link valgebra proves, from 3 of 3 to 24 of 24.
 
 ## Prior work
 
@@ -46,5 +49,6 @@ This package is written anew on the valgebra ecosystem and shares no code with i
 
 ## License
 
-MIT OR Apache-2.0, at your option. See [`LICENSE-MIT`](LICENSE-MIT) and
-[`LICENSE-APACHE`](LICENSE-APACHE).
+MIT OR Apache-2.0, at your option. See
+[`LICENSE-MIT`](https://github.com/ppigazzini/valgebra-planning/blob/main/LICENSE-MIT) and
+[`LICENSE-APACHE`](https://github.com/ppigazzini/valgebra-planning/blob/main/LICENSE-APACHE).

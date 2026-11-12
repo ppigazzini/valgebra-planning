@@ -53,6 +53,18 @@ def test_citations_and_the_references_page_are_held_equal() -> None:
     assert "lists 'Feng et al. 2017'" in problems[1]
 
 
+def test_the_readme_links_into_the_tree_by_address() -> None:
+    readme = docs_lint.ROOT / "README.md"
+    main = "https://github.com/ppigazzini/valgebra-planning/blob/main/"
+    assert docs_lint.check_markdown(readme, f"[m]({main}docs/01-method.md)\n") == []
+    [dead] = docs_lint.check_markdown(readme, f"[m]({main}docs/99-none.md)\n")
+    assert "dead link" in dead
+    [relative] = docs_lint.check_markdown(readme, "[m](docs/01-method.md)\n")
+    assert "PyPI" in relative
+    page = docs_lint.ROOT / "docs" / "README.md"
+    assert docs_lint.check_markdown(page, "[m](01-method.md)\n") == []
+
+
 def test_a_message_in_the_form_passes() -> None:
     assert docs_lint.check_message(GOOD) == []
 

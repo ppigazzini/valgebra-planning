@@ -12,7 +12,9 @@ The rules, and what each costs a reader when it breaks:
   a range split across two spans renders the second as source text. Read on every tracked
   `.md`, outside fenced blocks and inline code spans, since a page documenting the rules
   quotes the broken forms.
-* **A dead relative link,** on every tracked `.md`.
+* **A dead link,** on every tracked `.md`: a relative one, or an address of this tree's
+  `main` naming a path it does not hold. **A relative link in the README**, which is also
+  the package's page on PyPI, where none resolves.
 * **A British spelling,** in every tracked text file and its path, prose, code and names
   alike, and in a commit message.
 * **A word stating what the tree was,** on every tracked page, in every comment and
@@ -63,6 +65,10 @@ RULES: tuple[tuple[str, str], ...] = (
 )
 FENCE = re.compile(r"^\s*(```|~~~)")
 LINK = re.compile(r"\[[^\]]*\]\(([^)#\s]+)(?:#[^)\s]*)?\)")
+#: The README is also the package's page on PyPI, which resolves no relative link: it links
+#: into this tree by the address of `main`, and that address names a path the tree must hold.
+README = ROOT / "README.md"
+TREE = re.compile(r"https://github\.com/ppigazzini/valgebra-planning/(?:blob|tree)/main/(.+)")
 
 #: A British word, by family: `-our`, `-ise` with its inflections and nouns, `-yse`,
 #: `-re`, `-ence`, `-ogue`, `-ement`, a doubled `l` before a suffix, and a few words of
@@ -171,20 +177,30 @@ def strip_code_spans(line: str) -> str:
     return "".join(out)
 
 
+def link_problems(path: Path, line: str) -> list[str]:
+    """Return one message per dead link on ``line``, and per relative one in the README."""
+    problems: list[str] = []
+    for target in LINK.findall(line):
+        if target.startswith(("http://", "https://", "mailto:")):
+            own = TREE.match(target)
+            if own and not (ROOT / own[1]).exists():
+                problems.append(f"dead link -> {target}")
+        elif path.resolve() == README:
+            problems.append(f"relative link in the README, which PyPI cannot follow -> {target}")
+        elif not (path.parent / target).exists():
+            problems.append(f"dead link -> {target}")
+    return problems
+
+
 def check_markdown(path: Path, text: str) -> list[str]:
-    """Return one message per rendering problem or dead relative link in a page."""
+    """Return one message per rendering problem or link problem in a page."""
     problems: list[str] = []
     in_fence = False
     for n, raw in enumerate(text.splitlines(), 1):
         if FENCE.match(raw):
             in_fence = not in_fence
             continue
-        problems.extend(
-            f"{n}: dead link -> {target}"
-            for target in LINK.findall(raw)
-            if not target.startswith(("http://", "https://", "mailto:"))
-            and not (path.parent / target).exists()
-        )
+        problems.extend(f"{n}: {why}" for why in link_problems(path, raw))
         if in_fence:
             continue
         line = strip_code_spans(raw)
