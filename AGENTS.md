@@ -21,6 +21,7 @@ a schema in the companion; neither is worked around here by a guess.
 | what a program, a link or a rule means | [docs/01-method.md](docs/01-method.md) |
 | a published count | [docs/04-results.md](docs/04-results.md), and the study file its command checks |
 | a citation | [docs/11-references.md](docs/11-references.md) |
+| a release, or a dependency's floor | [docs/05-releasing.md](docs/05-releasing.md) |
 | any prose at all: a page, a comment, a docstring, a commit message | [docs/10-writing.md](docs/10-writing.md) |
 
 ## Setup
