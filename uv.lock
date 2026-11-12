@@ -1274,7 +1274,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.3.0,<3" },
-    { name = "valgebra", specifier = ">=0.0.25,<0.1" },
+    { name = "valgebra", specifier = ">=0.0.25,<0.0.26" },
     { name = "valgebra-jsonschema", git = "https://github.com/ppigazzini/valgebra-jsonschema?rev=f9ee61df512ce89adbc6c24c97051aac698a161b" },
 ]
 provides-extras = ["mcp"]

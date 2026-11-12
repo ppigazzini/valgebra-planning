@@ -24,7 +24,8 @@ same bytes.
 ## Both dependencies come from PyPI
 
 valgebra and valgebra-jsonschema are pre-alpha, and a `0.0.x` minor of either is a breaking
-release here, so each is required at the version the studies were read on and below 0.1. A user
+release here, so each is required at the version the studies were read on and below its next
+minor, which a release of this package takes once its suite has run on it. A user
 installs both from PyPI, and the smoke resolves them from PyPI as a user does, so a release
 follows one of valgebra-jsonschema at the floor `pyproject.toml` names.
 
