@@ -23,9 +23,9 @@ dependencies = [
     # The decision procedure every proof here rests on. Pre-alpha, so pinned below 0.1,
     # and a 0.0.x minor is a breaking release: the floor moves with each release.
     "valgebra>=0.0.25,<0.1",
-    # JSON Schema and MCP tool listings read into valgebra's sets. Not on an index yet, so
-    # the source below pins a commit.
-    "valgebra-jsonschema>=0.0.1",
+    # JSON Schema and MCP tool listings read into valgebra's sets. Pre-alpha as valgebra is,
+    # so pinned below 0.1. Not on an index yet, so the source below pins a commit.
+    "valgebra-jsonschema>=0.0.1,<0.1",
 ]
 
 [project.optional-dependencies]
