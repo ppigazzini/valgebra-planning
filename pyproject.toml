@@ -37,6 +37,9 @@ valgebra-planning = "valgebra_planning.cli:main"
 
 [project.urls]
 Repository = "https://github.com/ppigazzini/valgebra-planning"
+Documentation = "https://github.com/ppigazzini/valgebra-planning/tree/main/docs"
+Changelog = "https://github.com/ppigazzini/valgebra-planning/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ppigazzini/valgebra-planning/issues"
 
 [tool.uv.sources]
 valgebra-jsonschema = { git = "https://github.com/ppigazzini/valgebra-jsonschema", rev = "f9ee61df512ce89adbc6c24c97051aac698a161b" }
