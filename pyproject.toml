@@ -68,6 +68,14 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["valgebra_planning"]
 
+# The package, its suite and what the suite reads: the examples, the pages and `tools/`, whose
+# lint and bench driver it imports, beside the README, the licenses and this file, which every
+# sdist carries. The test holding `AGENTS.md` to the workflow stays out with the two files it
+# reads.
+[tool.hatch.build.targets.sdist]
+include = ["valgebra_planning", "tests", "examples", "docs", "tools", "CHANGELOG.md"]
+exclude = ["tests/test_build_surfaces.py"]
+
 [tool.hatch.metadata]
 # The git source of valgebra-jsonschema above; an index release replaces it.
 allow-direct-references = true
