@@ -1219,6 +1219,11 @@ dev = [
     { name = "ruff" },
     { name = "ty" },
 ]
+test = [
+    { name = "hypothesis" },
+    { name = "mcp" },
+    { name = "pytest" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1236,6 +1241,11 @@ dev = [
     { name = "pytest", specifier = ">=9.2.0" },
     { name = "ruff", specifier = ">=0.17.4" },
     { name = "ty", specifier = ">=0.0.99" },
+]
+test = [
+    { name = "hypothesis", specifier = ">=6.170.15" },
+    { name = "mcp", specifier = ">=2.3.0,<3" },
+    { name = "pytest", specifier = ">=9.2.0" },
 ]
 
 [[package]]

@@ -42,11 +42,17 @@ Repository = "https://github.com/ppigazzini/valgebra-planning"
 valgebra-jsonschema = { git = "https://github.com/ppigazzini/valgebra-jsonschema", rev = "f9ee61df512ce89adbc6c24c97051aac698a161b" }
 
 [dependency-groups]
-dev = [
+# What the suite imports beside the package. The release smoke installs this group alone
+# beside the built artifact, so a module the suite needs and no group names fails there.
+test = [
     "hypothesis>=6.170.15",
+    # The `mcp` extra's client and server: the live-server and proxy tests run on it.
     "mcp>=2.3.0,<3",
-    "pre-commit>=4.7.0",
     "pytest>=9.2.0",
+]
+dev = [
+    { include-group = "test" },
+    "pre-commit>=4.7.0",
     "ruff>=0.17.4",
     "ty>=0.0.99",
 ]
