@@ -56,10 +56,36 @@ JSON_VALUES = st.recursive(
 )
 
 
+def _holds_nan(value: Any) -> bool:
+    if isinstance(value, float):
+        return math.isnan(value)
+    if isinstance(value, list):
+        return any(map(_holds_nan, value))
+    if isinstance(value, dict):
+        return any(map(_holds_nan, value.values()))
+    return False
+
+
+def _of_no_kind_and_no_predicate(value: Any) -> bool:
+    return not any(values.is_valid(value) for values in KINDS.values()) and not any(
+        predicate.values.is_valid(value) for predicate in ABSTRACTION.predicates
+    )
+
+
 @settings(max_examples=400, deadline=None)
 @given(JSON_VALUES)
 def test_every_value_lies_in_a_cell_the_abstraction_kept(value: Any) -> None:
-    assert _cell_of(ABSTRACTION, value) is not None, value
+    if _holds_nan(value):
+        assert _of_no_kind_and_no_predicate(value), value
+    else:
+        assert _cell_of(ABSTRACTION, value) is not None, value
+
+
+def test_a_value_holding_nan_is_of_no_kind_and_in_no_predicate() -> None:
+    # JSON has no NaN (RFC 8259 §6), at the top or below a key or an index.
+    nan = float("nan")
+    for value in (nan, [nan], {"k": nan}, [1, {"a": ["x", nan]}]):
+        assert _of_no_kind_and_no_predicate(value), value
 
 
 def test_every_edge_and_listed_value_lies_in_a_kept_cell() -> None:

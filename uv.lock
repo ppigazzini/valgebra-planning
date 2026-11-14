@@ -1232,7 +1232,7 @@ wheels = [
 [[package]]
 name = "valgebra-jsonschema"
 version = "0.0.1"
-source = { git = "https://github.com/ppigazzini/valgebra-jsonschema?rev=f9ee61df512ce89adbc6c24c97051aac698a161b#f9ee61df512ce89adbc6c24c97051aac698a161b" }
+source = { git = "https://github.com/ppigazzini/valgebra-jsonschema?rev=c42ea07cd8fc28b892757eb33ac1bceec3cc08d4#c42ea07cd8fc28b892757eb33ac1bceec3cc08d4" }
 dependencies = [
     { name = "annotated-types" },
     { name = "typing-extensions" },
@@ -1275,7 +1275,7 @@ test = [
 requires-dist = [
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.3.0,<3" },
     { name = "valgebra", specifier = ">=0.0.26,<0.0.27" },
-    { name = "valgebra-jsonschema", git = "https://github.com/ppigazzini/valgebra-jsonschema?rev=f9ee61df512ce89adbc6c24c97051aac698a161b" },
+    { name = "valgebra-jsonschema", git = "https://github.com/ppigazzini/valgebra-jsonschema?rev=c42ea07cd8fc28b892757eb33ac1bceec3cc08d4" },
 ]
 provides-extras = ["mcp"]
 

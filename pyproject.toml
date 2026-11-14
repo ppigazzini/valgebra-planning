@@ -42,7 +42,7 @@ Changelog = "https://github.com/ppigazzini/valgebra-planning/blob/main/CHANGELOG
 Issues = "https://github.com/ppigazzini/valgebra-planning/issues"
 
 [tool.uv.sources]
-valgebra-jsonschema = { git = "https://github.com/ppigazzini/valgebra-jsonschema", rev = "f9ee61df512ce89adbc6c24c97051aac698a161b" }
+valgebra-jsonschema = { git = "https://github.com/ppigazzini/valgebra-jsonschema", rev = "c42ea07cd8fc28b892757eb33ac1bceec3cc08d4" }
 
 [dependency-groups]
 # What the suite imports beside the package. The release smoke installs this group alone

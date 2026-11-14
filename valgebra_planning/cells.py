@@ -41,7 +41,8 @@ from valgebra_planning._valgebra import (
     nothing,
 )
 
-#: The seven kinds of JSON value, which partition every value `json.loads` returns.
+#: The seven kinds of JSON value, which partition every value `json.loads` returns that holds
+#: no NaN: JSON has none (RFC 8259 §6), and valgebra-jsonschema compiles no set holding one.
 KINDS: dict[str, Validator[Any]] = {
     "null": NULL,
     "boolean": BOOLEAN,
@@ -66,7 +67,6 @@ EDGES: tuple[Any, ...] = (
     0.5,
     -0.5,
     1.5,
-    float("nan"),
     float("inf"),
     "",
     "a",
