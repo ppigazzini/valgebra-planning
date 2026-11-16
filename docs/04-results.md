@@ -59,11 +59,11 @@ uv run --no-sync python tools/census.py --check docs/studies/census.json
 The seven official MCP reference servers, each pinned to one release (`SERVERS` in
 `tools/census.py`), list 66 tools. valgebra-jsonschema reads every one, and 31 carry an
 `outputSchema`, which is 12 distinct schemas, all 16 of filesystem's being one text wrapper. Of
-the 126 arguments, 72 carry a bare type and nothing more. Cut into cells together, as the planner cuts them,
-the 106 predicates give 794 cells, of which 759 are undecided, 758 of them array cells: arrays of
-records met with the complements of the other arrays of records and of the non-empty arrays of
-strings, which valgebra does not part. They are kept, so no wrong program is admitted, and they
-cost the search. The cut asks valgebra 3,087 relations.
+the 126 arguments, 72 carry a bare type and nothing more. Cut into cells together, as the planner
+cuts them, the 106 predicates give 127 cells, of which 92 are undecided, 91 of them array cells:
+arrays of records met with the complements of other arrays of records, 63 of them with arrays of
+strings too, which valgebra does not part. They are kept, so no wrong program is admitted, and
+they cost the search. The cut asks valgebra 3,082 relations.
 
 The census needs the network, `uvx` and `npx`, so it runs as the CI job `census` and not in the
 local gate. A new release of a server is a new study.
