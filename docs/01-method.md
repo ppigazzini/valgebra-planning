@@ -48,7 +48,10 @@ implies the inclusion between predicates.
 
 A part of a cell is dropped only where valgebra proves it empty, inhabited where a concrete value
 lies in it or valgebra refutes its emptiness, and kept as undecided otherwise: an undecided cell
-can cost a program, never admit a wrong one. Relations between two predicates, each asked once,
+can cost a program, never admit a wrong one. A part is asked as its kind, each predicate it lies
+inside, and the complement of each it lies outside but for one a predicate inside it already
+excludes: one set, in the form valgebra decides most often, where a meet built cut by cut lacks
+some complements and holds redundant ones. Relations between two predicates, each asked once,
 settle most cuts. The concrete values are the edges of common bounds, every listed value, draws
 from each schema and objects merged from those draws, since an open record meets another where a
 value carries both their keys. The predicates are cut in the order of their names: which meets

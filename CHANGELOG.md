@@ -6,6 +6,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A part of a cell is asked of valgebra as its kind, each predicate it lies inside, and the
+  complement of each it lies outside but for one a predicate inside it already excludes,
+  where it was the meet built cut by cut. The set is the same, and valgebra decides more of
+  them: the MCP reference servers' cut keeps 64 cells, 29 undecided, where it kept 96, 61
+  undecided.
+
 ### Fixed
 
 - The cut a plan searches is the same however a library lists its tools: its predicates are

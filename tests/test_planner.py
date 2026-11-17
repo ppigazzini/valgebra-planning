@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import random
 from typing import Any
 
+from valgebra_planning._valgebra import Sampler
 from valgebra_planning.cells import abstract
 from valgebra_planning.contracts import Contract, read_contract, read_task
 from valgebra_planning.planner import plan, predicates
@@ -150,3 +152,19 @@ def test_the_cut_is_the_same_whatever_order_the_tools_are_listed_in() -> None:
             )
         )
     assert len(cuts) == 1
+
+
+def test_a_cell_is_asked_in_the_form_valgebra_decides() -> None:
+    # Asked as a meet built up cut by cut, the cut of these keeps 22 cells, 8 undecided: valgebra
+    # proves some meets empty only with the complement of a predicate the cell lies outside by a
+    # relation, and some only without the complement of one a predicate inside it excludes.
+    task = read_task("a string", {"text": {"type": "string"}}, {"type": "string"})
+    found = predicates({spec["name"]: read_contract(spec) for spec in ARRAYS}, task)
+    cut = abstract(found)
+    assert len(cut.cells) <= 19
+    assert sum(cell.status == "undecided" for cell in cut.cells) <= 5
+    # A part dropped as empty holds no value: every value drawn lies in exactly one cell.
+    rng = random.Random(0)
+    drawn = [v for p in found for v in Sampler(p.root, rng).draw(p.schema, 20)]
+    assert drawn
+    assert all(sum(cell.values.is_valid(v) for cell in cut.cells) == 1 for v in drawn)

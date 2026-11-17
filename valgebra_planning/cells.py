@@ -267,9 +267,9 @@ def _cut(split: _Split, i: int, predicate: Predicate, relations: _Relations) -> 
         return [split]
     parts = []
     for inside in (True, False):
-        values = intersection(
-            split.values, predicate.values if inside else complement(predicate.values)
-        )
+        held = split.inside | {i} if inside else set(split.inside)
+        out = set(split.outside) if inside else split.outside | {i}
+        values = _meet(split.kind, held, out, relations)
         witnesses = [v for v in split.witnesses if predicate.values.is_valid(v) == inside]
         proven = bool(witnesses)
         if not witnesses:
@@ -277,10 +277,25 @@ def _cut(split: _Split, i: int, predicate: Predicate, relations: _Relations) -> 
             if emptiness == "empty":
                 continue
             proven = emptiness == "inhabited"
-        held = split.inside | {i} if inside else set(split.inside)
-        out = set(split.outside) if inside else split.outside | {i}
         parts.append(_Split(split.kind, held, out, values, witnesses, proven))
     return parts
+
+
+def _meet(kind: str, inside: set[int], outside: set[int], relations: _Relations) -> Validator[Any]:
+    """Return the set a cell is asked as: its kind, and each predicate it lies inside or outside.
+
+    The complement of a predicate sharing no value with one the cell lies inside is left out:
+    that one lies inside the complement already, so the set is the same and the question
+    smaller. The complement of a predicate the cell lies outside by a relation stays: valgebra
+    proves some meets empty only with it, and some only without a redundant one.
+    """
+    predicates = relations.predicates
+    kept = [q for q in sorted(outside) if not any(relations.are_apart(q, p) for p in inside)]
+    return intersection(
+        KINDS[kind],
+        *(predicates[p].values for p in sorted(inside)),
+        *(complement(predicates[q].values) for q in kept),
+    )
 
 
 def abstract(predicates: Sequence[Predicate], *, seed: int = 0) -> Abstraction:
