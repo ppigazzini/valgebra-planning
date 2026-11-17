@@ -168,3 +168,15 @@ def test_a_cell_is_asked_in_the_form_valgebra_decides() -> None:
     drawn = [v for p in found for v in Sampler(p.root, rng).draw(p.schema, 20)]
     assert drawn
     assert all(sum(cell.values.is_valid(v) for cell in cut.cells) == 1 for v in drawn)
+
+
+def test_two_spellings_of_one_set_are_one_predicate() -> None:
+    spelled = [
+        _passing("u", {"type": "string", "description": "a code"}, {"type": "integer"}),
+        _passing("v", {"type": "string", "title": "Code"}, {"type": "integer", "default": 0}),
+    ]
+    task = read_task("an integer", {"text": {"type": "string"}}, {"type": "integer"})
+    found = predicates({spec["name"]: read_contract(spec) for spec in spelled}, task)
+    by_name = {name: predicate for predicate in found for name in predicate.names}
+    assert by_name["argument:u.x"] is by_name["argument:v.x"]
+    assert by_name["result:u.y"] is by_name["result:v.y"]

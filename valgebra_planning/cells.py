@@ -18,7 +18,6 @@ inside it, and a cell outside a predicate above it lies outside it.
 from __future__ import annotations
 
 import itertools
-import json
 import random
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -167,24 +166,20 @@ class Abstraction:
         return sum(self.cells[i].status == "undecided" for i in cells)
 
 
-def _key(schema: object, root: object) -> str:
-    text = json.dumps(schema, sort_keys=True, default=repr)
-    # A reference reads against its document, so the same text under two roots is two sets.
-    if "$ref" in text:
-        text += json.dumps(root, sort_keys=True, default=repr)
-    return text
-
-
 def gather(entries: Iterable[tuple[str, Validator[Any], object, object]]) -> list[Predicate]:
-    """Merge named sets with the same schema text into one predicate each, keeping order."""
-    merged: dict[str, Predicate] = {}
+    """Merge named sets valgebra holds equal into one predicate each, keeping order.
+
+    Two schemas differing in a description, a title or a default compile to one set, and a
+    predicate per spelling would only ask each relation again; the first spelling stays, to
+    draw members from.
+    """
+    merged: dict[Validator[Any], Predicate] = {}
     for name, values, schema, root in entries:
-        key = _key(schema, root)
-        if key in merged:
-            held = merged[key]
-            merged[key] = Predicate((*held.names, name), held.values, held.schema, held.root)
+        if values in merged:
+            held = merged[values]
+            merged[values] = Predicate((*held.names, name), held.values, held.schema, held.root)
         else:
-            merged[key] = Predicate((name,), values, schema, root)
+            merged[values] = Predicate((name,), values, schema, root)
     return list(merged.values())
 
 

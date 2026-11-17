@@ -13,6 +13,9 @@ All notable changes to valgebra-planning are recorded here. The format follows
   where it was the meet built cut by cut. The set is the same, and valgebra decides more of
   them: the MCP reference servers' cut keeps 64 cells, 29 undecided, where it kept 96, 61
   undecided.
+- Schemas that compile to one validator, a description, a title or a default apart, are one
+  predicate, where each spelling was one: the reference servers' 106 predicates are 37 sets,
+  and their cut asks valgebra 507 relations where it asked 3,044.
 
 ### Fixed
 
