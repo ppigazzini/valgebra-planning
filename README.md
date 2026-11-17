@@ -12,7 +12,12 @@ It is part of the [valgebra](https://github.com/ppigazzini/valgebra) ecosystem.
 contract, the MCP `inputSchema` and `outputSchema`, into valgebra's sets, and valgebra decides
 every inclusion a program rests on. Nothing here reads JSON Schema itself.
 
-Status: pre-alpha, not on an index.
+Status: pre-alpha.
+
+```bash
+pip install valgebra-planning            # Python 3.11 or later
+pip install "valgebra-planning[mcp]"     # with a live MCP server's tools, and the proxy
+```
 
 ## What it does
 
