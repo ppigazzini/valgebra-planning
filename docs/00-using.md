@@ -1,3 +1,7 @@
+---
+description: Plan a library's tasks, critique a program, run one against a live server, or serve the proxy, from the command line.
+---
+
 # Using valgebra-planning
 
 How to plan the tasks of a tool library, or check a program written for one, from the command

@@ -1,3 +1,7 @@
+---
+description: The public modules, the names each promises, the two needing the mcp extra, and their reference read from the docstrings.
+---
+
 # The Python API
 
 The names valgebra-planning promises a Python caller: each public module, the names its
@@ -95,3 +99,39 @@ are not public.
 
 **The limit.** Under `0.0.x` a release may change any public name; the table says which names
 a release can break, not that it will not. The changelog records each change.
+
+## Reference
+
+Each public module's names, read from their docstrings.
+
+::: valgebra_planning.contracts
+
+::: valgebra_planning.program
+
+::: valgebra_planning.planner
+
+::: valgebra_planning.cells
+
+::: valgebra_planning.verify
+
+::: valgebra_planning.critic
+
+::: valgebra_planning.codemode
+
+::: valgebra_planning.run
+
+::: valgebra_planning.policy
+
+::: valgebra_planning.flows
+
+::: valgebra_planning.mining
+
+::: valgebra_planning.library
+
+::: valgebra_planning.privilege
+
+::: valgebra_planning.vacuity
+
+::: valgebra_planning.servers
+
+::: valgebra_planning.proxy

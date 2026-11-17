@@ -1,3 +1,7 @@
+---
+description: The studies, each count with the command that checks it.
+---
+
 # Results
 
 Every count below is a row of a study file, and the command beside it fails when this code

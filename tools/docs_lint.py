@@ -1,4 +1,4 @@
-r"""Hold every text the tree writes to the rules of `docs/10-writing.md`.
+r"""Hold every text the tree writes to the rules of `docs/dev/10-writing.md`.
 
     uv run --no-sync python tools/docs_lint.py                    # every tracked file
     uv run --no-sync python tools/docs_lint.py README.md          # the named files
@@ -15,6 +15,12 @@ The rules, and what each costs a reader when it breaks:
 * **A dead link,** on every tracked `.md`: a relative one, or an address of this tree's
   `main` naming a path it does not hold. **A relative link in the README**, which is also
   the package's page on PyPI, where none resolves.
+* **A link from the site into the developer set.** `mkdocs.yml` excludes `docs/dev/`, so a
+  published page linking there resolves in the tree and answers 404 on the site; a published
+  page names such a page by its path instead.
+* **The llms.txt manifest.** A page in the site's `nav` that the `llmstxt` sections of
+  `mkdocs.yml` do not name fails, and the reverse; so does a manifest line whose summary is not
+  its page's `description:`.
 * **A British spelling,** in every tracked text file and its path, prose, code and names
   alike, and in a commit message.
 * **A word stating what the tree was,** on every tracked page, in every comment and
@@ -27,7 +33,7 @@ The rules, and what each costs a reader when it breaks:
 * **A citation the references page does not list,** or a work it lists that no tracked
   text cites. A key of two surnames, or of one with `et al.`, is read; a key of one
   surname is not.
-* **A commit message off the form** `docs/10-writing.md` gives, or carrying a trailer:
+* **A commit message off the form** `docs/dev/10-writing.md` gives, or carrying a trailer:
   any line git parses as one, and an attribution line anywhere.
 
 This script and its test spell the words to forbid them, and are exempt from the rules
@@ -136,7 +142,7 @@ BODY_WIDTH = 88
 
 #: The files that spell the words to forbid them.
 SPELLERS = frozenset({"tools/docs_lint.py", "tests/test_docs_lint.py"})
-HISTORY_EXEMPT = SPELLERS | {"CHANGELOG.md", "docs/10-writing.md"}
+HISTORY_EXEMPT = SPELLERS | {"CHANGELOG.md", "docs/dev/10-writing.md"}
 INTERNAL_EXEMPT = SPELLERS | {".gitignore"}
 
 
@@ -189,6 +195,65 @@ def link_problems(path: Path, line: str) -> list[str]:
             problems.append(f"relative link in the README, which PyPI cannot follow -> {target}")
         elif not (path.parent / target).exists():
             problems.append(f"dead link -> {target}")
+        elif _on_the_site(path) and _unpublished(path.parent / target):
+            problems.append(
+                f"link leaves the site, where docs/dev/ is not published; name the page by its"
+                f" path -> {target}"
+            )
+    return problems
+
+
+def _parts(path: Path) -> tuple[str, ...]:
+    try:
+        return path.resolve().relative_to(ROOT).parts
+    except ValueError:
+        return ()
+
+
+def _on_the_site(path: Path) -> bool:
+    """Answer whether mkdocs renders the page: under `docs/`, outside `docs/dev/`."""
+    parts = _parts(path)
+    return len(parts) > 1 and parts[0] == "docs" and parts[1] != "dev"
+
+
+def _unpublished(path: Path) -> bool:
+    """Answer whether the page is in the developer set `mkdocs.yml` excludes."""
+    return _parts(path)[:2] == ("docs", "dev")
+
+
+DESCRIPTION = re.compile(r"^description: (.+)$", re.MULTILINE)
+
+
+def manifest_problems(config: str, pages: Path) -> list[str]:
+    """Hold the llms.txt manifest of ``config`` to its nav, both ways, and to each description.
+
+    `mkdocs.yml` names every user page twice: in `nav`, which builds the site, and in the
+    `llmstxt` sections, which build `/llms.txt` for a reader that is not a browser. A page added
+    to one alone is missing from the half no person opens; a summary is a copy of the page's
+    `description:`, and a copy that moves apart describes a page the site no longer has.
+    """
+    head, marker, tail = config.partition("  - llmstxt:")
+    if not marker:
+        return ["mkdocs.yml: no llmstxt plugin"]
+    nav = set(re.findall(r"^ +- [^:\n]+: ([A-Za-z0-9-]+\.md)$", head, re.MULTILINE))
+    lines = dict(re.findall(r"^ +- ([A-Za-z0-9-]+\.md): (.+)$", tail, re.MULTILINE))
+    if not nav or not lines:
+        return ["mkdocs.yml: the nav or the llms.txt manifest reads as empty"]
+    problems = [
+        f"mkdocs.yml: {page} is in the {here} but not the {there}"
+        for pages_named, here, there in (
+            (nav - lines.keys(), "nav", "llms.txt manifest"),
+            (lines.keys() - nav, "llms.txt manifest", "nav"),
+        )
+        for page in sorted(pages_named)
+    ]
+    for page, summary in sorted(lines.items()):
+        source = pages / page
+        described = (
+            DESCRIPTION.search(source.read_text(encoding="utf-8")) if source.exists() else None
+        )
+        if described is None or described.group(1).strip() != summary.strip():
+            problems.append(f"mkdocs.yml: the llms.txt line for {page} is not its description")
     return problems
 
 
@@ -353,6 +418,7 @@ def check_tree(named: list[str]) -> list[str]:
     problems = [p for relative, text in texts.items() for p in check_file(relative, text)]
     if not named:
         problems += check_citations(texts)
+        problems += manifest_problems((ROOT / "mkdocs.yml").read_text("utf-8"), ROOT / "docs")
     return problems
 
 

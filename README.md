@@ -7,6 +7,14 @@ proven inside that tool's argument, whatever values inside their output schemas 
 return. A program proposed elsewhere, by hand or by a language model, is verified the same
 way, link by link.
 
+📖 **Documentation: <https://ppigazzini.github.io/valgebra-planning/>**
+
+🤖 **For AI assistants and coding agents:** the documentation is also published as
+[`llms.txt`](https://ppigazzini.github.io/valgebra-planning/llms.txt) (a curated manifest)
+and [`llms-full.txt`](https://ppigazzini.github.io/valgebra-planning/llms-full.txt) (the
+full text, including the API reference) per the [llmstxt.org](https://llmstxt.org)
+convention.
+
 It is part of the [valgebra](https://github.com/ppigazzini/valgebra) ecosystem.
 [valgebra-jsonschema](https://github.com/ppigazzini/valgebra-jsonschema) reads each tool's
 contract, the MCP `inputSchema` and `outputSchema`, into valgebra's sets, and valgebra decides

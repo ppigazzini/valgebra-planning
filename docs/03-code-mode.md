@@ -1,3 +1,7 @@
+---
+description: A model's program proven before it runs and run so the proof holds, and the two kinds of check the proxy holds.
+---
+
 # Code mode
 
 How a program a model writes in Python against typed tool stubs is proven before it runs and

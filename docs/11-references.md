@@ -1,3 +1,7 @@
+---
+description: Every work the method and the modules cite, under its key.
+---
+
 # References
 
 The works the method and the modules cite, each under the key a text cites it by: the

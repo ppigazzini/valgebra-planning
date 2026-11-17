@@ -103,3 +103,32 @@ def test_the_hook_reads_the_message_git_keeps(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert docs_lint.message_file(path) == GOOD
+
+
+def test_a_published_page_does_not_link_into_the_developer_set() -> None:
+    page = docs_lint.ROOT / "docs" / "00-using.md"
+    assert docs_lint.link_problems(page, "see [the release](dev/05-releasing.md)")
+    assert not docs_lint.link_problems(page, "see [the method](01-method.md)")
+    developer = docs_lint.ROOT / "docs" / "dev" / "README.md"
+    assert not docs_lint.link_problems(developer, "see [the release](05-releasing.md)")
+
+
+def test_the_llms_manifest_is_held_to_the_nav_and_the_descriptions(tmp_path: Path) -> None:
+    (tmp_path / "a.md").write_text("---\ndescription: The first page.\n---\n")
+    (tmp_path / "b.md").write_text("---\ndescription: The second page.\n---\n")
+    config = (
+        "nav:\n  - A: a.md\n  - B: b.md\n"
+        "plugins:\n  - llmstxt:\n      sections:\n        S:\n"
+        "          - a.md: The first page.\n          - b.md: The second page.\n"
+    )
+    assert docs_lint.manifest_problems(config, tmp_path) == []
+    missing = config.replace("          - b.md: The second page.\n", "")
+    assert docs_lint.manifest_problems(missing, tmp_path) == [
+        "mkdocs.yml: b.md is in the nav but not the llms.txt manifest"
+    ]
+    moved = config.replace("The second page.\n", "Another page.\n", 1).replace(
+        "- b.md: The second page.", "- b.md: Another page."
+    )
+    assert "the llms.txt line for b.md is not its description" in " ".join(
+        docs_lint.manifest_problems(moved, tmp_path)
+    )

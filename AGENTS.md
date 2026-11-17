@@ -22,8 +22,8 @@ a schema in the companion; neither is worked around here by a guess.
 | a public name, or a module's `__all__` | [docs/02-api.md](docs/02-api.md) |
 | a published count | [docs/04-results.md](docs/04-results.md), and the study file its command checks |
 | a citation | [docs/11-references.md](docs/11-references.md) |
-| a release, or a dependency's floor | [docs/05-releasing.md](docs/05-releasing.md) |
-| any prose at all: a page, a comment, a docstring, a commit message | [docs/10-writing.md](docs/10-writing.md) |
+| a release, or a dependency's floor | [docs/dev/05-releasing.md](docs/dev/05-releasing.md) |
+| any prose at all: a page, a comment, a docstring, a commit message | [docs/dev/10-writing.md](docs/dev/10-writing.md) |
 
 ## Setup
 
@@ -64,8 +64,10 @@ and its message says why the count moved.
 - `examples/` — the tool libraries, tasks, policies, flow rules and observed calls the
   studies read.
 - `tools/` — the study drivers, `case.py` and `bench.py`, and the lint, `docs_lint.py`.
-- `docs/` — the method, the results, the writing rules and the references;
-  `docs/studies/` holds the counts the drivers check.
+- `docs/` — the user guide `mkdocs.yml` builds and the workflow `Docs` publishes, with
+  `llms.txt`, at <https://ppigazzini.github.io/valgebra-planning/>; `docs/dev/` holds the
+  developer pages, releasing and writing, which are not published, and `docs/studies/` the
+  counts the drivers check.
 - `tests/` — pytest suites.
 
 Style, naming and formatting are enforced by ruff and ty: follow their output rather than
@@ -133,7 +135,7 @@ no `Generated with` line and no other trailer, and names no tool or agent that t
 commit-msg hook and `tools/docs_lint.py --commits` refuse any trailer git parses and any
 attribution line.
 
-The form is [docs/10-writing.md](docs/10-writing.md#commit-messages)'s: `scope: subject`, a
+The form is [docs/dev/10-writing.md](docs/dev/10-writing.md#commit-messages)'s: `scope: subject`, a
 body wrapped at 88 columns describing the system as it stands after the change, in
 authoritative present tense, with its numbers. No history, no meta, and no reference to an
 untracked file. The same lint holds the form.

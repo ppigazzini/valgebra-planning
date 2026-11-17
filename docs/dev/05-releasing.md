@@ -105,7 +105,7 @@ and repository, `release.yml` and the environment.
 
 1. **Move to the newest valgebra and valgebra-jsonschema first**, each from PyPI: the floors in
    `pyproject.toml`, the lock and every study move in a commit of their own, with the gate of
-   [`AGENTS.md`](../AGENTS.md) green, before the bump.
+   [`AGENTS.md`](../../AGENTS.md) green, before the bump.
 2. **Bump, in one commit.** `version` in `pyproject.toml`, `uv lock`, and the changelog: the
    `Unreleased` entries roll into a section for the version, dated the day of the commit, with its
    compare and tag links. It lands on `main`, and the push runs `ci.yml` on the tree about to

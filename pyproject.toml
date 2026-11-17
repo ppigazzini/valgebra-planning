@@ -60,6 +60,16 @@ dev = [
 # builds the published artifacts with it alone, so a backend release reaches them only through
 # a lock update.
 build = ["hatchling>=1.33.0"]
+# The site `mkdocs.yml` builds and the workflow `Docs` publishes, as valgebra's: the pages, the
+# API reference read from the docstrings, and `/llms.txt` with `/llms-full.txt` for a reader
+# that is not a browser. The llms.txt plugin reads HTML through soupsieve, whose release that
+# fixes CVE-2026-126190 needs Python 3.11.5, as valgebra's group states.
+docs = [
+    "mkdocs>=1.6.1,<2",
+    "mkdocs-material>=9.7.7,<10",
+    "mkdocstrings[python]>=1.0.6",
+    "mkdocs-llmstxt>=0.5; python_full_version >= '3.11.5'",
+]
 
 [build-system]
 requires = ["hatchling>=1.33.0"]

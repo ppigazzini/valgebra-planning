@@ -1,3 +1,7 @@
+---
+description: Contracts, the cells, the planner, the verifier, the rules a program is held to, the critic, and the limits.
+---
+
 # Method
 
 ## Contracts as slots

@@ -27,7 +27,7 @@ repos:
   - repo: local
     hooks:
       - id: docs-lint
-        name: every tracked text against docs/10-writing.md
+        name: every tracked text against docs/dev/10-writing.md
         entry: uv run --no-sync python tools/docs_lint.py
         language: system
         pass_filenames: false
