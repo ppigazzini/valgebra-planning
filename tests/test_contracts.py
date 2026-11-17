@@ -158,3 +158,24 @@ def test_a_task_holds_its_inputs_as_slots_and_its_goal_as_a_set() -> None:
     assert task.goal.is_valid("re_1")
     assert not task.goal.is_valid("ch_1")
     assert task.goal_schema == {"type": "string", "pattern": "^re_"}
+
+
+@pytest.mark.parametrize(
+    ("output", "member", "outsider"),
+    [
+        ({"type": "array", "items": {"type": "string"}}, ["a"], {"a": 1}),
+        ({"type": "string", "minLength": 1}, "a", ""),
+    ],
+    ids=["array", "string"],
+)
+def test_an_output_that_is_not_an_object_is_one_result_slot(
+    output: dict[str, object], member: object, outsider: object
+) -> None:
+    # MCP 2026-07-28 admits any JSON value as a result: the whole value is the one slot.
+    contract = read_contract(
+        {"name": "t", "inputSchema": {"type": "object", "properties": {}}, "outputSchema": output}
+    )
+    (slot,) = contract.results
+    assert slot.path == ()
+    assert slot.values.is_valid(member)
+    assert not slot.values.is_valid(outsider)
