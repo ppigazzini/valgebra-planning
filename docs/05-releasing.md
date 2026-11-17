@@ -1,8 +1,8 @@
 # Releasing
 
 How a version reaches PyPI: where it is declared, how it is built, what stands between a
-dispatch and an upload, what the repository and the indexes hold for it, the order of the steps,
-and the checks on what an index serves. `.github/workflows/release.yml` owns the build, the tests
+dispatch and an upload, the release train it is part of, what the repository and the indexes
+hold for it, the order of the steps, and the checks on what an index serves. `.github/workflows/release.yml` owns the build, the tests
 of the built artifacts and the upload; this page owns the order and the checks outside it.
 
 ## The version is declared once
@@ -31,6 +31,21 @@ follows one of valgebra-jsonschema at the floor `pyproject.toml` names.
 
 A release commit's `pyproject.toml` names no `[tool.uv.sources]`: a source there holds the lock
 and the push lanes to a build no user installs, while the smoke reads PyPI's.
+
+## The release train
+
+valgebra, valgebra-jsonschema and this package release in that order, since each caps the one
+before it below its next `0.0.x` minor:
+
+1. valgebra's cut reaches PyPI.
+2. valgebra-jsonschema moves its floor and cap to it, relocks, reruns its studies and releases.
+3. This package moves both floors and caps, relocks, reruns its studies and releases.
+4. Each consumer moves its pins: valplan relocks, fishtest re-pins.
+
+A valgebra minor is a release of each package after it, whether or not their code changes: the
+cost of the caps. The `Upstream` workflow of valgebra-jsonschema and of this repository runs
+each suite and study on the `main` of what it depends on, each Monday and on a dispatch, so a
+change that moves a count shows before valgebra's cut, not at step 2 or 3.
 
 ## Publishing is a dispatch, and a tag publishes nothing
 
