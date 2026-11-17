@@ -167,6 +167,11 @@ command line test, which starts the command line with `python -c` in a process o
 import asserts where it read the package from, and the suite runs through the environment's
 `pytest` script, which puts no directory of the tree on the path.
 
+**The layout stays flat, as valgebra-jsonschema's is.** A src layout keeps a test from importing
+the checkout in place of the installed package, which the paragraph above already rules out for
+every check of an artifact. It would move every path of the tree for no check left open, and set
+this package's layout apart from the companion released beside it.
+
 **The simple index lags the JSON API, and the simple index is what an installer reads.** A
 same-day check passes `--refresh-package valgebra-planning`, since uv caches an index's answers,
 and "no such version" is read against the index itself before it is believed:
