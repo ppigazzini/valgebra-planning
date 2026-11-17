@@ -44,6 +44,7 @@ jobs:
       # Every published count is one this code still produces.
       - run: uv run --no-sync python tools/case.py examples/parcels --check docs/studies/parcels.json
       - run: uv run --no-sync python tools/bench.py --check docs/studies/bench.json
+      - run: uv run --no-sync python tools/census.py --check docs/studies/census.json
 
   floor:
     name: the suite on the oldest interpreter
@@ -57,20 +58,6 @@ jobs:
         with: { version: "0.13.8", python-version: "3.11", enable-cache: true }
       - run: uv sync --locked
       - run: uv run --no-sync pytest
-
-  census:
-    name: the census of live MCP servers
-    runs-on: ubuntu-26.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@v10.3.3
-        with: { version: "0.13.8", python-version: "3.15", enable-cache: true }
-      - run: uv sync --locked
-      # The servers are pinned in tools/census.py; uvx and npx fetch them.
-      - run: uv run --no-sync python tools/census.py --check docs/studies/census.json
 
   actions-lock:
     name: the actions lockfile

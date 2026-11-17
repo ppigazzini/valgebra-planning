@@ -55,7 +55,7 @@ Six conditions stand between a dispatch and an upload, each a job, a step or a j
   ([below](#what-the-repository-and-the-indexes-hold)).
 - **`ci.yml` passed on the commit.** A push run of it on `main`, at this very commit,
   concluded in success; a failed, canceled or unfinished run, none at all, or an API that does
-  not answer refuses. The census is one of its jobs, so a release reads the live servers too.
+  not answer refuses.
 - **The version is absent from the index.** Only a definitive 404 for it proceeds: a 200 is a
   re-publish, and any other answer leaves the question open. A version the index names as its
   latest is refused as well.
@@ -168,8 +168,9 @@ curl -sS https://test.pypi.org/simple/valgebra-planning/ \
 - **The floors.** The smoke resolves each dependency to its newest release, and no job installs
   the floors `pyproject.toml` names. Each floor is the lock's version, which a lock update can
   move past.
-- **The live servers at the upload.** The job `census` of `ci.yml` reads them when the commit
-  is pushed; a server that changes between that push and the upload is read by no step.
+- **The live servers.** The census counts the listings stored under `examples/census/`; a
+  server whose listing moves after it was stored is read by no step until `tools/census.py
+  --refresh` reads it.
 - **A published version that is wrong.** It cannot be replaced, only yanked, and the workflow
   refuses a version the index serves. The remedy is the next version, which is why step 4 comes
   before step 5.
