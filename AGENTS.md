@@ -31,8 +31,6 @@ uv sync                               # the package and its dev group, into .ven
 uv run --no-sync pre-commit install   # the hooks, the commit-msg hook among them
 ```
 
-valgebra-jsonschema is not on an index yet, so `pyproject.toml` pins it by commit.
-
 ## The gate
 
 A change is not done until every command exits 0. Trust exit codes, not log text: a process

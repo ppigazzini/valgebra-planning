@@ -1232,11 +1232,15 @@ wheels = [
 [[package]]
 name = "valgebra-jsonschema"
 version = "0.0.1"
-source = { git = "https://github.com/ppigazzini/valgebra-jsonschema?rev=dd4f52cd409c3e85c63535d514a2391b5e38ca8c#dd4f52cd409c3e85c63535d514a2391b5e38ca8c" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-types" },
     { name = "typing-extensions" },
     { name = "valgebra" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b3/65/e2744fc6c76faf6282070fd214d7ebe1c01d7e4b141842bde58986ddacb8/valgebra_jsonschema-0.0.1.tar.gz", hash = "sha256:6e63e8bcf728f9c2ee4bcd042acaf51e5fb8671e8a0ca604a99421155edefc89", size = 222679, upload-time = "2026-11-17T14:46:41.561Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/ef/cd5784b91ad21fa19c5f64b9250d562860e258ff8c0b12c1965b064f793d/valgebra_jsonschema-0.0.1-py3-none-any.whl", hash = "sha256:4d0b549f2e0763c26a8fbb586ce784231189510c2129d547076ec7820b157ceb", size = 55931, upload-time = "2026-11-17T14:46:40.288Z" },
 ]
 
 [[package]]
@@ -1275,7 +1279,7 @@ test = [
 requires-dist = [
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.3.0,<3" },
     { name = "valgebra", specifier = ">=0.0.28,<0.0.29" },
-    { name = "valgebra-jsonschema", git = "https://github.com/ppigazzini/valgebra-jsonschema?rev=dd4f52cd409c3e85c63535d514a2391b5e38ca8c" },
+    { name = "valgebra-jsonschema", specifier = ">=0.0.1,<0.0.2" },
 ]
 provides-extras = ["mcp"]
 

@@ -119,8 +119,6 @@ jobs:
     # advisory database. pip-audit reads the lock as a PEP 751 file: it installs nothing, and
     # it reads every package, one whose marker excludes this runner included. `--strict` fails
     # the job on a package it cannot audit, where a plain run would only skip it.
-    # valgebra-jsonschema comes from a git commit and is on no index pip-audit can look it up
-    # in; its own repository audits it, and its dependencies are read here.
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -131,5 +129,5 @@ jobs:
         run: |
           set -euo pipefail
           mkdir "$RUNNER_TEMP/audit"
-          uv export --locked --format pylock.toml --no-emit-project --no-emit-package valgebra-jsonschema --all-groups -o "$RUNNER_TEMP/audit/pylock.toml"
+          uv export --locked --format pylock.toml --no-emit-project --all-groups -o "$RUNNER_TEMP/audit/pylock.toml"
           uvx pip-audit==2.10.1 --strict --locked "$RUNNER_TEMP/audit"

@@ -85,8 +85,7 @@ jobs:
     # Each artifact is installed as a user installs it, with its `mcp` extra and its
     # dependencies resolved from PyPI, on the floor and on the newest release, and the suite
     # the sdist carries runs on it. A version cannot be replaced on an index once uploaded,
-    # only yanked, so a broken artifact fails here. valgebra-jsonschema resolves from PyPI as
-    # well, so no release here passes before one of it is on the index.
+    # only yanked, so a broken artifact fails here.
     strategy:
       fail-fast: false
       matrix:

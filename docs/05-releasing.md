@@ -29,10 +29,8 @@ minor, which a release of this package takes once its suite has run on it. A use
 installs both from PyPI, and the smoke resolves them from PyPI as a user does, so a release
 follows one of valgebra-jsonschema at the floor `pyproject.toml` names.
 
-valgebra-jsonschema is on no index yet: `[tool.uv.sources]` pins a commit of it for the lock and
-the push lanes, and the smoke refuses every artifact until the companion is on PyPI. A release
-commit's `[tool.uv.sources]` names no commit of it, since a pin there holds the lock and the push
-lanes to a commit no user installs, while the smoke reads PyPI's.
+A release commit's `pyproject.toml` names no `[tool.uv.sources]`: a source there holds the lock
+and the push lanes to a build no user installs, while the smoke reads PyPI's.
 
 ## Publishing is a dispatch, and a tag publishes nothing
 

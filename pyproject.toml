@@ -24,7 +24,7 @@ dependencies = [
     # breaking release, so pinned below the next minor: the range moves with each release.
     "valgebra>=0.0.28,<0.0.29",
     # JSON Schema and MCP tool listings read into valgebra's sets. Pre-alpha as valgebra is,
-    # so pinned below its next minor. Not on an index yet, so the source below pins a commit.
+    # so pinned below its next minor.
     "valgebra-jsonschema>=0.0.1,<0.0.2",
 ]
 
@@ -40,9 +40,6 @@ Repository = "https://github.com/ppigazzini/valgebra-planning"
 Documentation = "https://github.com/ppigazzini/valgebra-planning/tree/main/docs"
 Changelog = "https://github.com/ppigazzini/valgebra-planning/blob/main/CHANGELOG.md"
 Issues = "https://github.com/ppigazzini/valgebra-planning/issues"
-
-[tool.uv.sources]
-valgebra-jsonschema = { git = "https://github.com/ppigazzini/valgebra-jsonschema", rev = "dd4f52cd409c3e85c63535d514a2391b5e38ca8c" }
 
 [dependency-groups]
 # What the suite imports beside the package. The release smoke installs this group alone
@@ -78,10 +75,6 @@ packages = ["valgebra_planning"]
 [tool.hatch.build.targets.sdist]
 include = ["valgebra_planning", "tests", "examples", "docs", "tools", "CHANGELOG.md"]
 exclude = ["tests/test_build_surfaces.py"]
-
-[tool.hatch.metadata]
-# The git source of valgebra-jsonschema above; an index release replaces it.
-allow-direct-references = true
 
 [tool.uv]
 default-groups = ["dev"]
