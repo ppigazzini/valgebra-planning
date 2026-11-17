@@ -200,6 +200,18 @@ refused, and a value from a task input with it, since a proxy sees no task.
   as one about any two, so a program approving one parcel and booking another passes a rule that
   a booking follows its own parcel's approval. That one call takes the value another returned
   is a flow rule with `only`; a policy instance per value, the parametric monitoring of Roşu and
-  Chen 2012, is not read, and a proxy reads no pending state, since a session has no end it
-  sees.
+  Chen 2012, is not read, and a proxy reads no pending state: MCP 2026-07-28 has no session,
+  and a proxy sees no end of a task.
+- **A call is given no input.** A server may answer a call by asking for input: an elicitation,
+  a sampling, its roots, or an interaction it waits on, MCP 2026-07-28's `input_required`. The
+  runner and the proxy give none and forward none, so the call fails as a tool error, which an
+  error block takes or which ends the run. A value a user or a model supplied there would reach
+  the call held to no contract the program was proven against, the leak a stop answered by a
+  user would be.
+- **One client, over stdio.** The proxy serves the agent that starts it, and its flow rules read
+  the values of that one process. A client reaching servers over Streamable HTTP alone cannot
+  put it in front of one, and a proxy served over HTTP has no session to key provenance by:
+  MCP 2026-07-28 leaves state across calls to handles a server mints as tool arguments, which
+  would change the signatures the proxy lists. Refused until a client reaching servers over HTTP
+  alone, with tools that write and text it does not trust, needs it.
 - **Search bounds.** Six calls and tests a path by default, and the first 16 bindings of a call.

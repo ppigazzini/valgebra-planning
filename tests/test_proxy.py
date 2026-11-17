@@ -68,6 +68,24 @@ def _session(
     return made, asyncio.run(session())
 
 
+def _asking_upstream(made: list[str]) -> Server[Any]:
+    """Serve the parcel tools, answering every call by asking for a confirmation."""
+    ask = types.ElicitRequest(
+        params=types.ElicitRequestFormParams(
+            message="Confirm?", requested_schema={"type": "object"}
+        )
+    )
+
+    async def listed(_: Any, __: Any) -> types.ListToolsResult:
+        return types.ListToolsResult(tools=[types.Tool.model_validate(t) for t in LISTING])
+
+    async def called(_: Any, params: types.CallToolRequestParams) -> types.InputRequiredResult:
+        made.append(params.name)
+        return types.InputRequiredResult(input_requests={"confirm": ask})
+
+    return Server("parcels", on_list_tools=listed, on_call_tool=called)
+
+
 def _refused(result: Any) -> str:
     assert result.is_error
     return "".join(block.text for block in result.content)
@@ -138,3 +156,17 @@ def test_an_identifier_no_source_returned_never_reaches_the_server() -> None:
     )
     assert not grounded.is_error
     assert made == ["find_parcel", "approve_freight"]
+
+
+def test_a_call_asking_for_input_is_answered_with_a_tool_error() -> None:
+    made: list[str] = []
+
+    async def session() -> Any:
+        async with Client(_asking_upstream(made)) as upstream:
+            front = proxy(upstream, (await upstream.list_tools()).tools, TOOLS)
+            async with Client(front) as client:
+                return await client.call_tool("find_parcel", {"tracking": "AB123456789IT"})
+
+    result = asyncio.run(session())
+    assert made == ["find_parcel"]
+    assert _refused(result).startswith("find_parcel did not answer:")

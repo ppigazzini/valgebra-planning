@@ -94,8 +94,8 @@ uv run valgebra-planning run examples/parcels --task "settle a parcel" \
 
 `run` plans the task over the server's tools and runs the program against the server
 (`valgebra_planning/servers.py`): each call is a `tools/call`, its `structuredContent` the value
-it returns, an `isError` result a tool error, and the run fails closed on any argument record, policy
-step or result outside its contract. It prints how the run ended, and the cause of a break (the
+it returns, an `isError` result, a protocol error or a request for input a tool error, and the run
+fails closed on any argument record, policy step or result outside its contract. It prints how the run ended, and the cause of a break (the
 server, an assumption, or the program), and exits 1 unless it returned a value with no break.
 `tests/parcel_server.py` serves the example's tools over stdio.
 
@@ -113,7 +113,9 @@ the call never reaches the server, or its result the agent. A refused call leave
 where it was. A flow rule reads provenance from values: an argument equal to a value a source
 tool returned is taken as that tool's, an assumption. Under `only` an argument equal to no value
 its sources returned is refused, and so is a value from a task input, since a proxy sees no
-task. An agent connects to the proxy as to any stdio server, and no agent changes.
+task. A call the server answers by asking for input is answered with a tool error, and the
+request is not forwarded. An agent connects to the proxy as to any stdio server, and no agent
+changes.
 
 ## Limits
 

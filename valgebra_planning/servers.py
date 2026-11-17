@@ -5,7 +5,10 @@
 program with `valgebra_planning.run.run`, each call a ``tools/call`` through the client: the
 result's ``structuredContent`` is the value a call returns, an ``isError`` result is a
 `valgebra_planning.run.ToolError`, and a tool returning no structured content returns the text
-of its content blocks. The client runs the protocol's own rounds of a multi round-trip request.
+of its content blocks. A call the server answers with a protocol error is a tool error too, and
+so is one asking for input (MCP 2026-07-28's ``input_required``: a sampling, an elicitation, the
+roots, or an interaction it waits on): the client gives none, so no value a program did not hold
+reaches a call.
 
 Requires the ``mcp`` extra. The runner is synchronous and the client asynchronous, so the run
 goes on a worker thread and each call is sent to the client's event loop.
@@ -18,7 +21,7 @@ import shlex
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from mcp import Client, StdioServerParameters
+from mcp import Client, InputRequiredRoundsExceededError, MCPError, StdioServerParameters
 
 from valgebra_planning.contracts import Contract, Task, read_contract
 from valgebra_planning.policy import Policy
@@ -74,7 +77,14 @@ async def run_on_server(
     def caller(name: str) -> Callable[..., Any]:
         def call(**arguments: Any) -> Any:
             sent = asyncio.run_coroutine_threadsafe(client.call_tool(name, arguments), loop)
-            return _value(sent.result())
+            try:
+                result = sent.result()
+            except (MCPError, InputRequiredRoundsExceededError) as error:
+                # Fail the call, as an error block or a refusal reads it: a raise would end the
+                # run with no record of which call broke and why.
+                message = f"{name} did not answer: {error}"
+                raise ToolError(message) from error
+            return _value(result)
 
         return call
 

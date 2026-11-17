@@ -10,11 +10,14 @@ A flow rule is held by provenance read from values: the proxy sees values, not a
 references, so an argument equal, as one JSON value, to a value an untrusted tool returned is
 taken as coming from it, and refused unless it lies in the rule's endorsed set. A rule with
 ``only`` refuses an argument equal to no value its sources returned: an identifier not retrieved
-earlier in the session, the grounding gate Sah et al. 2026 ask for. Both are assumptions: a
-value equal by chance to an untrusted one is refused with it, and one equal by chance to a
-retrieved one passes. A proxy sees no task, so a value from a task input is from elsewhere.
-A session has no end a proxy sees, so a policy's pending states are not read there.
-Requires the ``mcp`` extra.
+earlier in the proxy's process, the grounding gate Sah et al. 2026 ask for. Both are
+assumptions: a value equal by chance to an untrusted one is refused with it, and one equal by
+chance to a retrieved one passes. A proxy sees no task, so a value from a task input is from
+elsewhere. The proxy serves one client over stdio for as long as its process runs, and MCP
+2026-07-28 has no session a client ends, so a policy's pending states are not read there. A call
+the upstream answers with a protocol error, or with a request for input, is answered with a tool
+error: the proxy gives no input and forwards no request for one, since a value it never checked
+would reach the call. Requires the ``mcp`` extra.
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from mcp import Client, types
+from mcp import Client, InputRequiredRoundsExceededError, MCPError, types
 from mcp.server.lowlevel import Server
 
 from valgebra_planning._valgebra import json_key
@@ -121,7 +124,11 @@ def proxy(
         refused = gate.before(params.name, arguments)
         if refused is not None:
             return _refusal(refused)
-        result = await upstream.call_tool(params.name, arguments)
+        try:
+            result = await upstream.call_tool(params.name, arguments)
+        except (MCPError, InputRequiredRoundsExceededError) as error:
+            text = types.TextContent(type="text", text=f"{params.name} did not answer: {error}")
+            return types.CallToolResult(content=[text], is_error=True)
         if result.is_error:
             return result
         value = result.structured_content

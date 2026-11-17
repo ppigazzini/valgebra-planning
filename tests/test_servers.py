@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypedDict
 
+import pytest
 from mcp import Client, types
 from mcp.server import MCPServer
 from mcp.server.lowlevel import Server
@@ -14,6 +15,8 @@ from mcp.server.lowlevel import Server
 from valgebra_planning._valgebra import Sampler
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.planner import plan
+from valgebra_planning.program import Block
+from valgebra_planning.run import Refusal
 from valgebra_planning.servers import read_server, run_on_server
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
@@ -128,3 +131,57 @@ def test_a_server_built_from_typed_functions_is_read_with_its_derived_output_sch
     contracts = asyncio.run(_listed(server))
     assert [slot.name for slot in contracts["book"].arguments] == ["book.parcel_id"]
     assert "book.label_id" in [slot.name for slot in contracts["book"].results]
+
+
+CONFIRM = {
+    "name": "confirm",
+    "inputSchema": {
+        "type": "object",
+        "properties": {"order": {"type": "integer"}},
+        "required": ["order"],
+    },
+    "outputSchema": {
+        "type": "object",
+        "properties": {"ok": {"type": "boolean"}},
+        "required": ["ok"],
+    },
+}
+ASK = types.ElicitRequest(
+    params=types.ElicitRequestFormParams(
+        message="Confirm the order?",
+        requested_schema={"type": "object", "properties": {"yes": {"type": "boolean"}}},
+    )
+)
+ASKING = [
+    types.InputRequiredResult(input_requests={"confirm": ASK}),
+    types.InputRequiredResult(request_state="waiting"),
+]
+
+
+def _asking(answer: types.InputRequiredResult) -> Server[Any]:
+    """Serve one tool that answers every call by asking for input."""
+
+    async def listed(_: Any, __: Any) -> types.ListToolsResult:
+        return types.ListToolsResult(tools=[types.Tool.model_validate(CONFIRM)])
+
+    async def called(_: Any, __: types.CallToolRequestParams) -> types.InputRequiredResult:
+        return answer
+
+    return Server("asks", on_list_tools=listed, on_call_tool=called)
+
+
+@pytest.mark.parametrize("answer", ASKING, ids=["elicitation", "waiting"])
+def test_a_call_asking_for_input_fails_as_a_tool_error(answer: types.InputRequiredResult) -> None:
+    contracts = {"confirm": read_contract(CONFIRM)}
+    task = read_task("confirm an order", {"order": {"type": "integer"}}, {"type": "boolean"})
+    program = plan(contracts, task).program
+    assert program is not None
+
+    async def ran(program: Block) -> Any:
+        # One round: a server that only waits is otherwise polled ten times, with backoff.
+        async with Client(_asking(answer), input_required_max_rounds=1) as client:
+            return await run_on_server(program, contracts, task, {"order": 1}, client)
+
+    result = asyncio.run(ran(program))
+    assert result.value is None
+    assert result.why == Refusal("error", "confirm")
