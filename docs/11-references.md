@@ -68,6 +68,16 @@ directions.
   [arXiv:2603.19328](https://arxiv.org/abs/2603.19328). Integrity leaks, identifiers made up
   to pass authentication, and deterministic grounding gates against them: a flow rule with
   `only` over a program, and the proxy's check at run time.
+- **Beurer-Kellner et al. 2025.** L. Beurer-Kellner, B. Buesser, A.-M. Creţu, E. Debenedetti,
+  D. Dobos, D. Fabian, M. Fischer, D. Froelicher, K. Grosse, D. Naeff, E. Ozoani, A. Paverd,
+  F. Tramèr, V. Volhejn. Design patterns for securing LLM agents against prompt injections.
+  [arXiv:2506.08837](https://arxiv.org/abs/2506.08837), 2025. Plan-then-execute and
+  code-then-execute, the order the critic and the runner hold.
+- **Nasr et al. 2025.** M. Nasr, N. Carlini, C. Sitawarin, S. V. Schulhoff, J. Hayes, M. Ilie,
+  J. Pluto, S. Song, H. Chaudhari, I. Shumailov, A. Thakurta, K. Y. Xiao, A. Terzis,
+  F. Tramèr. The attacker moves second: stronger adaptive attacks bypass defenses against LLM
+  jailbreaks and prompt injections. [arXiv:2510.09023](https://arxiv.org/abs/2510.09023), 2025.
+  Why the proxy's flow rules, read by equality, are no guarantee.
 - **Debenedetti et al. 2025.** E. Debenedetti, I. Shumailov, T. Fan, J. Hayes, N. Carlini,
   D. Fabian, C. Kern, C. Shi, A. Terzis, F. Tramèr. Defeating prompt injections by design.
   [arXiv:2503.18813](https://arxiv.org/abs/2503.18813), 2025. CaMeL.

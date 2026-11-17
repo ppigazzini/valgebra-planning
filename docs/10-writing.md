@@ -133,6 +133,7 @@ the code lands, and nobody knows which claim broke better than the person who br
 | [00-using.md](00-using.md) | hot: a command, an option or a file of a library is an edit there |
 | [01-method.md](01-method.md) | hot: a rule, a cut or a search change is an edit there |
 | [02-api.md](02-api.md) | hot: a public name added, removed or retyped is an edit there |
+| [03-code-mode.md](03-code-mode.md) | hot: its example runs in the suite, and a change to the critic, the runner or the proxy is an edit there |
 | [04-results.md](04-results.md) | hot: every count moves with its study |
 | this page | cold |
 | [11-references.md](11-references.md) | cold: a citation added in the code adds its work there |

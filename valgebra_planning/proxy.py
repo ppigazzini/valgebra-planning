@@ -12,12 +12,14 @@ taken as coming from it, and refused unless it lies in the rule's endorsed set. 
 ``only`` refuses an argument equal to no value its sources returned: an identifier not retrieved
 earlier in the proxy's process, the grounding gate Sah et al. 2026 ask for. Both are
 assumptions: a value equal by chance to an untrusted one is refused with it, and one equal by
-chance to a retrieved one passes. A proxy sees no task, so a value from a task input is from
-elsewhere. The proxy serves one client over stdio for as long as its process runs, and MCP
-2026-07-28 has no session a client ends, so a policy's pending states are not read there. A call
-the upstream answers with a protocol error, or with a request for input, is answered with a tool
-error: the proxy gives no input and forwards no request for one, since a value it never checked
-would reach the call. Requires the ``mcp`` extra.
+chance to a retrieved one passes, and a value the agent transforms, upper-cased, encoded or cut,
+equals none it was returned and passes: a flow rule here holds against no attacker that adapts,
+where the contract and policy checks hold against any. A proxy sees no task, so a value from a
+task input is from elsewhere. The proxy serves one client over stdio for as long as its process
+runs, and MCP 2026-07-28 has no session a client ends, so a policy's pending states are not read
+there. A call the upstream answers with a protocol error, or with a request for input, is
+answered with a tool error: the proxy gives no input and forwards no request for one, since a
+value it never checked would reach the call. Requires the ``mcp`` extra.
 """
 
 from __future__ import annotations
