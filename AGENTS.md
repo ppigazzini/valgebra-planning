@@ -37,7 +37,7 @@ valgebra-jsonschema is not on an index yet, so `pyproject.toml` pins it by commi
 
 A change is not done until every command exits 0. Trust exit codes, not log text: a process
 can print progress and then fail. If a command cannot run, say so and list what was checked
-instead. The job `test` of `.github/workflows/test.yml` runs the same commands on every push,
+instead. The job `test` of `.github/workflows/ci.yml` runs the same commands on every push,
 and `tests/test_build_surfaces.py` holds the two lists equal: a command added here is a step
 there in the same change.
 

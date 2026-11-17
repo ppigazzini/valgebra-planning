@@ -17,7 +17,7 @@ def _gate() -> list[str]:
 
 
 def _job(name: str) -> list[str]:
-    text = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
+    text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     job = re.split(r"\n  (?=[a-z][a-z-]*:\n)", text.split("\njobs:\n", 1)[1])
     steps = next(part for part in job if part.lstrip().startswith(f"{name}:"))
     found = re.findall(r"^\s+- run: (.+)$", steps, re.MULTILINE)

@@ -55,7 +55,7 @@ Six conditions stand between a dispatch and an upload, each a job, a step or a j
 - **`confirm_version` equals the built version**, and an empty input aborts.
 - **The ref is `main`**, and each environment admits `main` alone
   ([below](#what-the-repository-and-the-indexes-hold)).
-- **`test.yml` passed on the commit.** A push run of it on `main`, at this very commit,
+- **`ci.yml` passed on the commit.** A push run of it on `main`, at this very commit,
   concluded in success; a failed, canceled or unfinished run, none at all, or an API that does
   not answer refuses. The census is one of its jobs, so a release reads the live servers too.
 - **The version is absent from the index.** Only a definitive 404 for it proceeds: a 200 is a
@@ -95,7 +95,7 @@ and repository, `release.yml` and the environment.
    [`AGENTS.md`](../AGENTS.md) green, before the bump.
 2. **Bump, in one commit.** `version` in `pyproject.toml`, `uv lock`, and the changelog: the
    `Unreleased` entries roll into a section for the version, dated the day of the commit, with its
-   compare and tag links. It lands on `main`, and the push runs `test.yml` on the tree about to
+   compare and tag links. It lands on `main`, and the push runs `ci.yml` on the tree about to
    be published; the dispatches wait until it passes.
 3. **Dispatch to TestPyPI**, with the version confirmed:
 
@@ -170,7 +170,7 @@ curl -sS https://test.pypi.org/simple/valgebra-planning/ \
 - **The floors.** The smoke resolves each dependency to its newest release, and no job installs
   the floors `pyproject.toml` names. Each floor is the lock's version, which a lock update can
   move past.
-- **The live servers at the upload.** The job `census` of `test.yml` reads them when the commit
+- **The live servers at the upload.** The job `census` of `ci.yml` reads them when the commit
   is pushed; a server that changes between that push and the upload is read by no step.
 - **A published version that is wrong.** It cannot be replaced, only yanked, and the workflow
   refuses a version the index serves. The remedy is the next version, which is why step 4 comes
