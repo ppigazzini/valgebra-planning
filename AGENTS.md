@@ -106,7 +106,10 @@ instead.
 - **valplan's code does not enter this tree.** valplan
   ([doi:10.5281/zenodo.23686600](https://doi.org/10.5281/zenodo.23686600)) is the prior work,
   licensed Apache-2.0 alone; this package is MIT OR Apache-2.0 and written anew. Read it and
-  cite it; never copy from it.
+  cite it; never copy from it. A technique valplan's studies measure enters this package only
+  as a change of its own, with its own tests, under
+  [valplan's rule for it](https://github.com/ppigazzini/valplan/blob/main/docs/01-method.md#valgebra-planning),
+  and this package never imports valplan.
 
 - **A paper is cited, never committed.** A third party's PDF does not enter the tree: the work
   goes on [docs/11-references.md](docs/11-references.md) with its DOI or arXiv identifier, and
