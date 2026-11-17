@@ -45,7 +45,7 @@ from valgebra_planning.program import (
 )
 from valgebra_planning.run import retry_assumptions
 
-__all__ = ["DEPTH", "Plan", "Uncovered", "plan"]
+__all__ = ["DEPTH", "Plan", "Uncovered", "plan", "predicates"]
 
 #: The calls and tests a path may take.
 DEPTH = 6
@@ -478,7 +478,7 @@ def _readable(values: Validator[Any], consumers: Sequence[Validator[Any]]) -> bo
     )
 
 
-def _predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate]:
+def predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate]:
     """Return every argument and the goal, and each result or input some of them may read.
 
     A value no argument and no goal can hold is never passed on, so its cells cost the
@@ -650,7 +650,7 @@ def plan(
         if any(policy.hints() & contract.hints for policy in policies)
     )
     contracts = _reachable(contracts, task, kept)
-    abstraction = abstract(_predicates(contracts, task), seed=seed)
+    abstraction = abstract(predicates(contracts, task), seed=seed)
     goal = abstraction.cells_of(abstraction.index(_GOAL))
     search = _Search(
         contracts,

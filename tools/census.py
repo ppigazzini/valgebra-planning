@@ -27,7 +27,7 @@ from mcp import Client, StdioServerParameters
 
 from valgebra_planning.cells import abstract
 from valgebra_planning.contracts import Contract, read_contract, read_task
-from valgebra_planning.planner import _predicates
+from valgebra_planning.planner import predicates
 
 FORMAT = 1
 ROOT = Path(__file__).resolve().parent.parent
@@ -87,7 +87,7 @@ def study() -> dict[str, Any]:
                 if "outputSchema" in t
             }
     task = read_task("a string to a string", {"text": {"type": "string"}}, {"type": "string"})
-    cut = abstract(_predicates(contracts, task))
+    cut = abstract(predicates(contracts, task))
     undecided = [cell for cell in cut.cells if cell.status == "undecided"]
     total = {
         "tools": sum(row["tools"] for row in rows),

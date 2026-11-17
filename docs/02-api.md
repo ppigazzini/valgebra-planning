@@ -56,7 +56,7 @@ extra.
 |---|---|---|
 | `valgebra_planning.contracts` | `Contract`, `Slot`, `Task`, `read_contract`, `read_task` | |
 | `valgebra_planning.program` | `Block`, `Branch`, `Call`, `Const`, `For`, `Next`, `Ref`, `Return`, `Stop`, `render`, `steps` | |
-| `valgebra_planning.planner` | `DEPTH`, `Plan`, `Uncovered`, `plan` | |
+| `valgebra_planning.planner` | `DEPTH`, `Plan`, `Uncovered`, `plan`, `predicates` | |
 | `valgebra_planning.cells` | `Abstraction`, `Cell`, `Predicate`, `Status`, `abstract`, `gather` | |
 | `valgebra_planning.verify` | `Gap`, `Link`, `Verdict`, `Verification`, `verify` | |
 | `valgebra_planning.critic` | `Critique`, `ProgramError`, `critique`, `read_program` | |
