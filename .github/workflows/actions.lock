@@ -12,6 +12,9 @@ workflows:
         - 'actions/upload-artifact@v7.0.2'
         - 'astral-sh/setup-uv@v10.3.3'
         - 'pypa/gh-action-pypi-publish@v1.14.3'
+    '.github/workflows/upstream.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'astral-sh/setup-uv@v10.3.3'
 dependencies:
     'actions/checkout@v7.0.1':
         ref: 'v7.0.1'

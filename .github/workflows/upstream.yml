@@ -1,0 +1,46 @@
+name: Upstream
+
+# Each Monday, and on a dispatch, the suite and every published count run on the `main` of
+# valgebra and of valgebra-jsonschema, the code their next cuts ship. Nothing waits on the run: a
+# red one says a change upstream moves this package before the cut ships it, where the re-pin
+# after the cut would meet it.
+on:
+  schedule:
+    - cron: "47 4 * * 1"
+  workflow_dispatch:
+
+# The job reads the repository and writes nothing back.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  upstream:
+    name: the suite and the studies on valgebra's and valgebra-jsonschema's main
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    env:
+      # A build for the suite, not for timing: no link-time optimization, parallel code generation.
+      CARGO_PROFILE_RELEASE_LTO: "off"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.3
+        with: { version: "0.13.8", python-version: "3.15", enable-cache: false }
+      - run: rustup update stable --no-self-update && rustup default stable
+      - run: uv sync --locked
+      # Each `main`, past the ranges the packages pin, which admit released versions alone. The
+      # companion takes the lock's dependencies, since its range would refuse valgebra's `main`
+      # once that is a new minor. So no `uv pip check` runs, and every `uv run` takes --no-sync,
+      # since a sync would put the locked releases back.
+      - run: uv pip install --no-deps "valgebra-jsonschema @ git+https://github.com/ppigazzini/valgebra-jsonschema@main"
+      - run: uv pip install "valgebra @ git+https://github.com/ppigazzini/valgebra@main"
+      - run: uv run --no-sync pytest
+      - run: uv run --no-sync python tools/case.py examples/parcels --check docs/studies/parcels.json
+      - run: uv run --no-sync python tools/bench.py --check docs/studies/bench.json
+      - run: uv run --no-sync python tools/census.py --check docs/studies/census.json
