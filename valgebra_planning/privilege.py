@@ -1,12 +1,14 @@
-"""Privilege policies in Progent's format, read as valgebra sets (Shi et al. 2025).
+"""Privilege policies in Progent's format, read as valgebra sets (Shi et al. 2025, §4.1).
 
 A policy maps each tool to its rules, ``[priority, effect, condition, fallback]``: effect 0
 allows and 1 forbids, and the condition maps an argument to the JSON Schema its value must meet
 or to a regular expression a string value must match from its start. A condition checks only the
-arguments a call passes. Rules are tried by priority, a forbidding rule before an allowing one of
-the same priority, and the first whose condition holds decides; a call no rule matches, and a
-call to a tool the policy names no rule for, is denied. A rule asking the user (fallback 2) is
-read as denied, the reading that admits no call the user did not approve.
+arguments a call passes. Rules are tried by priority, a forbidding rule before an allowing one
+of the same priority, and the first whose condition holds decides; a call no rule matches, and a
+call to a tool the policy names no rule for, is denied. Within one priority that is the order
+Progent applies a policy in (Shi et al. 2025, §4.2, Alg. 2), which reads no priority. A rule
+asking the user (fallback 2) is read as denied, the reading that admits no call the user did not
+approve.
 
 The calls a policy allows to a tool are then a set: each allowing rule's condition, minus the
 conditions of every rule tried before it, joined. Progent asks Z3 whether an update narrows a
@@ -130,7 +132,8 @@ def _drawn(rules: Sequence[Rule], restricted: Iterable[str]) -> list[Any]:
 def updates(old: Mapping[str, Sequence[Rule]], new: Mapping[str, Sequence[Rule]]) -> list[Update]:
     """Return, for each tool the new policy names, whether it narrows the old policy's calls.
 
-    A narrowing is applied without asking, and an expansion needs approval, as Progent has it.
+    A narrowing is applied without asking, and an expansion needs approval, as Progent has it
+    (Shi et al. 2025, §4.3).
     """
     found = []
     for tool, rules in sorted(new.items()):

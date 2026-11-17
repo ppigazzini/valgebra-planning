@@ -7,8 +7,9 @@ whole record inside it. A guarded call handles a reference that only overlaps an
 it branches on the reference lying in the argument, calls the tool on the narrowed value,
 and goes on with the rest in the other branch. A program is strong when every path returns
 a reference whose cells lie inside the goal's: strong planning under nondeterministic
-outcomes (Cimatti et al. 2003), the outcomes partitioned by the cells rather than listed,
-and a branch on a runtime type test as an observation (Bertoli et al. 2006).
+outcomes (Cimatti et al. 2003, Def. 2.11), the outcomes partitioned by the cells rather
+than listed, and a branch on a runtime type test as an observation (Bertoli et al. 2006,
+Def. 2.8).
 
 The search deepens on the calls and tests along a path, so the first strong program found is
 a shallowest one. Where none exists within the bound, one search at the full bound lets a
@@ -397,8 +398,8 @@ def _reachable(
     hold: the task's inputs, then the results of each tool found callable. Backward, a tool
     matters once one of its results meets the goal or an argument of a tool that matters.
     A tool failing either is never part of a program, so its slots are never cut into cells:
-    the reachability pruning of component synthesis (SyPet, Feng et al. 2017), with valgebra
-    deciding each overlap.
+    the graph-reachability pruning of component synthesis, which SyPet takes backward from
+    the goal alone (Feng et al. 2017, §6.3), with valgebra deciding each overlap.
     """
     held = [slot.values for slots in task.held.values() for slot in slots]
     callable_: dict[str, Contract] = {}

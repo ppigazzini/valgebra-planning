@@ -33,6 +33,13 @@ The rules, and what each costs a reader when it breaks:
 * **A citation the references page does not list,** or a work it lists that no tracked
   text cites. A key of two surnames, or of one with `et al.`, is read; a key of one
   surname is not.
+* **A citation in the package or on the theory page with no place,** the section or the
+  numbered statement after the key, and, where the paper shelf is at hand, a place its copy
+  does not print.
+* **The theory page and the package apart:** an `IMPLEMENTED-BY:` entry naming no item of
+  the package, or an item citing none of the works its claim cites; an item citing a work
+  that no claim naming it cites; a claim with no `IMPLEMENTED-BY:` or `HELD-BY:` line; and a
+  `HELD-BY:` name that is no test.
 * **A commit message off the form** `docs/dev/10-writing.md` gives, or carrying a trailer:
   any line git parses as one, and an attribution line anywhere.
 
@@ -52,11 +59,16 @@ import re
 import subprocess
 import sys
 import tokenize
+import unicodedata
+from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "valgebra_planning"
 REFERENCES = "docs/11-references.md"
+THEORY = "docs/dev/09-theory.md"
+#: The text renderings of the paper shelf, which only the author's clone holds.
+SHELF = ROOT / "__DEV" / "papers" / "text"
 
 # Each rule is (pattern, description). Applied outside fenced blocks and outside
 # inline code spans.
@@ -132,6 +144,28 @@ ENTRY = re.compile(
 )
 #: A line break inside prose, a comment or a docstring, with what continues it.
 BREAK = re.compile(r"\s*\n\s*(?:#+\s*)?")
+#: One place in a work: a section, or a numbered statement of a form the writing rule lists.
+ONE_PLACE = r"§[0-9]+(?:\.[0-9]+)*|(?:Def|Thm|Lem|Prop|Cor|Ex|Alg|Fig)\. [0-9]+(?:\.[0-9]+)*"
+#: The places after a key: a comma, then one place or more, a comma between two.
+PLACES = re.compile(rf", (?:{ONE_PLACE})(?:, (?:{ONE_PLACE}))*")
+#: One place, read into its parts.
+PLACE = re.compile(
+    r"§(?P<section>[0-9]+(?:\.[0-9]+)*)"
+    r"|(?P<form>Def|Thm|Lem|Prop|Cor|Ex|Alg|Fig)\. (?P<number>[0-9]+(?:\.[0-9]+)*)"
+)
+#: What a statement's form reads as where a paper prints it.
+STATEMENT = {
+    "Def": "Definition",
+    "Thm": "Theorem",
+    "Lem": "Lemma",
+    "Prop": "Proposition",
+    "Cor": "Corollary",
+    "Ex": "Example",
+    "Alg": "Algorithm",
+    "Fig": "Fig(?:ure|\\.)",
+}
+#: A claim's tag on the theory page.
+TAG = re.compile(r"\*\*\[(LOAD-BEARING|DEVIATION): ([a-z][a-z0-9-]*)\]\*\*")
 
 #: The scopes a subject may name beside each module's stem: a study with its example and
 #: driver, and the parts of the tree no module owns.
@@ -388,6 +422,202 @@ def check_citations(texts: dict[str, str]) -> list[str]:
     return unlisted + uncited
 
 
+def located(text: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Return each citation ``text`` writes with the places after its key, none if it names none."""
+    flat = BREAK.sub(" ", text)
+    found = []
+    for match in CITATION.finditer(flat):
+        tail = PLACES.match(flat, match.end())
+        found.append((match.group(), tuple(re.findall(ONE_PLACE, tail.group()) if tail else ())))
+    return found
+
+
+def _page_prose(text: str) -> str:
+    """Return a page with its code spans blanked: an example of the form cites nothing."""
+    return "\n".join(strip_code_spans(line) for line in text.splitlines())
+
+
+def _package(texts: dict[str, str]) -> dict[str, str]:
+    return {
+        relative: text
+        for relative, text in texts.items()
+        if relative.startswith(f"{PACKAGE.name}/") and relative.endswith(".py")
+    }
+
+
+def items(module: str, text: str) -> dict[str, set[str]]:
+    """Return each item of a package module the theory page may name, with the works it cites.
+
+    An item is the module, as `cells.py`, or a class or a function in it, as
+    `planner.py::_Search.solve`. It cites what its docstring cites, and what a comment inside it
+    and in no item nested in it cites.
+    """
+    tree = ast.parse(text)
+    found = {module: citations(ast.get_docstring(tree) or "")}
+    spans: list[tuple[int, int, str]] = []
+
+    def walk(node: ast.AST, owner: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                qualified = f"{owner}{child.name}"
+                name = f"{module}::{qualified}"
+                found[name] = citations(ast.get_docstring(child) or "")
+                spans.append((child.lineno, child.end_lineno or child.lineno, name))
+                walk(child, f"{qualified}.")
+
+    walk(tree, "")
+    blocks: list[tuple[int, int, str]] = []
+    for token in tokenize.generate_tokens(io.StringIO(text).readline):
+        if token.type != tokenize.COMMENT:
+            continue
+        line = token.start[0]
+        if blocks and blocks[-1][1] == line - 1:
+            blocks[-1] = (blocks[-1][0], line, f"{blocks[-1][2]}\n{token.string}")
+        else:
+            blocks.append((line, line, token.string))
+    for line, _, comment in blocks:
+        owners = [name for start, end, name in spans if start <= line <= end]
+        found[owners[-1] if owners else module] |= citations(comment)
+    return found
+
+
+@dataclass
+class Claim:
+    """A claim of the theory page: its tag and id, its works, and the items and tests it names."""
+
+    tag: str
+    ident: str
+    cites: set[str]
+    implemented: list[str] = field(default_factory=list)
+    held: list[str] = field(default_factory=list)
+
+
+IMPLEMENTED = "IMPLEMENTED-BY"
+HELD = "HELD-BY"
+
+
+def claims(page: str) -> list[Claim]:
+    """Read the claims of the theory page, each with the lines that follow it."""
+    found: list[Claim] = []
+    prose: list[str] = []
+    for paragraph in re.split(r"\n\s*\n", page):
+        text = paragraph.strip()
+        label, colon, names = text.partition(": ")
+        if text.startswith("#"):
+            prose = []
+        elif colon and label in (IMPLEMENTED, HELD) and found:
+            listed = [name.strip() for name in names.split(",") if name.strip()]
+            (found[-1].implemented if label == IMPLEMENTED else found[-1].held).extend(listed)
+        elif tag := TAG.search(text):
+            body = _page_prose("\n".join([*prose, text]))
+            found.append(Claim(tag[1], tag[2], citations(body)))
+            prose = []
+        else:
+            prose.append(text)
+    return found
+
+
+def check_theory(texts: dict[str, str]) -> list[str]:
+    """Hold the theory page and the package to each other, as `docs/dev/10-writing.md` says."""
+    page = texts.get(THEORY)
+    if page is None:
+        return [f"{THEORY}: missing, so no claim names the code citing a result"]
+    package = _package(texts)
+    sources = {relative: python_prose(text) for relative, text in package.items()}
+    sources[THEORY] = _page_prose(page)
+    problems = [
+        f"{relative}: cites {key!r} with no place in it"
+        for relative, text in sorted(sources.items())
+        for key, places in located(text)
+        if not places
+    ]
+    cited: dict[str, set[str]] = {}
+    for relative, text in package.items():
+        cited.update(items(Path(relative).name, text))
+    tests = {
+        name
+        for relative, text in texts.items()
+        if relative.startswith("tests/") and relative.endswith(".py")
+        for name in re.findall(r"^(?:async )?def (test_\w+)", text, re.MULTILINE)
+    }
+    read = claims(page)
+    seen: set[str] = set()
+    for claim in read:
+        where = f"{THEORY}: [{claim.ident}]"
+        if claim.ident in seen:
+            problems.append(f"{where} is a second claim of that id")
+        seen.add(claim.ident)
+        problems += [
+            f"{where} has no {line}: line"
+            for line, names in ((IMPLEMENTED, claim.implemented), (HELD, claim.held))
+            if not names
+        ]
+        for name in claim.implemented:
+            if name not in cited:
+                problems.append(f"{where} names {name!r}, which is no item of the package")
+            elif not cited[name] & claim.cites:
+                problems.append(f"{where} names {name!r}, which cites none of its works")
+        problems += [
+            f"{where} is held by {name!r}, which is no test"
+            for name in claim.held
+            if name not in tests
+        ]
+    for name, keys in sorted(cited.items()):
+        naming = [claim for claim in read if name in claim.implemented]
+        if keys and not naming:
+            problems.append(f"{name}: cites {', '.join(sorted(keys))}, and no claim names it")
+        problems += [
+            f"{name}: cites {key!r}, which no claim naming it cites"
+            for key in sorted(keys)
+            if naming and not any(key in claim.cites for claim in naming)
+        ]
+    return problems
+
+
+def copies(key: str, shelf: Path) -> list[Path]:
+    """Return the shelf's renderings of the work a key names, by its first surname and year."""
+    surname = unicodedata.normalize("NFKD", key.split(maxsplit=1)[0])
+    folded = "".join(c for c in surname if c.isascii() and c.isalpha())
+    return sorted(shelf.glob(f"*_{folded}{key[-4:]}_*.txt"))
+
+
+def states(text: str, place: str) -> bool:
+    """Answer whether a paper's text prints a place: the section's heading, or the statement."""
+    part = PLACE.fullmatch(place)
+    if part is None:
+        return False
+    if part["section"]:
+        pattern = rf"^\s*{re.escape(part['section'])}\.?\s+\S"
+    else:
+        pattern = rf"^\s*{STATEMENT[part['form']]} {re.escape(part['number'])}(?!\.?[0-9])"
+    return re.search(pattern, text, re.MULTILINE) is not None
+
+
+def check_places(texts: dict[str, str], shelf: Path = SHELF) -> list[str]:
+    """Refuse a place no copy of its work on the shelf prints; nothing where there is no shelf."""
+    if not shelf.is_dir():
+        return []
+    sources = {relative: python_prose(text) for relative, text in _package(texts).items()}
+    if THEORY in texts:
+        sources[THEORY] = _page_prose(texts[THEORY])
+    read: dict[Path, str] = {}
+    problems = []
+    for relative, text in sorted(sources.items()):
+        for key, places in located(text):
+            found = copies(key, shelf)
+            if not found:
+                problems.append(f"{relative}: {key!r} has no copy on the shelf to read it in")
+                continue
+            for copy in found:
+                read.setdefault(copy, copy.read_text("utf-8", errors="replace"))
+            problems += [
+                f"{relative}: ({key}, {place}) is a place no copy of the work prints"
+                for place in places
+                if not any(states(read[copy], place) for copy in found)
+            ]
+    return problems
+
+
 def git(*arguments: str, given: str | None = None) -> str:
     """Return what a git command prints, run at the root."""
     return subprocess.run(  # noqa: S603
@@ -418,6 +648,8 @@ def check_tree(named: list[str]) -> list[str]:
     problems = [p for relative, text in texts.items() for p in check_file(relative, text)]
     if not named:
         problems += check_citations(texts)
+        problems += check_theory(texts)
+        problems += check_places(texts)
         problems += manifest_problems((ROOT / "mkdocs.yml").read_text("utf-8"), ROOT / "docs")
     return problems
 

@@ -1,13 +1,16 @@
 """Every link of a program, asked of valgebra alone.
 
-A link is an inclusion a program rests on: a reference inside the argument it fills, a
-call's whole argument record inside the tool's input set where the arguments are related,
-and the returned reference inside the goal. Each is asked of valgebra with the set the
-reference lies in at that point of the program, narrowed by every test on the way there, and
-nothing else: not the cells, not the search. A refuted link carries a value outside the
-inclusion where one is found among the examples given and the values drawn from the
-reference's own schema. A value found that way refutes an undecided link too, since a
-concrete member is a proof.
+A link is an inclusion a program rests on: a reference inside the argument it fills, a call's
+whole argument record inside the tool's input set where the arguments are related, and the
+returned reference inside the goal. Each is asked of valgebra with the set the reference lies in
+at that point of the program, narrowed by every test on the way there, and nothing else, not the
+cells, not the search: the belief execution along a path (Bertoli et al. 2006, Def. 3.4), each
+reference's set read apart from the others'. A program whose every link is proven and on which
+no path stops is a strong solution, applicable at each call and inside the goal at the end of
+each path (Bertoli et al. 2006, Thm. 3.5). A refuted link carries a value outside the inclusion
+where one is found among the examples given and the values drawn from the reference's own
+schema. A value found that way refutes an undecided link too, since a concrete member is a
+proof.
 """
 
 from __future__ import annotations
@@ -466,7 +469,8 @@ def verify(
     tried first in search of a counterexample. With ``errors``, any tool may answer with an
     error, and a call neither retried nor given an error block leaves that path uncovered.
     A retry is accepted only for a tool that is read-only or idempotent, since calling twice
-    must act as calling once; it ends under fairness, the strong cyclic reading. Each policy
+    must act as calling once; it ends under fairness, the strong cyclic reading (Cimatti et al.
+    2003, Def. 2.10). Each policy
     adds a link at the end of every path: proven where no bad state can be reached there,
     refuted where one surely is, undecided where one possibly is. Each flow rule adds a link
     for every value from one of its sources bound to its sink, and, where implicit flows are

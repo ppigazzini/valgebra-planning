@@ -1,31 +1,31 @@
 """Policies over the calls a program makes: automata whose guards are valgebra sets.
 
-A policy is a symbolic automaton over call events (D'Antoni and Veanes 2017): a transition
+A policy is a symbolic automaton over call events (D'Antoni and Veanes 2017, Def. 1): a transition
 fires on a call to its tool whose argument record lies in its guard, a JSON Schema the
 companion reads into a set. Some states are bad: reaching one is a violation, and a bad state
 is never left. Some are pending: a path may pass through one and must not end in one, an
 obligation still open, as a notice owed after a booking. A call no guard of the current state
 matches keeps that state. It states what a domain policy says
-in prose (τ-bench, Yao et al. 2024), and what a trace rule checks one prefix at a time
-(AgentLTL, Elkoussy and Perez 2026), as a set a whole program is decided against before it
+in prose (τ-bench, Yao et al. 2024, §3), and what a trace rule checks one prefix at a time
+(AgentLTL, Elkoussy and Perez 2026, §3.4), as a set a whole program is decided against before it
 runs.
 
-Statically, a program's every path steps the automaton with the argument records it may
-pass: a guard is taken surely where valgebra proves the record inside it, never where it
-proves them disjoint, and possibly otherwise. A path ending in a bad or a pending state
-surely refutes the program, possibly leaves it undecided, and no path ending in one proves
-it; a bad state never left makes ending in one the same as reaching one. Every path of a
-program ends, a loop's after any number of items, so an obligation is decided over the whole
-program before it runs, where a monitor reading a run's prefix cannot decide it (Bauer et al.
-2011). At run time the same automaton is a monitor stepping on concrete records, and reading
-the pending states when the run ends.
+Statically, a program's every path steps the automaton with the argument records it may pass: a
+guard is taken surely where valgebra proves the record inside it, never where it proves them
+disjoint, and possibly otherwise. A path ending in a bad or a pending state surely refutes the
+program, possibly leaves it undecided, and no path ending in one proves it; a bad state never
+left makes ending in one the same as reaching one. Every path of a program ends, a loop's after
+any number of items, so an obligation is decided over the whole program before it runs, where a
+monitor reading a run's prefix cannot decide it (Bauer et al. 2011, Def. 3.4). At run time the
+same automaton is a monitor stepping on concrete records, and reading the pending states when
+the run ends.
 
 A policy reads one program's calls in order. It carries no value from one call to another,
 so a rule about the same parcel across two calls is read as a rule about any two calls: a
 program approving one parcel and booking another passes a rule that a booking follows its own
 parcel's approval. A rule that a call takes a value another returned is a flow rule with
-``only`` (`valgebra_planning.flows`). A policy instance per value, parametric monitoring
-(Roşu and Chen 2012), is not read.
+``only`` (`valgebra_planning.flows`). A policy instance per value, a parametric property
+(Roşu and Chen 2012, Def. 12), is not read.
 """
 
 from __future__ import annotations

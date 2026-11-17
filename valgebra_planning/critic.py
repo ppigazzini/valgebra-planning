@@ -1,6 +1,6 @@
 """A program written elsewhere, read from Python, verified, and answered with a critique.
 
-A language model proposes, a sound critic checks (Kambhampati et al. 2024): the program's
+A language model proposes, a sound critic checks (Kambhampati et al. 2024, §3.1): the program's
 every link is asked of valgebra by `valgebra_planning.verify.verify`, under the rules the task
 is held to, and the answer names each link that is not proven, the value that refutes it where
 one is found, and what the author can change: for an argument a value only overlaps, the test

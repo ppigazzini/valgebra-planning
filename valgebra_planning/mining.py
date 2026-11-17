@@ -3,7 +3,7 @@
 Two slots with the same schema are one set to valgebra, so the planner may pass a customer's
 name where a ticket's subject goes. Observed calls tell them apart: a value a tool returned
 that a later call took as an argument links the two slots, and slots linked by any shared
-value form one semantic type (APIphany, Guo et al. 2022). A binding across two types is then
+value form one semantic type (APIphany, Guo et al. 2022, §4). A binding across two types is then
 refused, which narrows the planner's choices to what the observations show.
 
 A mined type is an assumption, never a proof: the verifier reads none, every link of a

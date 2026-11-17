@@ -5,18 +5,20 @@ passes on is known from the program alone: a task input, or the result of a name
 flow rule names untrusted sources and a sink argument. A value from a source reaches the sink
 only where valgebra proves it inside the rule's endorsed set, when the rule names one, the
 narrowing a test or a sanitizing tool performs; otherwise it does not reach it at all. This
-is the integrity half of information-flow control for agents (CaMeL, Debenedetti et al.
-2025; FIDES, Costa et al. 2025), and a privilege rule over arguments (Progent, Shi et al.
-2025), decided over sets rather than checked per value.
+is the integrity half of information-flow control for agents, a value's provenance as its
+capability (CaMeL, Debenedetti et al. 2025, §5.3) and its integrity as its label (FIDES, Costa
+et al. 2025, §4.1), and a privilege rule over arguments (Progent, Shi et al. 2025, §4.1),
+decided over sets rather than checked per value.
 
 With ``implicit``, a sink call made under a test on a value from a source is refused too:
-which branch runs carries that value's influence, the implicit flow CaMeL names.
+which branch runs carries that value's influence, the dependency on a condition that CaMeL's
+STRICT mode adds (Debenedetti et al. 2025, §5.4).
 
 With ``only``, the rule holds every origin but its sources: a value from a tool it does not
 name, from a task input it does not name, or written into the program as a literal reaches the
 sink only inside the endorsed set. That is integrity as provenance: an identifier must come
 from the tool that retrieved it, on every path, which refutes the identifier a model makes up to
-pass an authentication step, the integrity leak Sah et al. 2026 measure.
+pass an authentication step, the integrity leak (Sah et al. 2026, §4.3).
 """
 
 from __future__ import annotations

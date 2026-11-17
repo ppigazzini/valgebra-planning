@@ -204,12 +204,29 @@ system a work names may lead the key, as in `(SyPet, Feng et al. 2017)`. The key
 lead of an entry on [11-references.md](../11-references.md), the one place a work's authors,
 title, venue and identifier are written.
 
-**Every module implementing a published result cites it**, in its docstring, at the clause
-the result supports and before its punctuation. A step that departs from the result cites
-it and names the departure beside it.
+**In the package, a citation names the result by its place.** After the key comes the place
+in the work: `(Cimatti et al. 2003, Def. 2.11)`, `(Shi et al. 2025, §4.2, Alg. 2)`. A place is
+`§` and a section number, or `Def.`, `Thm.`, `Lem.`, `Prop.`, `Cor.`, `Ex.`, `Alg.` or `Fig.`
+and a number, several separated by commas, and the number is the one the copy the references
+page lists prints: a conference version and its journal version can number a result apart, so
+the entry names the copy read. A key alone leaves a reader to search a whole work for the line
+a step rests on. A user page may cite a work whole.
+
+**Every item implementing a published result cites it**, in its docstring, a module or a
+function alike, at the clause the result supports and before its punctuation. A step that
+departs from the result cites it and names the departure beside it.
+
+**The theory page names the item.** [09-theory.md](09-theory.md) states each result the package
+rests on as a claim: an `IMPLEMENTED-BY:` line names the items citing it and a `HELD-BY:` line
+the tests that fail when it is false. A citation written into the package is written into that
+page in the same change.
 
 `tools/docs_lint.py` refuses a key of two surnames or of one with `et al.` that the page does
-not list, and an entry no tracked text cites. A key of one surname is not read.
+not list, and an entry no tracked text cites. A key of one surname is not read. In the package
+and on the theory page it refuses a citation with no place; an `IMPLEMENTED-BY:` entry naming
+no item, or an item citing none of the works its claim cites; an item citing a work that no
+claim naming it cites; and a `HELD-BY:` name that is no test. Where the papers are at hand, only
+in the author's clone, it refuses a place the copy of its paper does not print.
 
 ## Commit messages
 

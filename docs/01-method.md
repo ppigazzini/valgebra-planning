@@ -150,7 +150,7 @@ proposal, until a program is accepted or the rounds run out, any callable being 
 
 ## Specifications that hold vacuously
 
-A check that passes without testing what its author meant is vacuous (Kupferman and Vardi 2003),
+A check that passes without testing what its author meant is vacuous (Kupferman and Vardi 1999),
 and `valgebra_planning/vacuity.py` finds each kind a library can hold, every one a set question:
 a goal no value meets or every value meets; an input, an argument record or a result no value
 meets; a policy transition naming no tool, or whose guard no argument record of its tool meets,

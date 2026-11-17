@@ -3,11 +3,10 @@
 A goal no value meets makes every task over it unsolvable, and one every value meets makes any
 program a solution; a policy transition whose guard no argument record of its tool meets never
 fires, and a policy whose bad and pending states no transition that can fire reaches is never
-violated; a
-flow rule whose endorsed set misses the sink's argument lets nothing through, and one that holds
-it refuses nothing. Each is a specification satisfied vacuously (Kupferman and Vardi 2003), a
-check that passes without testing what its author meant, and each is a set question valgebra
-decides: emptiness, inclusion, a meet.
+violated; a flow rule whose endorsed set misses the sink's argument lets nothing through, and
+one that holds it refuses nothing. Each is a specification satisfied vacuously (Kupferman and
+Vardi 1999, Def. 2), a check that passes without testing what its author meant, and each is a
+set question valgebra decides: emptiness, inclusion, a meet.
 
 The cheap question is asked first: values drawn from a schema are tried for membership, and a
 member found is a proof the set is inhabited, so valgebra is asked only where none is. A question

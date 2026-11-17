@@ -42,6 +42,15 @@ def test_the_monitor_reads_a_trace_call_by_call() -> None:
     assert unapproved.violations == ["freight approved first: book_freight_return reached violated"]
 
 
+def test_a_rule_about_one_parcel_reads_as_a_rule_about_any_two_calls() -> None:
+    # A policy carries no value from one call to another: an approval of one parcel lets the
+    # booking of another through, where a parametric monitor would keep one instance a parcel.
+    monitor = Monitor(FREIGHT)
+    assert not monitor.observe("approve_freight", {"parcel_id": "pcl_1"})
+    assert not monitor.observe("book_freight_return", {"parcel_id": "pcl_2"})
+    assert monitor.violations == []
+
+
 def test_a_program_planned_without_the_policy_is_refuted_on_its_freight_path_alone() -> None:
     found = plan(TOOLS, SETTLE)
     assert found.program is not None

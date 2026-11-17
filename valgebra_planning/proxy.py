@@ -3,14 +3,15 @@
 The proxy lists the upstream server's tools as they are, and answers each ``tools/call`` only
 after checking it, as the fail-closed runner checks a call: the argument record against the
 tool's input set, each policy's step, and, the call forwarded, the result against its output
-set. A check that breaks answers the call with a tool error naming it, as Progent's proxy does,
+set. A check that breaks answers the call with a tool error naming it, as Progent's proxy mode
+answers a denied call with its fallback message (Shi et al. 2025, §4.1, §7),
 so the agent can try another way; nothing breaking it reaches the upstream server or the agent.
 
 A flow rule is held by provenance read from values: the proxy sees values, not a program's
 references, so an argument equal, as one JSON value, to a value an untrusted tool returned is
 taken as coming from it, and refused unless it lies in the rule's endorsed set. A rule with
 ``only`` refuses an argument equal to no value its sources returned: an identifier not retrieved
-earlier in the proxy's process, the grounding gate Sah et al. 2026 ask for. Both are
+earlier in the proxy's process, the strict grounding gate (Sah et al. 2026, §4.8). Both are
 assumptions: a value equal by chance to an untrusted one is refused with it, and one equal by
 chance to a retrieved one passes, and a value the agent transforms, upper-cased, encoded or cut,
 equals none it was returned and passes: a flow rule here holds against no attacker that adapts,

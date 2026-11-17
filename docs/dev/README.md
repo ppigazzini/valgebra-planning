@@ -6,4 +6,5 @@ not published; the site built from [../README.md](../README.md) is the user guid
 | page | what it holds |
 |---|---|
 | [05-releasing.md](05-releasing.md) | how a version reaches PyPI: the release train, the dispatch, what stands between it and the upload, the settings it rests on, the order, and the checks on what the index serves |
+| [09-theory.md](09-theory.md) | the results the package rests on: each claim, the paper and the place it cites, the items implementing it and the tests holding it |
 | [10-writing.md](10-writing.md) | the rules for every text: pages, comments, docstrings, citations and commit messages |

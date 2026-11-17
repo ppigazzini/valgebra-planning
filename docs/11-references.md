@@ -27,9 +27,12 @@ directions.
 - **D'Antoni and Veanes 2017.** L. D'Antoni, M. Veanes. The power of symbolic automata and
   transducers. CAV 2017.
 
-- **Kupferman and Vardi 2003.** O. Kupferman, M. Y. Vardi. Vacuity detection in temporal model
-  checking. International Journal on Software Tools for Technology Transfer 4(2), 2003, 224-233.
-  [doi:10.1007/s100090100062](https://doi.org/10.1007/s100090100062)
+- **Kupferman and Vardi 1999.** O. Kupferman, M. Y. Vardi. Vacuity detection in temporal model
+  checking. CHARME 1999, LNCS 1703, 82-98.
+  [doi:10.1007/3-540-48153-2_8](https://doi.org/10.1007/3-540-48153-2_8). The extended version
+  is in International Journal on Software Tools for Technology Transfer 4(2), 2003, 224-233,
+  [doi:10.1007/s100090100062](https://doi.org/10.1007/s100090100062), whose numbering is not
+  the one cited here.
 - **Bauer et al. 2011.** A. Bauer, M. Leucker, C. Schallhart. Runtime verification for LTL and
   TLTL. ACM Transactions on Software Engineering and Methodology 20(4), 2011.
   [doi:10.1145/2000799.2000800](https://doi.org/10.1145/2000799.2000800). A monitor decides a

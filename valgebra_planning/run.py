@@ -29,8 +29,9 @@ ATTEMPTS = 8
 def retry_assumptions(contract: Contract) -> tuple[str, ...]:
     """Return what a retry of a tool rests on: its errors transient, its annotations unless trusted.
 
-    A retry is a strong cyclic solution, sound under fairness (Daniele et al. 2000): an error is
-    transient, so one of the runner's attempts succeeds. The annotations saying the tool is
+    A retry is a strong cyclic solution (Daniele et al. 2000, Def. 7), sound under fairness
+    (Cimatti et al. 2003, Def. 2.10): an error is transient, so one of the runner's attempts
+    succeeds. The annotations saying the tool is
     read-only or idempotent are a hint the server gives, untrusted unless the server is.
     """
     return (

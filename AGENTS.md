@@ -22,6 +22,7 @@ a schema in the companion; neither is worked around here by a guess.
 | a public name, or a module's `__all__` | [docs/02-api.md](docs/02-api.md) |
 | a published count | [docs/04-results.md](docs/04-results.md), and the study file its command checks |
 | a citation | [docs/11-references.md](docs/11-references.md) |
+| code that implements a paper's result | [docs/dev/09-theory.md](docs/dev/09-theory.md), [docs/dev/10-writing.md](docs/dev/10-writing.md#citing-a-paper) |
 | a release, or a dependency's floor | [docs/dev/05-releasing.md](docs/dev/05-releasing.md) |
 | any prose at all: a page, a comment, a docstring, a commit message | [docs/dev/10-writing.md](docs/dev/10-writing.md) |
 

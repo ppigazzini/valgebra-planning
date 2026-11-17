@@ -2,9 +2,10 @@
 
 Every slot, input and goal is a predicate on JSON values. Each predicate taken inside or
 outside cuts the values into cells, and each predicate is exactly a union of cells, so an
-inclusion between two predicates' cells implies the inclusion between the predicates
-(Graf and Saidi 1997; the minterms of an effective Boolean algebra, D'Antoni and Veanes
-2017). The values split first into seven disjoint kinds, and a predicate cuts only the
+inclusion between two predicates' cells implies the inclusion between the predicates: the
+canonical monomials of the predicates as abstract states (Graf and Saidi 1997, §2.2), the
+minterms of an effective Boolean algebra (D'Antoni and Veanes 2017, §2.1). The values split
+first into seven disjoint kinds, and a predicate cuts only the
 cells of the kinds it meets.
 
 A part of a cell is dropped only where valgebra proves it empty. It is inhabited where a

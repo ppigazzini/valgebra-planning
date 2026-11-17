@@ -4,10 +4,10 @@ In code mode a model writes a program against typed tool APIs rather than callin
 one. `stubs` gives those APIs as Python: one function a tool, every argument by name, its type
 hint the kind its schema names, and its docstring the tool's own input and output JSON Schemas,
 since a pattern or a bound has no Python type and the critic holds the program to the schemas.
-`repair` is the loop of a model that proposes and a sound critic that checks (Kambhampati et al.
-2024): a program is critiqued, and its critique handed back for the next proposal, until it is
-accepted or the rounds run out. The model is any callable from the last critique to a program,
-so no model is part of this package.
+`repair` is the loop of a model that proposes and a sound critic that checks, the critique
+handed back as the next prompt (Kambhampati et al. 2024, §3.2): a program is critiqued, and its
+critique handed back for the next proposal, until it is accepted or the rounds run out. The
+model is any callable from the last critique to a program, so no model is part of this package.
 """
 
 from __future__ import annotations

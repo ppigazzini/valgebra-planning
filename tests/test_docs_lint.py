@@ -53,6 +53,83 @@ def test_citations_and_the_references_page_are_held_equal() -> None:
     assert "lists 'Feng et al. 2017'" in problems[1]
 
 
+def test_a_citation_names_its_place_across_a_line_break() -> None:
+    text = (
+        "planning (Cimatti et al.\n    2003, Def. 2.11), the order (Shi et al. 2025, §4.2,"
+        " Alg. 2), and pruning (Feng et al. 2017)"
+    )
+    assert docs_lint.located(text) == [
+        ("Cimatti et al. 2003", ("Def. 2.11",)),
+        ("Shi et al. 2025", ("§4.2", "Alg. 2")),
+        ("Feng et al. 2017", ()),
+    ]
+
+
+MODULE = '''"""The cells (Graf and Saidi 1997, §2.2), and vacuity (Kupferman and Vardi 1999)."""
+
+
+def cut() -> None:
+    """Prune what reaches nothing (Feng et al. 2017, §6.3)."""
+
+
+def plain() -> None:
+    # a prefix decides nothing (Bauer et al. 2011, Def. 3.4)
+    return None
+'''
+PAGE = """# The theory
+
+`(Cimatti et al. 2003)` is an example, and cites nothing.
+
+## The cells
+
+**Cells.** Minterms (Graf and Saidi 1997, §2.2). **[LOAD-BEARING: cells]**
+
+IMPLEMENTED-BY: cells.py, cells.py::cut, cells.py::gone
+
+HELD-BY: test_cells, test_gone
+
+**Vacuity.** (Kupferman and Vardi 1999, Def. 2). **[DEVIATION: vacuity]**
+
+IMPLEMENTED-BY: cells.py
+"""
+
+
+def test_the_theory_page_and_the_package_name_each_other() -> None:
+    texts = {
+        docs_lint.THEORY: PAGE,
+        "valgebra_planning/cells.py": MODULE,
+        "tests/test_cells.py": "def test_cells() -> None:\n    pass\n",
+    }
+    where = f"{docs_lint.THEORY}: "
+    assert docs_lint.check_theory(texts) == [
+        "valgebra_planning/cells.py: cites 'Kupferman and Vardi 1999' with no place in it",
+        f"{where}[cells] names 'cells.py::cut', which cites none of its works",
+        f"{where}[cells] names 'cells.py::gone', which is no item of the package",
+        f"{where}[cells] is held by 'test_gone', which is no test",
+        f"{where}[vacuity] has no HELD-BY: line",
+        "cells.py::cut: cites 'Feng et al. 2017', which no claim naming it cites",
+        "cells.py::plain: cites Bauer et al. 2011, and no claim names it",
+    ]
+
+
+def test_a_place_is_read_where_a_copy_of_its_work_prints_it(tmp_path: Path) -> None:
+    (tmp_path / "PLN_Cimatti2003_Plans.txt").write_text(
+        "Definition 2.11 (Solutions). Let\n2.2 Domains\n"
+    )
+    (tmp_path / "VER_Rosu2012_Monitoring.txt").write_text("Definition 12. Let X be\n")
+    page = (
+        "(Cimatti et al. 2003, Def. 2.11, §2.2), (Cimatti et al. 2003, Def. 2.1),"
+        " (Roşu and Chen 2012, Def. 12), (Guo et al. 2022, §4)"
+    )
+    texts = {docs_lint.THEORY: page}
+    where = f"{docs_lint.THEORY}: "
+    assert docs_lint.check_places(texts, tmp_path) == [
+        f"{where}(Cimatti et al. 2003, Def. 2.1) is a place no copy of the work prints",
+        f"{where}'Guo et al. 2022' has no copy on the shelf to read it in",
+    ]
+    assert docs_lint.check_places(texts, tmp_path / "absent") == []
+
+
 def test_the_readme_links_into_the_tree_by_address() -> None:
     readme = docs_lint.ROOT / "README.md"
     main = "https://github.com/ppigazzini/valgebra-planning/blob/main/"
