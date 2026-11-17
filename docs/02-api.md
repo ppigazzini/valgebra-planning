@@ -40,8 +40,14 @@ checked = verify(found.program, contracts, task)
 print(checked.count("proven"), "of", len(checked.links), "links proven")
 ```
 
-prints the program and `2 of 2 links proven`: the tracking code lies inside `find_parcel`'s
-argument, and the parcel identifier its output guarantees inside the goal.
+```text
+c1 = find_parcel(tracking=tracking)
+return c1.parcel_id
+2 of 2 links proven
+```
+
+The tracking code lies inside `find_parcel`'s argument, and the parcel identifier its output
+guarantees inside the goal.
 
 **The package itself exports nothing**, and `valgebra_planning.__all__` is empty. Three
 modules define a function of their own name, `run`, `verify` and `proxy`, so a function
