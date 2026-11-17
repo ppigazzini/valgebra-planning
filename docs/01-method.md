@@ -51,7 +51,9 @@ lies in it or valgebra refutes its emptiness, and kept as undecided otherwise: a
 can cost a program, never admit a wrong one. Relations between two predicates, each asked once,
 settle most cuts. The concrete values are the edges of common bounds, every listed value, draws
 from each schema and objects merged from those draws, since an open record meets another where a
-value carries both their keys.
+value carries both their keys. The predicates are cut in the order of their names: which meets
+valgebra leaves undecided depends on the order the cut splits by and draws in, so a fixed order
+makes a library's cells the same however it lists its tools.
 
 Before any cell is cut, the planner keeps only the tools a program can reach the goal through:
 callable, every required argument meeting a value the agent may hold, and mattering, a result

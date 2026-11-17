@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from typing import Any
+
+from valgebra_planning.cells import abstract
 from valgebra_planning.contracts import Contract, read_contract, read_task
-from valgebra_planning.planner import plan
+from valgebra_planning.planner import plan, predicates
 from valgebra_planning.program import Branch, Return, render, steps
 from valgebra_planning.verify import verify
 
@@ -103,3 +106,47 @@ def test_the_depth_bounds_the_calls_and_tests_on_a_path() -> None:
     found = plan(tools, TASK, depth=4, weak=False)
     assert found.program is not None
     assert isinstance(found.program.end, Branch)
+
+
+def _arrays(*keys: tuple[str, str]) -> dict[str, Any]:
+    record = {
+        "type": "object",
+        "properties": {name: {"type": kind} for name, kind in keys},
+        "required": [name for name, _ in keys],
+    }
+    return {"type": "array", "items": record}
+
+
+def _passing(name: str, takes: dict[str, Any], gives: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": name,
+        "inputSchema": {"type": "object", "properties": {"x": takes}, "required": ["x"]},
+        "outputSchema": {"type": "object", "properties": {"y": gives}, "required": ["y"]},
+    }
+
+
+#: Arrays of records beside arrays of strings, whose meets valgebra leaves partly undecided: cut
+#: in their listing order, the 120 orders count 6 to 9 undecided cells, this one 8, its reverse 6.
+STRINGS: dict[str, Any] = {"type": "array", "items": {"type": "string"}}
+ARRAYS: list[dict[str, Any]] = [
+    _passing("t0", STRINGS | {"minItems": 1}, _arrays(("c", "string")) | {"minItems": 1}),
+    _passing("t1", _arrays(("a", "string"), ("b", "integer")), _arrays(("b", "integer"))),
+    _passing("t2", _arrays(("c", "string")) | {"minItems": 1}, _arrays(("a", "string"))),
+    _passing("t3", STRINGS, STRINGS | {"minItems": 1}),
+    _passing("t4", _arrays(("b", "integer")), STRINGS | {"minItems": 1}),
+]
+
+
+def test_the_cut_is_the_same_whatever_order_the_tools_are_listed_in() -> None:
+    task = read_task("a string", {"text": {"type": "string"}}, {"type": "string"})
+    cuts = set()
+    for order in (ARRAYS, ARRAYS[::-1]):
+        cut = abstract(predicates({spec["name"]: read_contract(spec) for spec in order}, task))
+        names = [predicate.names for predicate in cut.predicates]
+        cuts.add(
+            frozenset(
+                (cell.kind, frozenset(names[i] for i in cell.inside), cell.status)
+                for cell in cut.cells
+            )
+        )
+    assert len(cuts) == 1

@@ -6,6 +6,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The cut a plan searches is the same however a library lists its tools: its predicates are
+  cut in the order of their names. Split in listing order, the cells valgebra leaves undecided
+  moved with that order: the seven MCP reference servers' 106 predicates gave 97, 127 or 130
+  cells in three orders, and give 96, 61 of them undecided, in every order now, asking
+  valgebra 3,035 relations where the order the census used asked 3,082.
+
 ## [0.0.1] - 2026-11-17
 
 ### Added

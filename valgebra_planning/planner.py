@@ -482,7 +482,10 @@ def predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate]
     """Return every argument and the goal, and each result or input some of them may read.
 
     A value no argument and no goal can hold is never passed on, so its cells cost the
-    search and decide nothing; it is left out, with its reference.
+    search and decide nothing; it is left out, with its reference. The sets are gathered in
+    the order of their names, which fixes the cut: valgebra leaves some meets undecided, and
+    which ones depends on the order the cut splits by and draws its members in, so a listing
+    order of its own would make a library's count that order's.
     """
     arguments = [slot for contract in contracts.values() for slot in contract.arguments]
     consumers = [slot.values for slot in arguments] + [task.goal]
@@ -500,7 +503,7 @@ def predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate]
         if _readable(slot.values, consumers)
     ]
     entries.append((_GOAL, task.goal, task.goal_schema, task.goal_schema))
-    return gather(entries)
+    return gather(sorted(entries, key=lambda entry: entry[0]))
 
 
 def _reads(block: Block) -> set[str]:
