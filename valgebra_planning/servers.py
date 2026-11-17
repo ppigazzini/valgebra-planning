@@ -25,6 +25,8 @@ from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block
 from valgebra_planning.run import Run, ToolError, run
 
+__all__ = ["connect", "read_server", "run_on_server"]
+
 
 def connect(server: str) -> Client:
     """Return a client for a server: a URL is Streamable HTTP, anything else a stdio command."""

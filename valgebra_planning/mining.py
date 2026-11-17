@@ -20,6 +20,8 @@ from typing import Any
 from valgebra_planning._valgebra import json_key
 from valgebra_planning.contracts import Contract
 
+__all__ = ["SlotKey", "Types", "infer_outputs", "mine"]
+
 #: A slot as the miner names it: ``("argument", "tool.name")`` or ``("result", "tool.path")``.
 SlotKey = tuple[str, str]
 

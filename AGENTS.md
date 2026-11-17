@@ -19,6 +19,7 @@ a schema in the companion; neither is worked around here by a guess.
 | Changing | Read |
 |---|---|
 | what a program, a link or a rule means | [docs/01-method.md](docs/01-method.md) |
+| a public name, or a module's `__all__` | [docs/02-api.md](docs/02-api.md) |
 | a published count | [docs/04-results.md](docs/04-results.md), and the study file its command checks |
 | a citation | [docs/11-references.md](docs/11-references.md) |
 | a release, or a dependency's floor | [docs/05-releasing.md](docs/05-releasing.md) |

@@ -32,6 +32,8 @@ from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 from valgebra_planning.run import annotated, retry_assumptions
 
+__all__ = ["Gap", "Link", "Verdict", "Verification", "verify"]
+
 Verdict = Literal["proven", "refuted", "undecided"]
 
 #: How many values are drawn from a reference's schema in search of a counterexample.

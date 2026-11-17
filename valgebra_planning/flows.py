@@ -27,6 +27,8 @@ from typing import Any
 
 from valgebra_planning._valgebra import Validator, compile_schema
 
+__all__ = ["Flow", "read_flow"]
+
 
 @dataclass(frozen=True, slots=True)
 class Flow:

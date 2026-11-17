@@ -20,6 +20,8 @@ from typing import Any
 from valgebra_planning.contracts import Contract, Task
 from valgebra_planning.critic import Critique, ProgramError, critique
 
+__all__ = ["Repair", "feedback", "repair", "stub", "stubs"]
+
 #: The Python a JSON Schema type is written as in a stub.
 _HINTS = {
     "string": "str",

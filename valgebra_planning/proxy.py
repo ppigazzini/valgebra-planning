@@ -31,6 +31,8 @@ from valgebra_planning.contracts import Contract
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Monitor, Policy
 
+__all__ = ["Gate", "proxy", "serve"]
+
 
 def _leaves(value: Any) -> Iterable[Any]:
     """Return every value a result holds, the whole and each part, for provenance."""

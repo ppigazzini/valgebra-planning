@@ -37,6 +37,18 @@ from valgebra_planning._valgebra import (
 from valgebra_planning.cells import EDGES
 from valgebra_planning.policy import Policy, Transition
 
+__all__ = [
+    "Change",
+    "Rule",
+    "Update",
+    "allowed",
+    "as_policy",
+    "describe",
+    "read_privileges",
+    "read_rules",
+    "updates",
+]
+
 Change = Literal["narrowing", "expansion", "undecided"]
 
 

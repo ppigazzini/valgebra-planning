@@ -24,6 +24,8 @@ from valgebra_planning._valgebra import (
     upgrade,
 )
 
+__all__ = ["Contract", "Slot", "Task", "read_contract", "read_task"]
+
 #: How deep a result field is read for the fields it guarantees in turn. A value three
 #: objects down is still one an agent can pass on by its path.
 RESULT_DEPTH = 3

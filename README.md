@@ -34,6 +34,8 @@ Status: pre-alpha, not on an index.
 
 [`docs/00-using.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/00-using.md)
 shows the command line,
+[`docs/02-api.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/02-api.md)
+the Python names each module promises,
 [`docs/01-method.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/01-method.md)
 states the method and its limits, and
 [`docs/04-results.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/04-results.md)

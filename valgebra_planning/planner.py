@@ -45,6 +45,8 @@ from valgebra_planning.program import (
 )
 from valgebra_planning.run import retry_assumptions
 
+__all__ = ["DEPTH", "Plan", "Uncovered", "plan"]
+
 #: The calls and tests a path may take.
 DEPTH = 6
 

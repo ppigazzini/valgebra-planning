@@ -24,6 +24,8 @@ from valgebra_planning.flows import Flow, read_flow
 from valgebra_planning.mining import Types, infer_outputs, mine
 from valgebra_planning.policy import Policy, read_policy
 
+__all__ = ["Library", "Problem", "read_library"]
+
 
 @dataclass(frozen=True, slots=True)
 class Problem:

@@ -33,6 +33,8 @@ from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 from valgebra_planning.verify import Verification, verify
 
+__all__ = ["Critique", "ProgramError", "critique", "read_program"]
+
 
 class ProgramError(ValueError):
     """A program the reader does not read, with the line that stops it."""
