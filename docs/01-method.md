@@ -180,6 +180,16 @@ refused, and a value from a task input with it, since a proxy sees no task.
   `prefixItems`; and a program the planner writes holds no constant, tests no key and loops
   over no array. A program written elsewhere may do all three, and each is checked like any
   value.
+- **No Python door.** A tool is read from the JSON Schema its server publishes, never from a
+  Python function's annotations. Where a call travels as JSON, the MCP SDK, FastMCP and the
+  OpenAI Agents SDK publish that schema from the same annotations, so a second reading adds no
+  tool, and it disagrees with the published one where Python's equality is kept: valgebra's
+  `Literal[1]` refuses `1.0`, which `{"const": 1}` holds, so a program proven over one reading
+  can be refuted over the other. A tool called with Python values, a tuple, a dataclass or a
+  `datetime`, lies outside the seven kinds of value `json.loads` returns that the cells
+  partition (`KINDS` in `valgebra_planning/cells.py`), and would need an abstraction over
+  valgebra's whole universe, not a reader. Refused until a consumer calls tools with Python
+  values under no published JSON Schema.
 - **No verify-before-retry.** A call made again on a value read again after its error is not
   judged a retry: whether it repeats the first rests on what the read shows, which only a
   postcondition the library declares could say (Mansoor et al. 2026), and none is read. So when
