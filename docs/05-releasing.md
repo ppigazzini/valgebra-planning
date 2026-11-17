@@ -190,9 +190,6 @@ curl -sS https://test.pypi.org/simple/valgebra-planning/ \
 - **The floors.** The smoke resolves each dependency to its newest release, and no job installs
   the floors `pyproject.toml` names. Each floor is the lock's version, which a lock update can
   move past.
-- **The live servers.** The census counts the listings stored under `examples/census/`; a
-  server whose listing moves after it was stored is read by no step until `tools/census.py
-  --refresh` reads it.
 - **A published version that is wrong.** It cannot be replaced, only yanked, and the workflow
   refuses a version the index serves. The remedy is the next version, which is why step 4 comes
   before step 5.

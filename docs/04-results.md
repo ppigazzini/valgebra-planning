@@ -49,23 +49,3 @@ Synthetic libraries of 8 to 256 tools hold a planted chain of four beside tools 
 call and tools whose results nothing reads, each size in three tool orders. At every size the
 reachability pruning leaves 5 predicates and 12 cells, and the strong program is found and
 proven, 5 of 5 links.
-
-## Real servers
-
-```bash
-uv run --no-sync python tools/census.py --check docs/studies/census.json
-```
-
-The seven official MCP reference servers, each pinned to one release (`SERVERS` in
-`tools/census.py`), list 66 tools, stored as listed under `examples/census/`. valgebra-jsonschema reads every one, and 31 carry an
-`outputSchema`, which is 12 distinct schemas, all 16 of filesystem's being one text wrapper. Of
-the 126 arguments, 72 carry a bare type and nothing more. Cut into cells together, as the planner
-cuts them, the 106 predicates give 127 cells, of which 92 are undecided, 91 of them array cells:
-arrays of records met with the complements of other arrays of records, 63 of them with arrays of
-strings too, which valgebra does not part. They are kept, so no wrong program is admitted, and
-they cost the search. The cut asks valgebra 3,082 relations.
-
-The count reads the stored listings, with no network, so it is in the gate. A pinned server is
-not a pinned listing: its dependencies resolve when it starts and its SDK writes the schemas, so
-`tools/census.py --refresh --check docs/studies/census.json` reads the servers again and reports
-a listing that moved. A moved listing, or a new release of a server, is a new study.

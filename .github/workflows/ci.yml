@@ -44,7 +44,6 @@ jobs:
       # Every published count is one this code still produces.
       - run: uv run --no-sync python tools/case.py examples/parcels --check docs/studies/parcels.json
       - run: uv run --no-sync python tools/bench.py --check docs/studies/bench.json
-      - run: uv run --no-sync python tools/census.py --check docs/studies/census.json
 
   floor:
     name: the suite on the oldest interpreter

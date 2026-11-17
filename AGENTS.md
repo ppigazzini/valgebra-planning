@@ -49,15 +49,10 @@ uv run --no-sync python tools/docs_lint.py --commits
 uv run --no-sync pytest
 uv run --no-sync python tools/case.py examples/parcels --check docs/studies/parcels.json
 uv run --no-sync python tools/bench.py --check docs/studies/bench.json
-uv run --no-sync python tools/census.py --check docs/studies/census.json
 ```
 
 **Every `uv run` carries `--no-sync`.** A run that syncs replaces the environment the change
 was tested in. Sync deliberately, with `uv sync --locked`.
-
-`tools/census.py` counts the listings stored under `examples/census/`, with no network.
-`--refresh` reads the seven live servers again, which needs the network, `uvx` and `npx`; run
-it before moving a server's release in `SERVERS`.
 
 A change that moves a published count regenerates the study with `--json` in the same commit,
 and its message says why the count moved.
@@ -67,9 +62,8 @@ and its message says why the count moved.
 - `valgebra_planning/` — the package. `_valgebra.py` is the only module importing valgebra
   or valgebra-jsonschema, and `tests/test_boundaries.py` holds it.
 - `examples/` — the tool libraries, tasks, policies, flow rules and observed calls the
-  studies read, and under `census/` the reference servers' listings.
-- `tools/` — the study drivers, `case.py`, `bench.py` and `census.py`, and the lint,
-  `docs_lint.py`.
+  studies read.
+- `tools/` — the study drivers, `case.py` and `bench.py`, and the lint, `docs_lint.py`.
 - `docs/` — the method, the results, the writing rules and the references;
   `docs/studies/` holds the counts the drivers check.
 - `tests/` — pytest suites.
