@@ -1,26 +1,26 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+import synthetic
 
 from valgebra_planning.contracts import Contract, read_contract, read_task
 from valgebra_planning.planner import _reachable, plan
 from valgebra_planning.policy import read_policy
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
-import bench
-
-TASK = read_task("reach the end", {"start": bench._id("k0")}, bench._id(f"k{bench.CHAIN}"))
+TASK = read_task(
+    "reach the end",
+    {"start": synthetic.identifier("k0")},
+    synthetic.identifier(f"k{synthetic.CHAIN}"),
+)
 
 
 def _library(size: int) -> dict[str, Contract]:
-    return {c.name: c for c in map(read_contract, bench.library(size, 0))}
+    return {c.name: c for c in map(read_contract, synthetic.library(size, 0))}
 
 
 def test_a_tool_no_held_value_can_call_and_one_reaching_nothing_are_dropped() -> None:
     tools = _library(12)
     kept = _reachable(tools, TASK, frozenset())
-    assert sorted(kept) == [f"step{i}" for i in range(bench.CHAIN)]
+    assert sorted(kept) == [f"step{i}" for i in range(synthetic.CHAIN)]
     assert any(name.startswith("stray") for name in tools)
     assert any(name.startswith("dead") for name in tools)
 
