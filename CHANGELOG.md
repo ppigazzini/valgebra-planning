@@ -6,6 +6,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-11-18
+
+A cell of many overlapping ranges is decided again, as 0.0.1 decided it, and the cut keeps the
+cells 0.0.2 decides.
+
 ### Fixed
 
 - A part of a cell is asked first as the meet its cell holds with the new predicate, as 0.0.1
@@ -93,6 +98,7 @@ decides more of it; the user guide is published.
   on synthetic libraries of 8 to 256 tools the cut holds 5 predicates and 12 cells at every
   size.
 
-[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/ppigazzini/valgebra-planning/releases/tag/v0.0.1
