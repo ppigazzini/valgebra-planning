@@ -6,6 +6,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A part of a cell is asked first as the meet its cell holds with the new predicate, as 0.0.1
+  asked it, and as its kind with every predicate it lies inside or outside only where valgebra
+  leaves that meet undecided. Asked in the second spelling alone, as 0.0.2 asks it, a cell of
+  many overlapping integer ranges was a meet too wide for valgebra to decide: valplan's numbers
+  task of 128 tools cut into 43,458 cells, 42,989 undecided, in 287 s, and cuts into 507, none
+  undecided, in 6 s, as on 0.0.1. The MCP reference servers' cut keeps 64 cells, 29 undecided,
+  as on 0.0.2.
+
 ## [0.0.2] - 2026-11-18
 
 The cut a plan searches is the library's, whatever order it lists its tools in, and valgebra

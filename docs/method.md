@@ -52,10 +52,13 @@ implies the inclusion between predicates.
 
 A part of a cell is dropped only where valgebra proves it empty, inhabited where a concrete value
 lies in it or valgebra refutes its emptiness, and kept as undecided otherwise: an undecided cell
-can cost a program, never admit a wrong one. A part is asked as its kind, each predicate it lies
-inside, and the complement of each it lies outside but for one a predicate inside it already
-excludes: one set, in the form valgebra decides most often, where a meet built cut by cut lacks
-some complements and holds redundant ones. Schemas valgebra compiles to one validator, a
+can cost a program, never admit a wrong one. A part is asked as the meet its cell holds with the
+new predicate or its complement, and where valgebra leaves that undecided, as its kind, each
+predicate it lies inside and the complement of each it lies outside but for one a predicate
+inside it already excludes. The two spell one set, and each is decided where the other is not:
+the second holds the complement of a predicate a cell lies outside by a relation, which some meets
+of arrays of records need, and the first holds only the predicates it was cut by, which keeps a
+cell of many overlapping ranges within what valgebra decides. Schemas valgebra compiles to one validator, a
 description or a default apart, are one predicate, since equal validators denote one set.
 Relations between two predicates, each asked once, settle most cuts. The concrete values are the edges of common bounds, every listed value, draws
 from each schema and objects merged from those draws, since an open record meets another where a

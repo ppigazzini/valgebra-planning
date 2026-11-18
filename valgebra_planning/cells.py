@@ -265,11 +265,18 @@ def _cut(split: _Split, i: int, predicate: Predicate, relations: _Relations) -> 
     for inside in (True, False):
         held = split.inside | {i} if inside else set(split.inside)
         out = set(split.outside) if inside else split.outside | {i}
-        values = _meet(split.kind, held, out, relations)
+        values = intersection(
+            split.values, predicate.values if inside else complement(predicate.values)
+        )
         witnesses = [v for v in split.witnesses if predicate.values.is_valid(v) == inside]
         proven = bool(witnesses)
         if not witnesses:
             emptiness = _emptiness(values)
+            if emptiness == "undecided":
+                whole = _meet(split.kind, held, out, relations)
+                # An equal validator is the question already asked: one set, one answer.
+                if whole != values:
+                    emptiness = _emptiness(whole)
             if emptiness == "empty":
                 continue
             proven = emptiness == "inhabited"
@@ -278,12 +285,18 @@ def _cut(split: _Split, i: int, predicate: Predicate, relations: _Relations) -> 
 
 
 def _meet(kind: str, inside: set[int], outside: set[int], relations: _Relations) -> Validator[Any]:
-    """Return the set a cell is asked as: its kind, and each predicate it lies inside or outside.
+    """Return a part's set spelled whole: its kind, and each predicate it lies inside or outside.
+
+    A part is asked first as the meet its cell holds with the new predicate or its complement,
+    and in this spelling where valgebra leaves that one undecided. The two are one set, and
+    each is decided where the other is not: this one holds the complement of each predicate
+    the cell lies outside by a relation, which some meets of arrays of records need, and the
+    meet built cut by cut holds the complements of the predicates it was cut by alone, which
+    keeps a meet of many overlapping ranges within what valgebra decides.
 
     The complement of a predicate sharing no value with one the cell lies inside is left out:
     that one lies inside the complement already, so the set is the same and the question
-    smaller. The complement of a predicate the cell lies outside by a relation stays: valgebra
-    proves some meets empty only with it, and some only without a redundant one.
+    smaller.
     """
     predicates = relations.predicates
     kept = [q for q in sorted(outside) if not any(relations.are_apart(q, p) for p in inside)]

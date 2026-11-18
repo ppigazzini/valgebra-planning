@@ -170,6 +170,30 @@ def test_a_cell_is_asked_in_the_form_valgebra_decides() -> None:
     assert all(sum(cell.values.is_valid(v) for cell in cut.cells) == 1 for v in drawn)
 
 
+def test_a_cell_of_many_overlapping_ranges_is_decided() -> None:
+    # Ranges sharing one value overlap, so no relation settles a cut. Asked only as its kind
+    # with the complement of every range it lies outside, a cell is a meet too wide for valgebra
+    # to decide, and the cut of these keeps 143 cells, 15 undecided; asked as the meet its cell
+    # holds with the new range first, it keeps 135, each decided.
+    rng = random.Random(2)
+
+    def quota() -> dict[str, Any]:
+        low, high = rng.randrange(10000, 15000), rng.randrange(15000, 20000)
+        return {"type": "integer", "minimum": low, "maximum": high}
+
+    specs = [_passing(f"t{i}", quota(), quota()) for i in range(32)]
+    held = {"x": {"type": "integer", "minimum": 15000, "maximum": 15000}}
+    task = read_task("a quota", held, {"type": "integer"})
+    found = predicates({spec["name"]: read_contract(spec) for spec in specs}, task)
+    cut = abstract(found)
+    assert all(cell.status == "inhabited" for cell in cut.cells)
+    # A part dropped as empty holds no value: every value drawn lies in exactly one cell.
+    draw = random.Random(0)
+    drawn = [v for p in found for v in Sampler(p.root, draw).draw(p.schema, 20)]
+    assert drawn
+    assert all(sum(cell.values.is_valid(v) for cell in cut.cells) == 1 for v in drawn)
+
+
 def test_two_spellings_of_one_set_are_one_predicate() -> None:
     spelled = [
         _passing("u", {"type": "string", "description": "a code"}, {"type": "integer"}),
