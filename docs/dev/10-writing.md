@@ -130,6 +130,7 @@ the code lands, and nobody knows which claim broke better than the person who br
 |---|---|
 | [`README.md`](../../README.md) | warm: its module table moves with a module |
 | [`AGENTS.md`](../../AGENTS.md) | warm: a gate command added there is a workflow step |
+| [the site's home](../README.md) | warm: its example runs in the suite, and its index moves with a page added |
 | [00-using.md](../00-using.md) | hot: a command, an option or a file of a library is an edit there |
 | [01-method.md](../01-method.md) | hot: a rule, a cut or a search change is an edit there |
 | [02-api.md](../02-api.md) | hot: a public name added, removed or retyped is an edit there |

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGES = ("docs/02-api.md", "docs/03-code-mode.md", "docs/19-recipes.md")
+PAGES = ("docs/README.md", "docs/02-api.md", "docs/03-code-mode.md", "docs/19-recipes.md")
 #: A Python block, and the text block that follows it, if one does, holding what it prints.
 BLOCK = re.compile(r"```python\n(.*?)```(?:\s*```text\n(.*?)```)?", re.DOTALL)
 

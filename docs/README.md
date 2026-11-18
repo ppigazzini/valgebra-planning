@@ -14,6 +14,49 @@ link. [valgebra-jsonschema](https://ppigazzini.github.io/valgebra-jsonschema/) r
 MCP `inputSchema` and `outputSchema` into [valgebra](https://ppigazzini.github.io/valgebra/)'s
 sets, and valgebra decides every inclusion a program rests on.
 
+```python
+from valgebra_planning.contracts import read_contract, read_task
+from valgebra_planning.critic import critique
+
+
+def tool(name, takes, returns):
+    """Return the contract of a tool listed with these properties, every one required."""
+    return read_contract(
+        {
+            "name": name,
+            "inputSchema": {"type": "object", "properties": takes, "required": [*takes]},
+            "outputSchema": {"type": "object", "properties": returns, "required": [*returns]},
+        }
+    )
+
+
+ORDER = {"type": "string", "pattern": "^ord_[0-9]+$"}
+REFUND = {"type": "string", "pattern": "^rfd_[0-9]+$"}
+tools = {
+    "find_order": tool("find_order", {"order_id": ORDER}, {"status": {"enum": ["open", "paid"]}}),
+    "refund": tool(
+        "refund", {"order_id": ORDER, "status": {"const": "paid"}}, {"refund_id": REFUND}
+    ),
+}
+task = read_task("refund an order", {"order_id": ORDER}, REFUND)
+
+# A program a model proposed: it refunds whatever order the lookup returns.
+checked = critique(
+    "c1 = find_order(order_id=order_id)\n"
+    "c2 = refund(order_id=order_id, status=c1.status)\n"
+    "return c2.refund_id\n",
+    tools,
+    task,
+)
+print(checked.accepted)
+print(checked.notes[0])
+```
+
+```text
+False
+refuted: c1.status <= refund.status; 'open' lies outside; test `if c1.status in refund.status:` and make the call in that branch
+```
+
 ```bash
 pip install valgebra-planning            # Python 3.11 or later
 pip install "valgebra-planning[mcp]"     # with a live MCP server's tools, and the proxy
