@@ -6,6 +6,20 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-11-18
+
+The cut a plan searches is the library's, whatever order it lists its tools in, and valgebra
+decides more of it; the user guide is published.
+
+### Added
+
+- The user guide is published at <https://ppigazzini.github.io/valgebra-planning/>, with
+  `llms.txt` and `llms-full.txt` for a reader that is not a browser, and the Python API read
+  from the package's docstrings.
+- A recipes page does six tasks end to end in Python over one tool library: a model's program
+  checked and run, a server answering outside its contract, a policy, a flow rule, a privilege
+  update and a policy that cannot fire.
+
 ### Changed
 
 - A part of a cell is asked of valgebra as its kind, each predicate it lies inside, and the
@@ -16,6 +30,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 - Schemas that compile to one validator, a description, a title or a default apart, are one
   predicate, where each spelling was one: the reference servers' 106 predicates are 37 sets,
   and their cut asks valgebra 507 relations where it asked 3,044.
+- The package's `Documentation` link and the README's links go to the published guide. Each
+  page's address is its topic, `/command-line/` and `/method/`, and an address the site has
+  served before answers with a page that sends the reader on.
+- The package requires valgebra 0.0.29 and below 0.0.30, and valgebra-jsonschema 0.0.2 and
+  below 0.0.3, whose releases change no answer of valgebra 0.0.28 and valgebra-jsonschema
+  0.0.1.
 
 ### Fixed
 
@@ -63,5 +83,6 @@ All notable changes to valgebra-planning are recorded here. The format follows
   on synthetic libraries of 8 to 256 tools the cut holds 5 predicates and 12 cells at every
   size.
 
-[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/ppigazzini/valgebra-planning/releases/tag/v0.0.1

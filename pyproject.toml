@@ -1,6 +1,6 @@
 [project]
 name = "valgebra-planning"
-version = "0.0.1"
+version = "0.0.2"
 description = "Plans of tool calls proven well-typed for every output the tool contracts admit, decided by valgebra's sets."
 readme = "README.md"
 license = "MIT OR Apache-2.0"
@@ -22,10 +22,10 @@ classifiers = [
 dependencies = [
     # The decision procedure every proof here rests on. Pre-alpha, and a 0.0.x minor is a
     # breaking release, so pinned below the next minor: the range moves with each release.
-    "valgebra>=0.0.28,<0.0.29",
+    "valgebra>=0.0.29,<0.0.30",
     # JSON Schema and MCP tool listings read into valgebra's sets. Pre-alpha as valgebra is,
     # so pinned below its next minor.
-    "valgebra-jsonschema>=0.0.1,<0.0.2",
+    "valgebra-jsonschema>=0.0.2,<0.0.3",
 ]
 
 [project.optional-dependencies]
