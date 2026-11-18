@@ -68,5 +68,5 @@ or [the recipes](recipes.md); [the method](method.md) is what every answer means
 The site serves [`llms.txt`](https://ppigazzini.github.io/valgebra-planning/llms.txt), a manifest
 of its pages, and [`llms-full.txt`](https://ppigazzini.github.io/valgebra-planning/llms-full.txt),
 their full text, for a reader that is not a browser. The developer pages under `docs/dev/` are not
-published: how a version reaches PyPI, `docs/dev/releasing.md`, and the rules for every text,
-`docs/dev/writing.md`.
+published: [how a version reaches PyPI](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/dev/releasing.md), and
+[the rules for every text](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/dev/writing.md).

@@ -6,8 +6,8 @@ description: Tasks done end to end over tool listings in hand -- a model's progr
 
 Each recipe is one task done end to end in Python, over tool listings already in hand as a
 server's `tools/list` returns them, and each says what it cannot do. Each block runs as written
-and prints the text that follows it. The command line for the same steps is
-[command-line.md](command-line.md)'s, and what each answer means is [method.md](method.md)'s.
+and prints the text that follows it. The same steps have [a command line](command-line.md), and
+what each answer means is [the method](method.md)'s.
 
 ## A model's program, checked before it runs
 
@@ -137,7 +137,7 @@ rests on: an `open` order lies outside `refund`'s `status`, and a total of `0` o
 `amount_cents`. The second tests each value into the argument it fills and escalates every other
 order, so every link is proven, and `run` checks each argument record and result again as the
 calls are made. `codemode.repair` runs the same loop with any callable from the last critique to
-a program as the model ([code-mode.md](code-mode.md)).
+a program as the model ([code mode](code-mode.md)).
 
 **The goal is the specification.** `plan` finds the shallowest program whose every path returns
 inside the goal, and for this task that is to escalate every order: a goal admitting a ticket
@@ -383,7 +383,7 @@ admits any string takes any string. **Provenance is a reference here, and an ass
 proxy.** The critic reads where each value of a program came from; `valgebra-planning proxy`
 sees no program, reads a value's source by its equality with what a source returned, and holds
 against no attacker that adapts
-([code-mode.md](code-mode.md#the-proxy-for-an-agent-whose-program-is-not-seen)).
+([the proxy](code-mode.md#the-proxy-for-an-agent-whose-program-is-not-seen)).
 
 ## A privilege policy update
 
@@ -419,7 +419,7 @@ refund: expansion, allowing {"amount_cents": 15968}
 A narrowing can be applied without asking, and an expansion needs approval, as Progent has it.
 `valgebra-planning privileges old.json new.json` prints the same lines and exits 0 only when
 every tool narrows, so a policy file under review gates its own change
-([command-line.md](command-line.md#compare-two-privilege-policies)); `privilege.as_policy` holds a
+([compare two privilege policies](command-line.md#compare-two-privilege-policies)); `privilege.as_policy` holds a
 program to a policy as the planner, the verifier and the runner hold any other.
 
 **A condition reads only the arguments a call passes,** as Progent's check does, so a call
@@ -479,7 +479,7 @@ policy a refund is approved first: no transition that can fire reaches a bad or 
 ```
 
 `valgebra-planning check` prints these findings for a library directory, an undecided one marked
-so, and exits 1 when it finds one ([command-line.md](command-line.md#check-a-library)). A value drawn
+so, and exits 1 when it finds one ([check a library](command-line.md#check-a-library)). A value drawn
 from a schema is tried first, a member found proving a set inhabited, and valgebra is asked only
 where none is.
 

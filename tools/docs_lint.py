@@ -17,10 +17,12 @@ The rules, and what each costs a reader when it breaks:
   the package's page on PyPI, where none resolves.
 * **A link from the site into the developer set.** `mkdocs.yml` excludes `docs/dev/`, so a
   published page linking there resolves in the tree and answers 404 on the site; a published
-  page names such a page by its path instead.
+  page links such a page by its GitHub address instead.
+* **A link whose text is a page's file name,** `[method.md](method.md)`, in every tracked
+  `.md`: a link says what the page holds.
 * **The llms.txt manifest.** A page in the site's `nav` that the `llmstxt` sections of
-  `mkdocs.yml` do not name fails, and the reverse; so does a manifest line whose summary is not
-  its page's `description:`.
+  `mkdocs.yml` do not name fails, and the reverse, and so does a manifest out of the nav's
+  order or a line whose summary is not its page's `description:`.
 * **A British spelling,** in every tracked text file and its path, prose, code and names
   alike, and in a commit message.
 * **A word stating what the tree was,** on every tracked page, in every comment and
@@ -217,6 +219,18 @@ def strip_code_spans(line: str) -> str:
     return "".join(out)
 
 
+#: A link whose text is a file name or a path to a Markdown page, as `[method.md](method.md)`.
+FILE_NAMED = re.compile(r"\[`?([\w./-]+\.md)`?\]\(")
+
+
+def link_text_problems(line: str) -> list[str]:
+    """Return one message per link whose text is a page's file name rather than its topic."""
+    return [
+        f"link text names a file; say what the page holds -> [{name}]"
+        for name in FILE_NAMED.findall(line)
+    ]
+
+
 def link_problems(path: Path, line: str) -> list[str]:
     """Return one message per dead link on ``line``, and per relative one in the README."""
     problems: list[str] = []
@@ -231,8 +245,8 @@ def link_problems(path: Path, line: str) -> list[str]:
             problems.append(f"dead link -> {target}")
         elif _on_the_site(path) and _unpublished(path.parent / target):
             problems.append(
-                f"link leaves the site, where docs/dev/ is not published; name the page by its"
-                f" path -> {target}"
+                f"link leaves the site, where docs/dev/ is not published; link the page by its"
+                f" GitHub address -> {target}"
             )
     return problems
 
@@ -306,6 +320,7 @@ def check_markdown(path: Path, text: str) -> list[str]:
         problems.extend(f"{n}: {why}" for why in link_problems(path, raw))
         if in_fence:
             continue
+        problems.extend(f"{n}: {why}" for why in link_text_problems(raw))
         line = strip_code_spans(raw)
         if line.count("$") % 2:
             problems.append(f"{n}: odd number of $ -- the whole line stops rendering")

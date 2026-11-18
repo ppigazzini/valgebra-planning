@@ -2,13 +2,13 @@
 
 What the method rests on, and which code each result holds up. A citation here is a claim
 that a named item of the package exists because of a numbered result, not a reading list:
-[references.md](../references.md) is the list of works, and this page is the account of
+[the works cited](../references.md) is the list of works, and this page is the account of
 what in `valgebra_planning` each one supports, and of the tests that fail when the account is
 false. valgebra's own theory, the sets, the decision procedure and its bounds, is valgebra's
 page; this one starts where a set is a predicate a plan reads.
 
 A citation is a key and a place, `(Cimatti et al. 2003, Def. 2.11)`, as
-[writing.md](writing.md#citing-a-paper) says, and the place is the number the copy on the
+[the rule for citing a paper](writing.md#citing-a-paper) says, and the place is the number the copy on the
 references page prints. A work cited only by a user page, for what an agent faces or for a
 pattern this package follows, is on the references page alone: no code rests on it.
 

@@ -35,7 +35,7 @@ report here that turns out to be one moves there.
   wrong one.
 - **A mined type.** It is an assumption: the verifier reads none, and a plan names each binding
   that rests on one.
-- **A limit [`docs/method.md`](docs/method.md#limits) states**, such as a policy carrying
+- **A limit [the method](docs/method.md#limits) states**, such as a policy carrying
   no value between calls, or a run with `enforce=False`, which records a break and goes on: a
   diagnosis, never a guard.
 - **A program refused that would have been safe.** It is a defect to report as an issue.

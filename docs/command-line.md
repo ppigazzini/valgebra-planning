@@ -5,7 +5,7 @@ description: Plan a library's tasks, critique a program, run one against a live 
 # Using valgebra-planning
 
 How to plan the tasks of a tool library, or check a program written for one, from the command
-line. What each answer means is [method.md](method.md)'s.
+line. What each answer means is [the method](method.md)'s.
 
 ## A library
 
@@ -66,7 +66,7 @@ uv run valgebra-planning check examples/parcels
 ```
 
 lists every specification in the library that holds vacuously, as
-[method.md](method.md#specifications-that-hold-vacuously) defines them: a goal no value or
+[the method](method.md#specifications-that-hold-vacuously) defines them: a goal no value or
 every value meets, a policy transition that never fires, a policy that can never be violated, a
 flow rule that lets nothing or everything through, a rule no task is held to. A finding valgebra
 leaves undecided is marked so. The exit status is 1 when it finds one.

@@ -190,6 +190,13 @@ def test_a_published_page_does_not_link_into_the_developer_set() -> None:
     assert not docs_lint.link_problems(developer, "see [the release](releasing.md)")
 
 
+def test_a_link_says_what_the_page_holds() -> None:
+    assert docs_lint.link_text_problems("see [method.md](method.md#limits)")
+    assert docs_lint.link_text_problems("see [`docs/dev/writing.md`](docs/dev/writing.md)")
+    assert not docs_lint.link_text_problems("see [the method](method.md)")
+    assert not docs_lint.link_text_problems("see [`llms.txt`](https://example.com/llms.txt)")
+
+
 def test_the_llms_manifest_is_held_to_the_nav_and_the_descriptions(tmp_path: Path) -> None:
     (tmp_path / "a.md").write_text("---\ndescription: The first page.\n---\n")
     (tmp_path / "b.md").write_text("---\ndescription: The second page.\n---\n")

@@ -5,8 +5,8 @@ description: The public modules, the names each promises, the two needing the mc
 # The Python API
 
 The names valgebra-planning promises a Python caller: each public module, the names its
-`__all__` holds, and the two modules that need the `mcp` extra. The command line is
-[command-line.md](command-line.md)'s, and what each answer means is [method.md](method.md)'s.
+`__all__` holds, and the two modules that need the `mcp` extra. [The command line](command-line.md)
+has a page of its own, and what each answer means is [the method](method.md)'s.
 
 ## Import a name from its module
 

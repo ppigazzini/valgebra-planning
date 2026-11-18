@@ -156,7 +156,9 @@ and `llms.txt` are the index. The manifest's sections repeat the nav in its orde
 under `docs/`, so a page added to the nav needs no other edit. A page that moves leaves an
 entry under `redirects` in `mkdocs.yml`, so every address the site has served still answers.
 
-Link with relative paths, except in `README.md`. The README is also the package's page on
+A link's text says what the page holds, as "the method" does for the method page, and never
+the page's file name, which the lint refuses as link text. Link with relative paths, except in
+`README.md`. The README is also the package's page on
 PyPI, which resolves no relative link, so it links into this tree by the absolute address of
 `main`, `https://github.com/ppigazzini/valgebra-planning/blob/main/` and the path. The lint
 fails on a dead link of either kind and on a relative link in the README. The site build checks
@@ -203,7 +205,7 @@ implementation.
 **Cite a work by its key**: the surnames of its one or two authors, or its first author's
 with `et al.`, then the year, as in `Graf and Saidi 1997` and `Cimatti et al. 2003`. The
 system a work names may lead the key, as in `(SyPet, Feng et al. 2017)`. The key is the bold
-lead of an entry on [references.md](../references.md), the one place a work's authors,
+lead of an entry on [the works cited](../references.md), the one place a work's authors,
 title, venue and identifier are written.
 
 **In the package, a citation names the result by its place.** After the key comes the place
@@ -218,7 +220,7 @@ a step rests on. A user page may cite a work whole.
 function alike, at the clause the result supports and before its punctuation. A step that
 departs from the result cites it and names the departure beside it.
 
-**The theory page names the item.** [theory.md](theory.md) states each result the package
+**The theory page names the item.** [It](theory.md) states each result the package
 rests on as a claim: an `IMPLEMENTED-BY:` line names the items citing it and a `HELD-BY:` line
 the tests that fail when it is false. A citation written into the package is written into that
 page in the same change.
