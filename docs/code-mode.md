@@ -6,8 +6,8 @@ description: A model's program proven before it runs and run so the proof holds,
 
 How a program a model writes in Python against typed tool stubs is proven before it runs and
 run so that the proof holds, and what the proxy holds for an agent whose program is never seen.
-The command line for the same steps is [00-using.md](00-using.md)'s; what a link means is
-[01-method.md](01-method.md)'s.
+The command line for the same steps is [command-line.md](command-line.md)'s; what a link means is
+[method.md](method.md)'s.
 
 ## Stubs, critique, run
 
@@ -106,7 +106,7 @@ each call as it comes. What it holds is of two kinds.
   reference, and a heuristic in the proxy.
 
 The proxy serves one agent over stdio, and a call its server answers by asking for input is
-answered with a tool error ([01-method.md](01-method.md#limits)).
+answered with a tool error ([method.md](method.md#limits)).
 
 ## Limits
 

@@ -18,13 +18,13 @@ a schema in the companion; neither is worked around here by a guess.
 
 | Changing | Read |
 |---|---|
-| what a program, a link or a rule means | [docs/01-method.md](docs/01-method.md) |
-| a public name, or a module's `__all__` | [docs/02-api.md](docs/02-api.md) |
-| a published count | [docs/04-results.md](docs/04-results.md), and the study file its command checks |
-| a citation | [docs/11-references.md](docs/11-references.md) |
-| code that implements a paper's result | [docs/dev/09-theory.md](docs/dev/09-theory.md), [docs/dev/10-writing.md](docs/dev/10-writing.md#citing-a-paper) |
-| a release, or a dependency's floor | [docs/dev/05-releasing.md](docs/dev/05-releasing.md) |
-| any prose at all: a page, a comment, a docstring, a commit message | [docs/dev/10-writing.md](docs/dev/10-writing.md) |
+| what a program, a link or a rule means | [docs/method.md](docs/method.md) |
+| a public name, or a module's `__all__` | [docs/api.md](docs/api.md) |
+| a published count | [docs/results.md](docs/results.md), and the study file its command checks |
+| a citation | [docs/references.md](docs/references.md) |
+| code that implements a paper's result | [docs/dev/theory.md](docs/dev/theory.md), [docs/dev/writing.md](docs/dev/writing.md#citing-a-paper) |
+| a release, or a dependency's floor | [docs/dev/releasing.md](docs/dev/releasing.md) |
+| any prose at all: a page, a comment, a docstring, a commit message | [docs/dev/writing.md](docs/dev/writing.md) |
 
 ## Setup
 
@@ -119,7 +119,7 @@ instead.
   and this package never imports valplan.
 
 - **A paper is cited, never committed.** A third party's PDF does not enter the tree: the work
-  goes on [docs/11-references.md](docs/11-references.md) with its DOI or arXiv identifier, and
+  goes on [docs/references.md](docs/references.md) with its DOI or arXiv identifier, and
   the text cites its key.
 
 - **Write American English, names included.** `behavior`, `normalize`, `modeled`, `labeled`,
@@ -140,7 +140,7 @@ no `Generated with` line and no other trailer, and names no tool or agent that t
 commit-msg hook and `tools/docs_lint.py --commits` refuse any trailer git parses and any
 attribution line.
 
-The form is [docs/dev/10-writing.md](docs/dev/10-writing.md#commit-messages)'s: `scope: subject`, a
+The form is [docs/dev/writing.md](docs/dev/writing.md#commit-messages)'s: `scope: subject`, a
 body wrapped at 88 columns describing the system as it stands after the change, in
 authoritative present tense, with its numbers. No history, no meta, and no reference to an
 untracked file. The same lint holds the form.

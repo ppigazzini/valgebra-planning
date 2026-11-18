@@ -45,7 +45,7 @@ def test_citations_and_the_references_page_are_held_equal() -> None:
     page = "- **Graf and Saidi 1997.** S. Graf, H. Saidi.\n- **Feng et al. 2017.** Y. Feng.\n"
     texts = {
         docs_lint.REFERENCES: page,
-        "docs/01-method.md": "abstraction (Graf and Saidi 1997), as in Guo et al. 2022\n",
+        "docs/method.md": "abstraction (Graf and Saidi 1997), as in Guo et al. 2022\n",
     }
     problems = docs_lint.check_citations(texts)
     assert len(problems) == 2
@@ -133,13 +133,13 @@ def test_a_place_is_read_where_a_copy_of_its_work_prints_it(tmp_path: Path) -> N
 def test_the_readme_links_into_the_tree_by_address() -> None:
     readme = docs_lint.ROOT / "README.md"
     main = "https://github.com/ppigazzini/valgebra-planning/blob/main/"
-    assert docs_lint.check_markdown(readme, f"[m]({main}docs/01-method.md)\n") == []
+    assert docs_lint.check_markdown(readme, f"[m]({main}docs/method.md)\n") == []
     [dead] = docs_lint.check_markdown(readme, f"[m]({main}docs/99-none.md)\n")
     assert "dead link" in dead
-    [relative] = docs_lint.check_markdown(readme, "[m](docs/01-method.md)\n")
+    [relative] = docs_lint.check_markdown(readme, "[m](docs/method.md)\n")
     assert "PyPI" in relative
     page = docs_lint.ROOT / "docs" / "README.md"
-    assert docs_lint.check_markdown(page, "[m](01-method.md)\n") == []
+    assert docs_lint.check_markdown(page, "[m](method.md)\n") == []
 
 
 def test_a_message_in_the_form_passes() -> None:
@@ -183,11 +183,11 @@ def test_the_hook_reads_the_message_git_keeps(tmp_path: Path) -> None:
 
 
 def test_a_published_page_does_not_link_into_the_developer_set() -> None:
-    page = docs_lint.ROOT / "docs" / "00-using.md"
-    assert docs_lint.link_problems(page, "see [the release](dev/05-releasing.md)")
-    assert not docs_lint.link_problems(page, "see [the method](01-method.md)")
+    page = docs_lint.ROOT / "docs" / "command-line.md"
+    assert docs_lint.link_problems(page, "see [the release](dev/releasing.md)")
+    assert not docs_lint.link_problems(page, "see [the method](method.md)")
     developer = docs_lint.ROOT / "docs" / "dev" / "README.md"
-    assert not docs_lint.link_problems(developer, "see [the release](05-releasing.md)")
+    assert not docs_lint.link_problems(developer, "see [the release](releasing.md)")
 
 
 def test_the_llms_manifest_is_held_to_the_nav_and_the_descriptions(tmp_path: Path) -> None:

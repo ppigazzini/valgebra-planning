@@ -1,4 +1,4 @@
-r"""Hold every text the tree writes to the rules of `docs/dev/10-writing.md`.
+r"""Hold every text the tree writes to the rules of `docs/dev/writing.md`.
 
     uv run --no-sync python tools/docs_lint.py                    # every tracked file
     uv run --no-sync python tools/docs_lint.py README.md          # the named files
@@ -40,7 +40,7 @@ The rules, and what each costs a reader when it breaks:
   the package, or an item citing none of the works its claim cites; an item citing a work
   that no claim naming it cites; a claim with no `IMPLEMENTED-BY:` or `HELD-BY:` line; and a
   `HELD-BY:` name that is no test.
-* **A commit message off the form** `docs/dev/10-writing.md` gives, or carrying a trailer:
+* **A commit message off the form** `docs/dev/writing.md` gives, or carrying a trailer:
   any line git parses as one, and an attribution line anywhere.
 
 This script and its test spell the words to forbid them, and are exempt from the rules
@@ -65,8 +65,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "valgebra_planning"
-REFERENCES = "docs/11-references.md"
-THEORY = "docs/dev/09-theory.md"
+REFERENCES = "docs/references.md"
+THEORY = "docs/dev/theory.md"
 #: The text renderings of the paper shelf, which only the author's clone holds.
 SHELF = ROOT / "__DEV" / "papers" / "text"
 
@@ -176,7 +176,7 @@ BODY_WIDTH = 88
 
 #: The files that spell the words to forbid them.
 SPELLERS = frozenset({"tools/docs_lint.py", "tests/test_docs_lint.py"})
-HISTORY_EXEMPT = SPELLERS | {"CHANGELOG.md", "docs/dev/10-writing.md"}
+HISTORY_EXEMPT = SPELLERS | {"CHANGELOG.md", "docs/dev/writing.md"}
 INTERNAL_EXEMPT = SPELLERS | {".gitignore"}
 
 
@@ -518,7 +518,7 @@ def claims(page: str) -> list[Claim]:
 
 
 def check_theory(texts: dict[str, str]) -> list[str]:
-    """Hold the theory page and the package to each other, as `docs/dev/10-writing.md` says."""
+    """Hold the theory page and the package to each other, as `docs/dev/writing.md` says."""
     page = texts.get(THEORY)
     if page is None:
         return [f"{THEORY}: missing, so no claim names the code citing a result"]

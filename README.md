@@ -45,17 +45,17 @@ pip install "valgebra-planning[mcp]"     # with a live MCP server's tools, and t
 | serve an MCP proxy holding every call to the contracts, policies and flow rules | `valgebra_planning/proxy.py` |
 | give a model typed stubs, and repair its program with the critique | `valgebra_planning/codemode.py` |
 
-[`docs/00-using.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/00-using.md)
+[`docs/command-line.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/command-line.md)
 shows the command line,
-[`docs/02-api.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/02-api.md)
+[`docs/api.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/api.md)
 the Python names each module promises,
-[`docs/03-code-mode.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/03-code-mode.md)
+[`docs/code-mode.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/code-mode.md)
 how a model's program is proven before it runs,
-[`docs/19-recipes.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/19-recipes.md)
+[`docs/recipes.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/recipes.md)
 tasks done end to end in Python, a policy, a flow rule and a privilege update among them,
-[`docs/01-method.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/01-method.md)
+[`docs/method.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/method.md)
 states the method and its limits, and
-[`docs/04-results.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/04-results.md)
+[`docs/results.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/results.md)
 the studies: on a parcel-returns library of ten tools, eight tasks get programs whose every
 link valgebra proves, from 3 of 3 to 24 of 24.
 

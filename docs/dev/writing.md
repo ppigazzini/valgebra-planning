@@ -130,17 +130,17 @@ the code lands, and nobody knows which claim broke better than the person who br
 |---|---|
 | [`README.md`](../../README.md) | warm: its module table moves with a module |
 | [`AGENTS.md`](../../AGENTS.md) | warm: a gate command added there is a workflow step |
-| [the site's home](../README.md) | warm: its example runs in the suite, and its index moves with a page added |
-| [00-using.md](../00-using.md) | hot: a command, an option or a file of a library is an edit there |
-| [01-method.md](../01-method.md) | hot: a rule, a cut or a search change is an edit there |
-| [02-api.md](../02-api.md) | hot: a public name added, removed or retyped is an edit there |
-| [03-code-mode.md](../03-code-mode.md) | hot: its example runs in the suite, and a change to the critic, the runner or the proxy is an edit there |
-| [04-results.md](../04-results.md) | hot: every count moves with its study |
-| [19-recipes.md](../19-recipes.md) | hot: its examples run in the suite and print what the page shows, so a change to a critique, a plan, a run or a finding is an edit there |
-| [12-changelog.md](../12-changelog.md) | warm: it serves `CHANGELOG.md`, and its versioning rules move with a release's |
+| [the site's home](../index.md) | warm: its example runs in the suite, and its index moves with a page added |
+| [command-line.md](../command-line.md) | hot: a command, an option or a file of a library is an edit there |
+| [method.md](../method.md) | hot: a rule, a cut or a search change is an edit there |
+| [api.md](../api.md) | hot: a public name added, removed or retyped is an edit there |
+| [code-mode.md](../code-mode.md) | hot: its example runs in the suite, and a change to the critic, the runner or the proxy is an edit there |
+| [results.md](../results.md) | hot: every count moves with its study |
+| [recipes.md](../recipes.md) | hot: its examples run in the suite and print what the page shows, so a change to a critique, a plan, a run or a finding is an edit there |
+| [changelog.md](../changelog.md) | warm: it serves `CHANGELOG.md`, and its versioning rules move with a release's |
 | `mkdocs.yml` | warm: a page added is a line of its `nav` and of its `llms.txt` sections, the second the page's `description:` |
 | this page | cold |
-| [11-references.md](../11-references.md) | cold: a citation added in the code adds its work there |
+| [references.md](../references.md) | cold: a citation added in the code adds its work there |
 
 Cold does not mean unowned. It means the claim outlives a release, so when it is wrong it has
 usually been wrong for a long time.
@@ -206,7 +206,7 @@ implementation.
 **Cite a work by its key**: the surnames of its one or two authors, or its first author's
 with `et al.`, then the year, as in `Graf and Saidi 1997` and `Cimatti et al. 2003`. The
 system a work names may lead the key, as in `(SyPet, Feng et al. 2017)`. The key is the bold
-lead of an entry on [11-references.md](../11-references.md), the one place a work's authors,
+lead of an entry on [references.md](../references.md), the one place a work's authors,
 title, venue and identifier are written.
 
 **In the package, a citation names the result by its place.** After the key comes the place
@@ -221,7 +221,7 @@ a step rests on. A user page may cite a work whole.
 function alike, at the clause the result supports and before its punctuation. A step that
 departs from the result cites it and names the departure beside it.
 
-**The theory page names the item.** [09-theory.md](09-theory.md) states each result the package
+**The theory page names the item.** [theory.md](theory.md) states each result the package
 rests on as a claim: an `IMPLEMENTED-BY:` line names the items citing it and a `HELD-BY:` line
 the tests that fail when it is false. A citation written into the package is written into that
 page in the same change.

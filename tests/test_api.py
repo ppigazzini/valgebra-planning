@@ -1,4 +1,4 @@
-"""The public names: each public module's `__all__`, as `docs/02-api.md` lists it."""
+"""The public names: each public module's `__all__`, as `docs/api.md` lists it."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import valgebra_planning
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "valgebra_planning"
-PAGE = ROOT / "docs" / "02-api.md"
+PAGE = ROOT / "docs" / "api.md"
 INTERNAL = frozenset({"_valgebra", "cli"})
 ROW = re.compile(r"^\| `valgebra_planning\.(\w+)` \| (.*?) \|(.*?)\|$")
 
