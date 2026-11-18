@@ -58,7 +58,7 @@ All notable changes to valgebra-planning are recorded here. The format follows
 - The package requires valgebra 0.0.28 and below 0.0.29 and valgebra-jsonschema 0.0.1 and
   below 0.0.2, since a `0.0.x` minor of either is a breaking release here, and Python 3.11 or
   later; the `mcp` extra takes the MCP SDK 2.3 and below 3.
-- Measured on this release, each figure in [the results page](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/results.md): on the
+- Measured on this release, each figure in [the results page](https://ppigazzini.github.io/valgebra-planning/results/): on the
   parcel library's eight tasks every link of every program is proven, 3 of 3 to 24 of 24, and
   on synthetic libraries of 8 to 256 tools the cut holds 5 predicates and 12 cells at every
   size.

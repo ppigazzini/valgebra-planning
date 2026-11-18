@@ -190,6 +190,14 @@ def test_a_published_page_does_not_link_into_the_developer_set() -> None:
     assert not docs_lint.link_problems(developer, "see [the release](releasing.md)")
 
 
+def test_a_link_to_the_site_names_a_published_page_and_anchor() -> None:
+    site = docs_lint.SITE
+    for good in ("", "method/", "method/#limits", "llms.txt"):
+        assert not docs_lint.site_link_problems(f"[x]({site}{good})"), good
+    for bad in ("nowhere/", "method/#nowhere", "dev/writing/", "01-method/"):
+        assert docs_lint.site_link_problems(f"[x]({site}{bad})"), bad
+
+
 def test_a_link_says_what_the_page_holds() -> None:
     assert docs_lint.link_text_problems("see [method.md](method.md#limits)")
     assert docs_lint.link_text_problems("see [`docs/dev/writing.md`](docs/dev/writing.md)")

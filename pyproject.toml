@@ -37,7 +37,7 @@ valgebra-planning = "valgebra_planning.cli:main"
 
 [project.urls]
 Repository = "https://github.com/ppigazzini/valgebra-planning"
-Documentation = "https://github.com/ppigazzini/valgebra-planning/tree/main/docs"
+Documentation = "https://ppigazzini.github.io/valgebra-planning/"
 Changelog = "https://github.com/ppigazzini/valgebra-planning/blob/main/CHANGELOG.md"
 Issues = "https://github.com/ppigazzini/valgebra-planning/issues"
 

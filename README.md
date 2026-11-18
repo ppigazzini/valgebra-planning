@@ -45,12 +45,12 @@ pip install "valgebra-planning[mcp]"     # with a live MCP server's tools, and t
 | serve an MCP proxy holding every call to the contracts, policies and flow rules | `valgebra_planning/proxy.py` |
 | give a model typed stubs, and repair its program with the critique | `valgebra_planning/codemode.py` |
 
-The guide has [the command line](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/command-line.md),
-[the Python names each module promises](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/api.md),
-[how a model's program is proven before it runs](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/code-mode.md),
-[tasks done end to end in Python](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/recipes.md), a policy, a flow rule and a privilege
-update among them, [the method and its limits](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/method.md), and
-[the studies](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/results.md): on a parcel-returns library of ten tools, eight tasks get programs whose every
+The guide has [the command line](https://ppigazzini.github.io/valgebra-planning/command-line/),
+[the Python names each module promises](https://ppigazzini.github.io/valgebra-planning/api/),
+[how a model's program is proven before it runs](https://ppigazzini.github.io/valgebra-planning/code-mode/),
+[tasks done end to end in Python](https://ppigazzini.github.io/valgebra-planning/recipes/), a policy, a flow rule and a privilege
+update among them, [the method and its limits](https://ppigazzini.github.io/valgebra-planning/method/), and
+[the studies](https://ppigazzini.github.io/valgebra-planning/results/): on a parcel-returns library of ten tools, eight tasks get programs whose every
 link valgebra proves, from 3 of 3 to 24 of 24.
 
 ## Prior work

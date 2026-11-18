@@ -12,8 +12,9 @@ The rules, and what each costs a reader when it breaks:
   a range split across two spans renders the second as source text. Read on every tracked
   `.md`, outside fenced blocks and inline code spans, since a page documenting the rules
   quotes the broken forms.
-* **A dead link,** on every tracked `.md`: a relative one, or an address of this tree's
-  `main` naming a path it does not hold. **A relative link in the README**, which is also
+* **A dead link,** on every tracked `.md`: a relative one, an address of this tree's `main`
+  naming a path it does not hold, or an address on the site naming no page it publishes or no
+  anchor that page's headings render to. **A relative link in the README**, which is also
   the package's page on PyPI, where none resolves.
 * **A link from the site into the developer set.** `mkdocs.yml` excludes `docs/dev/`, so a
   published page linking there resolves in the tree and answers 404 on the site; a published
@@ -85,10 +86,16 @@ RULES: tuple[tuple[str, str], ...] = (
 )
 FENCE = re.compile(r"^\s*(```|~~~)")
 LINK = re.compile(r"\[[^\]]*\]\(([^)#\s]+)(?:#[^)\s]*)?\)")
-#: The README is also the package's page on PyPI, which resolves no relative link: it links
-#: into this tree by the address of `main`, and that address names a path the tree must hold.
+#: The README is also the package's page on PyPI, which resolves no relative link: it links a
+#: published page by its address on the site, and any other file by the address of `main`. Each
+#: address names a page the site publishes, or a path the tree holds.
 README = ROOT / "README.md"
 TREE = re.compile(r"https://github\.com/ppigazzini/valgebra-planning/(?:blob|tree)/main/(.+)")
+SITE = "https://ppigazzini.github.io/valgebra-planning/"
+SITE_LINK = re.compile(re.escape(SITE) + r"([^)#\s]*)(?:#([^)\s]*))?\)")
+#: What the site's build writes, which no page in the tree stands for.
+SITE_GENERATED = frozenset({"llms.txt", "llms-full.txt"})
+HEADING = re.compile(r"^#{1,6} (.+?) *#*$")
 
 #: A British word, by family: `-our`, `-ise` with its inflections and nouns, `-yse`,
 #: `-re`, `-ence`, `-ogue`, `-ement`, a doubled `l` before a suffix, and a few words of
@@ -231,6 +238,38 @@ def link_text_problems(line: str) -> list[str]:
     ]
 
 
+def _slug(heading: str) -> str:
+    """Give the anchor MkDocs renders a heading to, as Python-Markdown's `toc` slugifies it."""
+    text = re.sub(r"[^\w\s-]", "", heading).strip().lower()
+    return re.sub(r"[-\s]+", "-", text)
+
+
+def _anchors(page: Path) -> set[str]:
+    """Return the anchors of the headings of ``page``, outside its code blocks."""
+    anchors, in_fence = set(), False
+    for line in page.read_text(encoding="utf-8").splitlines():
+        if FENCE.match(line):
+            in_fence = not in_fence
+        elif not in_fence and (match := HEADING.match(line)):
+            anchors.add(_slug(match[1]))
+    return anchors
+
+
+def site_link_problems(line: str) -> list[str]:
+    """Return one message per link to the site naming no page it publishes, or no anchor of it."""
+    problems: list[str] = []
+    for address, anchor in SITE_LINK.findall(line):
+        name = address.rstrip("/")
+        if name in SITE_GENERATED:
+            continue
+        page = ROOT / "docs" / f"{name or 'index'}.md"
+        if not page.is_file() or not _on_the_site(page):
+            problems.append(f"dead link -> {SITE}{address}")
+        elif anchor and anchor not in _anchors(page):
+            problems.append(f"dead anchor -> {SITE}{address}#{anchor}")
+    return problems
+
+
 def link_problems(path: Path, line: str) -> list[str]:
     """Return one message per dead link on ``line``, and per relative one in the README."""
     problems: list[str] = []
@@ -318,6 +357,7 @@ def check_markdown(path: Path, text: str) -> list[str]:
             in_fence = not in_fence
             continue
         problems.extend(f"{n}: {why}" for why in link_problems(path, raw))
+        problems.extend(f"{n}: {why}" for why in site_link_problems(raw))
         if in_fence:
             continue
         problems.extend(f"{n}: {why}" for why in link_text_problems(raw))
