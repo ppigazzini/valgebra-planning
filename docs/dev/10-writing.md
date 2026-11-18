@@ -135,6 +135,7 @@ the code lands, and nobody knows which claim broke better than the person who br
 | [02-api.md](../02-api.md) | hot: a public name added, removed or retyped is an edit there |
 | [03-code-mode.md](../03-code-mode.md) | hot: its example runs in the suite, and a change to the critic, the runner or the proxy is an edit there |
 | [04-results.md](../04-results.md) | hot: every count moves with its study |
+| [19-recipes.md](../19-recipes.md) | hot: its examples run in the suite and print what the page shows, so a change to a critique, a plan, a run or a finding is an edit there |
 | [12-changelog.md](../12-changelog.md) | warm: it serves `CHANGELOG.md`, and its versioning rules move with a release's |
 | `mkdocs.yml` | warm: a page added is a line of its `nav` and of its `llms.txt` sections, the second the page's `description:` |
 | this page | cold |

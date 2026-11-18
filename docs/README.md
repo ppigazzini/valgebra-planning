@@ -23,6 +23,7 @@ pip install "valgebra-planning[mcp]"     # with a live MCP server's tools, and t
 |---|---|
 | [00-using.md](00-using.md) | the command line: a library's files, `plan`, `critique`, `stubs`, `check`, `privileges`, `run` and `proxy`, their output and exit statuses |
 | [03-code-mode.md](03-code-mode.md) | a model's program proven before it runs and run so the proof holds, and the two kinds of check the proxy holds |
+| [19-recipes.md](19-recipes.md) | tasks done end to end in Python: a model's program checked, a server outside its contract, a policy, a flow rule, a privilege update, a policy that cannot fire |
 | [12-changelog.md](12-changelog.md) | every released version and what it changed |
 | [01-method.md](01-method.md) | contracts, the verifier, the cells, the planner, the rules a program is held to, the critic, and the limits |
 | [04-results.md](04-results.md) | the studies and the commands that check them |

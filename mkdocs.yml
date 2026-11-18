@@ -37,6 +37,7 @@ nav:
   - Getting started:
       - The command line: 00-using.md
       - Code mode: 03-code-mode.md
+      - Recipes: 19-recipes.md
   - Release notes: 12-changelog.md
   - Explanation:
       - The method: 01-method.md
@@ -106,6 +107,7 @@ plugins:
           - README.md: What valgebra-planning is, how it rests on valgebra and valgebra-jsonschema, and the index to this guide.
           - 00-using.md: Plan a library's tasks, critique a program, run one against a live server, or serve the proxy, from the command line.
           - 03-code-mode.md: A model's program proven before it runs and run so the proof holds, and the two kinds of check the proxy holds.
+          - 19-recipes.md: Tasks done end to end over tool listings in hand -- a model's program checked before it runs, a server answering outside its contract, an approval a policy requires, a notice held to the address on file, a privilege update, and a policy that cannot fire.
         Release notes:
           - 12-changelog.md: Every released version, what it changed, and what counts as a break.
         Explanation:

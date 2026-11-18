@@ -51,6 +51,8 @@ shows the command line,
 the Python names each module promises,
 [`docs/03-code-mode.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/03-code-mode.md)
 how a model's program is proven before it runs,
+[`docs/19-recipes.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/19-recipes.md)
+tasks done end to end in Python, a policy, a flow rule and a privilege update among them,
 [`docs/01-method.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/01-method.md)
 states the method and its limits, and
 [`docs/04-results.md`](https://github.com/ppigazzini/valgebra-planning/blob/main/docs/04-results.md)
