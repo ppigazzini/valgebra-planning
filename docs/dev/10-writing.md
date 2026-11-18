@@ -162,7 +162,10 @@ The renderer is strict and the failures are silent. `tools/docs_lint.py` catches
 Link with relative paths, except in `README.md`. The README is also the package's page on
 PyPI, which resolves no relative link, so it links into this tree by the absolute address of
 `main`, `https://github.com/ppigazzini/valgebra-planning/blob/main/` and the path. The lint
-fails on a dead link of either kind and on a relative link in the README.
+fails on a dead link of either kind and on a relative link in the README. The site build checks
+the published pages again: `mkdocs.yml` raises each of the builder's link and nav checks to a
+warning, which `--strict` fails on. It reports a link from a published page into `docs/dev/`
+only as information, so that rule is the lint's.
 
 ## Code comments
 
