@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGES = ("docs/index.md", "docs/api.md", "docs/code-mode.md", "docs/recipes.md")
+#: The README, the changelog and every page under `docs/`, found rather than listed, so a page
+#: added anywhere has its examples run with no edit here.
+PAGES = [
+    path.relative_to(ROOT).as_posix()
+    for path in [ROOT / "README.md", ROOT / "CHANGELOG.md", *sorted((ROOT / "docs").rglob("*.md"))]
+]
 #: A Python block, and the text block that follows it, if one does, holding what it prints.
 BLOCK = re.compile(r"```python\n(.*?)```(?:\s*```text\n(.*?)```)?", re.DOTALL)
 
@@ -20,6 +25,11 @@ def _examples() -> list[object]:
         for number, found in enumerate(BLOCK.finditer(text), 1):
             examples.append(pytest.param(found.group(1), found.group(2), id=f"{page}#{number}"))
     return examples
+
+
+def test_the_examples_are_found() -> None:
+    found = {page for page in PAGES if BLOCK.search((ROOT / page).read_text(encoding="utf-8"))}
+    assert len(found) >= 3, found
 
 
 @pytest.mark.parametrize(("source", "printed"), _examples())

@@ -130,7 +130,7 @@ plugins:
       full_output: llms-full.txt
       sections:
         Getting started:
-          - index.md: What valgebra-planning is, how it rests on valgebra and valgebra-jsonschema, and the index to this guide.
+          - index.md: What valgebra-planning is, how it rests on valgebra and valgebra-jsonschema, and where to start.
           - command-line.md: Plan a library's tasks, critique a program, run one against a live server, or serve the proxy, from the command line.
           - code-mode.md: A model's program proven before it runs and run so the proof holds, and the two kinds of check the proxy holds.
           - recipes.md: Tasks done end to end over tool listings in hand -- a model's program checked before it runs, a server answering outside its contract, an approval a policy requires, a notice held to the address on file, a privilege update, and a policy that cannot fire.

@@ -126,21 +126,11 @@ A page is **hot** when it describes code that moves, **cold** when what it descr
 does. **Change hot code, fix its page in the same commit.** A page is wrong from the moment
 the code lands, and nobody knows which claim broke better than the person who broke it.
 
-| page | temperature |
-|---|---|
-| [`README.md`](../../README.md) | warm: its module table moves with a module |
-| [`AGENTS.md`](../../AGENTS.md) | warm: a gate command added there is a workflow step |
-| [the site's home](../index.md) | warm: its example runs in the suite, and its index moves with a page added |
-| [command-line.md](../command-line.md) | hot: a command, an option or a file of a library is an edit there |
-| [method.md](../method.md) | hot: a rule, a cut or a search change is an edit there |
-| [api.md](../api.md) | hot: a public name added, removed or retyped is an edit there |
-| [code-mode.md](../code-mode.md) | hot: its example runs in the suite, and a change to the critic, the runner or the proxy is an edit there |
-| [results.md](../results.md) | hot: every count moves with its study |
-| [recipes.md](../recipes.md) | hot: its examples run in the suite and print what the page shows, so a change to a critique, a plan, a run or a finding is an edit there |
-| [changelog.md](../changelog.md) | warm: it serves `CHANGELOG.md`, and its versioning rules move with a release's |
-| `mkdocs.yml` | warm: a page added is a line of its `nav` and of its `llms.txt` sections, the second the page's `description:` |
-| this page | cold |
-| [references.md](../references.md) | cold: a citation added in the code adds its work there |
+A page is hot when its examples run in the suite, when it lists what the code defines (a
+public name, a command, an option, a rule of the method), or when it carries a count a study
+reproduces. `README.md`, `AGENTS.md`, `mkdocs.yml`, the site's home and the release notes are
+warm: they move with a module, a gate command, a page or a release. The works cited and this
+page are cold.
 
 Cold does not mean unowned. It means the claim outlives a release, so when it is wrong it has
 usually been wrong for a long time.
@@ -158,6 +148,13 @@ The renderer is strict and the failures are silent. `tools/docs_lint.py` catches
 - When wrapping prose, never start a continuation line with `+ `, `- ` or `* `.
 - No images, anywhere. A committed plot stops tracking the code that produced it and cannot
   be grepped against a study row.
+
+The nav of `mkdocs.yml` is the one list of the site's pages and their order. A page's file is
+named for its topic, never numbered, and no other page keeps a table of the pages: the sidebar
+and `llms.txt` are the index. The manifest's sections repeat the nav in its order, which
+`tools/docs_lint.py` holds, and `tests/test_doc_examples.py` runs every `python` block it finds
+under `docs/`, so a page added to the nav needs no other edit. A page that moves leaves an
+entry under `redirects` in `mkdocs.yml`, so every address the site has served still answers.
 
 Link with relative paths, except in `README.md`. The README is also the package's page on
 PyPI, which resolves no relative link, so it links into this tree by the absolute address of
