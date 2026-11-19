@@ -87,7 +87,9 @@ planner, the verifier and the runner hold a program to.
 
 With the `mcp` extra (`uv sync --extra mcp`, or `pip install "valgebra-planning[mcp]"`), `--server`
 reads the tools from a live MCP server instead of `tools.json`: a URL connects over Streamable
-HTTP, anything else is a command starting a server over stdio.
+HTTP, anything else is a command starting a server over stdio. The command is split as a POSIX
+shell splits it, on Windows as well: a backslash escapes the character after it, so a path
+holding one, or a space, goes in single quotes, as `shlex.quote` writes it.
 
 ```bash
 uv run valgebra-planning plan examples/parcels --task "return a parcel" \

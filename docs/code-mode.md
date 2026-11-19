@@ -15,6 +15,7 @@ Run from the repository root:
 
 ```python
 import asyncio
+import shlex
 import sys
 from pathlib import Path
 
@@ -46,7 +47,8 @@ print(second.accepted)
 
 
 async def ran():
-    async with connect(f"{sys.executable} tests/parcel_server.py") as client:
+    # The command is split as a POSIX shell splits it, so the interpreter's path is quoted.
+    async with connect(shlex.join([sys.executable, "tests/parcel_server.py"])) as client:
         inputs = {"tracking": "AB123456789IT"}
         return await run_on_server(second.program, library.tools, settle.task, inputs, client)
 

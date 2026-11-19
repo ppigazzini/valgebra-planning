@@ -32,7 +32,12 @@ __all__ = ["connect", "read_server", "run_on_server"]
 
 
 def connect(server: str) -> Client:
-    """Return a client for a server: a URL is Streamable HTTP, anything else a stdio command."""
+    """Return a client for a server: a URL is Streamable HTTP, anything else a stdio command.
+
+    The command is split as a POSIX shell splits it (``shlex.split``), on Windows as well: a
+    backslash escapes the character after it, so a Windows path is passed quoted, as
+    ``shlex.quote`` quotes it, the way pre-commit quotes the interpreter in a hook's ``entry``.
+    """
     if server.startswith(("http://", "https://")):
         return Client(server)
     command, *arguments = shlex.split(server)

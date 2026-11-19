@@ -20,7 +20,8 @@ narrows the old for every tool it names. ``proxy`` serves an MCP server over std
 ``stubs`` prints the tools as typed Python stubs, their schemas in their docstrings, for a model
 to write a program against.
 ``SERVER`` is a URL or a command starting a stdio server; its tools replace ``tools.json``, and
-it needs the ``mcp`` extra. With ``--json`` each prints one JSON document.
+it needs the ``mcp`` extra. A command is split as a POSIX shell splits it, on Windows as well, so
+a path holding a backslash or a space is quoted. With ``--json`` each prints one JSON document.
 """
 
 from __future__ import annotations

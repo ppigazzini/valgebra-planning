@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -64,7 +65,8 @@ def test_a_program_the_reader_refuses_exits_2(
     assert str(bad) in capsys.readouterr().err
 
 
-SERVER = f"{sys.executable} {Path(__file__).parent / 'parcel_server.py'}"
+# `--server` is split as a POSIX shell splits it, so the interpreter's path is quoted.
+SERVER = shlex.join([sys.executable, str(Path(__file__).parent / "parcel_server.py")])
 
 
 def _command(*argv: str) -> subprocess.CompletedProcess[str]:

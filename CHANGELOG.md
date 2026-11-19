@@ -6,6 +6,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The live-server example on the code mode page quotes the interpreter's path, so it runs on
+  Windows, and the command line's `--server` and `connect` state how a command is split: as a
+  POSIX shell splits it, on Windows as well, so a path holding a backslash or a space is quoted.
+
 ### Changed
 
 - The package requires valgebra 0.0.30 and valgebra-jsonschema 0.0.3 or later, with no upper
