@@ -6,17 +6,22 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
-### Fixed
+## [0.0.4] - 2026-11-19
 
-- The live-server example on the code mode page quotes the interpreter's path, so it runs on
-  Windows, and the command line's `--server` and `connect` state how a command is split: as a
-  POSIX shell splits it, on Windows as well, so a path holding a backslash or a space is quoted.
+A release of the dependency range: the planner is 0.0.3's, and every published count is the one
+0.0.3 recorded, read again on valgebra 0.0.30 and valgebra-jsonschema 0.0.3.
 
 ### Changed
 
 - The package requires valgebra 0.0.30 and valgebra-jsonschema 0.0.3 or later, with no upper
   bound on either: a release of either installs beside this package the day it is published,
   with no release of this package.
+
+### Fixed
+
+- The live-server example on the code mode page quotes the interpreter's path, so it runs on
+  Windows, and the command line's `--server` and `connect` state how a command is split: as a
+  POSIX shell splits it, on Windows as well, so a path holding a backslash or a space is quoted.
 
 ## [0.0.3] - 2026-11-18
 
@@ -110,7 +115,8 @@ decides more of it; the user guide is published.
   on synthetic libraries of 8 to 256 tools the cut holds 5 predicates and 12 cells at every
   size.
 
-[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.4...HEAD
+[0.0.4]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/ppigazzini/valgebra-planning/releases/tag/v0.0.1
