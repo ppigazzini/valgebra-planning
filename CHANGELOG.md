@@ -6,6 +6,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The package requires valgebra 0.0.30 and valgebra-jsonschema 0.0.3 or later, with no upper
+  bound on either: a release of either installs beside this package the day it is published,
+  with no release of this package.
+
 ## [0.0.3] - 2026-11-18
 
 A cell of many overlapping ranges is decided again, as 0.0.1 decided it, and the cut keeps the

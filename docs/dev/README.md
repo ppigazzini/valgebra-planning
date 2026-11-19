@@ -5,6 +5,6 @@ not published; [the user guide](../index.md) is the site.
 
 | page | what it holds |
 |---|---|
-| [Releasing](releasing.md) | how a version reaches PyPI: the release train, the dispatch, what stands between it and the upload, the settings it rests on, the order, and the checks on what the index serves |
+| [Releasing](releasing.md) | how a version reaches PyPI: the release order, the dispatch, what stands between it and the upload, the settings it rests on, the order, and the checks on what the index serves |
 | [Theory](theory.md) | the results the package rests on: each claim, the paper and the place it cites, the items implementing it and the tests holding it |
 | [Writing](writing.md) | the rules for every text: pages, comments, docstrings, citations and commit messages |

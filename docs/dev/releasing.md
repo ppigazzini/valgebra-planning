@@ -1,7 +1,7 @@
 # Releasing
 
 How a version reaches PyPI: where it is declared, how it is built, what stands between a
-dispatch and an upload, the release train it is part of, what the repository and the indexes
+dispatch and an upload, the release order it is part of, what the repository and the indexes
 hold for it, the order of the steps, and the checks on what an index serves. `.github/workflows/release.yml` owns the build, the tests
 of the built artifacts and the upload; this page owns the order and the checks outside it.
 
@@ -23,29 +23,30 @@ same bytes.
 
 ## Both dependencies come from PyPI
 
-valgebra and valgebra-jsonschema are pre-alpha, and a `0.0.x` minor of either is a breaking
-release here, so each is required at the version the studies were read on and below its next
-minor, which a release of this package takes once its suite has run on it. A user
-installs both from PyPI, and the smoke resolves them from PyPI as a user does, so a release
-follows one of valgebra-jsonschema at the floor `pyproject.toml` names.
+valgebra and valgebra-jsonschema are each required from the release the studies were read on,
+with no ceiling. A ceiling cannot be lifted from a published version, so a capped package would
+owe a release of its own to every release of the two, and no resolver would install them
+together before that release. A user installs both from PyPI, and the smoke resolves them from
+PyPI as a user does, at their newest releases and at the floors `pyproject.toml` names.
 
 A release commit's `pyproject.toml` names no `[tool.uv.sources]`: a source there holds the lock
 and the push lanes to a build no user installs, while the smoke reads PyPI's.
 
-## The release train
+## The release order
 
-valgebra, valgebra-jsonschema and this package release in that order, since each caps the one
-before it below its next `0.0.x` minor:
+No package caps the one before it, so a valgebra release installs beside valgebra-jsonschema and
+this package the day it is published, and asks no release of either. A release that needs what
+an upstream release adds follows it, in this order:
 
 1. valgebra's cut reaches PyPI.
-2. valgebra-jsonschema moves its floor and cap to it, relocks, reruns its studies and releases.
-3. This package moves both floors and caps, relocks, reruns its studies and releases.
+2. valgebra-jsonschema moves its floor to it where it needs it, relocks, reruns its studies and
+   releases.
+3. This package moves the floors it needs, relocks, reruns its studies and releases.
 4. Each consumer moves its pins: valplan relocks, fishtest re-pins.
 
-A valgebra minor is a release of each package after it, whether or not their code changes: the
-cost of the caps. The `Upstream` workflow of valgebra-jsonschema and of this repository runs
-each suite and study on the `main` of what it depends on, each Monday and on a dispatch, so a
-change that moves a count shows before valgebra's cut, not at step 2 or 3.
+The `Upstream` workflow of valgebra-jsonschema and of this repository runs each suite and study
+on the `main` of what it depends on, each Monday and on a dispatch, so a change that moves a
+count shows before valgebra's cut, where a user installing the newest releases would meet it.
 
 ## Publishing is a dispatch, and a tag publishes nothing
 
@@ -108,7 +109,7 @@ and repository, `release.yml` and the environment.
 
 ## The order
 
-1. **Move to the newest valgebra and valgebra-jsonschema first**, each from PyPI: the floors in
+1. **Move the floors where the release needs them**, each to a release on PyPI: the floors in
    `pyproject.toml`, the lock and every study move in a commit of their own, with [the gate](../../AGENTS.md#the-gate)
    green, before the bump.
 2. **Bump, in one commit.** `version` in `pyproject.toml`, `uv lock`, and the changelog: the

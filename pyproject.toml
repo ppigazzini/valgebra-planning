@@ -20,12 +20,13 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    # The decision procedure every proof here rests on. Pre-alpha, and a 0.0.x minor is a
-    # breaking release, so pinned below the next minor: the range moves with each release.
-    "valgebra>=0.0.29,<0.0.30",
-    # JSON Schema and MCP tool listings read into valgebra's sets. Pre-alpha as valgebra is,
-    # so pinned below its next minor.
-    "valgebra-jsonschema>=0.0.2,<0.0.3",
+    # The decision procedure every proof here rests on, from the release the studies were read
+    # on. No ceiling: a ceiling cannot be lifted from a published version, so a valgebra release
+    # installs beside this package the day it is published, and asks no release here.
+    "valgebra>=0.0.30",
+    # JSON Schema and MCP tool listings read into valgebra's sets, from the release the studies
+    # were read on, and with no ceiling for the same reason.
+    "valgebra-jsonschema>=0.0.3",
 ]
 
 [project.optional-dependencies]
