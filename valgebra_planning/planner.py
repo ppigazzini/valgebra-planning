@@ -28,7 +28,7 @@ from typing import Any
 
 from valgebra_planning._valgebra import Validator, intersection, nothing, union
 from valgebra_planning.cells import Abstraction, Predicate, abstract, gather
-from valgebra_planning.contracts import Contract, Slot, Task, unclashed
+from valgebra_planning.contracts import Contract, Slot, Task, record_of, unclashed
 from valgebra_planning.flows import Flow
 from valgebra_planning.mining import SlotKey, Types
 from valgebra_planning.policy import Policy
@@ -319,7 +319,9 @@ class _Search:
     ) -> bool:
         if contract.plain:
             return True
-        record = Validator({name: self.values(state.cells(ref)) for name, ref in bindings}).close()
+        record = record_of(
+            {name: self.values(state.cells(ref)) for name, ref in bindings}, closed=True
+        )
         return record.relation_to(contract.accepts) == "subset"
 
     def policed(
@@ -328,7 +330,9 @@ class _Search:
         """Return each policy's states after the call, or None if one may turn bad."""
         if not self.policies:
             return state.policed
-        record = Validator({name: self.values(state.cells(ref)) for name, ref in bindings}).close()
+        record = record_of(
+            {name: self.values(state.cells(ref)) for name, ref in bindings}, closed=True
+        )
         after = tuple(
             policy.step(held, contract.name, record, contract.hints)
             for policy, held in zip(self.policies, state.policed, strict=True)

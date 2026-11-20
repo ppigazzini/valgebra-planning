@@ -13,6 +13,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
   result, so a key test on it held the tool's optional fields with the tool's schemas, and a
   flow rule with `only` naming the tool as its source let it reach the sink: a program passing
   a value outside a tool's argument, or breaking the rule, was accepted.
+- An argument whose name ends in `?` is read as written in the record a relation-dependent
+  input schema and a policy are asked of. valgebra's dict display reads a trailing `?` as an
+  optional field of the name without it, so a relation on such an argument, as
+  `dependentRequired`, went unchecked, and the verifier proved a call the input schema
+  refuses.
 
 ## [0.0.4] - 2026-11-19
 

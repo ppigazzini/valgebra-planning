@@ -29,7 +29,15 @@ from valgebra_planning._valgebra import (
     complement,
     intersection,
 )
-from valgebra_planning.contracts import Contract, Slot, Task, item_slots, listed, unclashed
+from valgebra_planning.contracts import (
+    Contract,
+    Slot,
+    Task,
+    item_slots,
+    listed,
+    record_of,
+    unclashed,
+)
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
@@ -219,7 +227,7 @@ class _Walk:
             self.record(call, contract, bound, where)
         after = states
         if self.policies:
-            record = Validator({name: held.values for name, held in bound.items()}).close()
+            record = record_of({name: held.values for name, held in bound.items()}, closed=True)
             after = tuple(
                 policy.step(held, call.tool, record, contract.hints)
                 for policy, held in zip(self.policies, states, strict=True)
@@ -316,7 +324,7 @@ class _Walk:
             self.gaps.append(Gap(where, f"an error of {call.tool}"))
 
     def record(self, call: Call, contract: Contract, bound: dict[str, _Held], where: str) -> None:
-        record = Validator({name: held.values for name, held in bound.items()}).close()
+        record = record_of({name: held.values for name, held in bound.items()}, closed=True)
         claim = f"the arguments of {call.tool} <= its input schema"
         verdict = _relation(record, contract.accepts)
         found: tuple[Any, ...] = ()

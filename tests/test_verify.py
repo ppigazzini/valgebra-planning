@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop, render, steps
+from valgebra_planning.run import run
 from valgebra_planning.verify import verify
 
 ORDER_ID = {"type": "string", "pattern": "^ord_[0-9]+$"}
@@ -123,6 +124,28 @@ def test_a_record_the_input_schema_relates_is_asked_whole() -> None:
     one = Block((Call("pay", (("card", Ref("card")),), "c1"),), Stop(Ref("card")))
     record = next(link for link in verify(one, TOOLS, card).links if "arguments" in link.claim)
     assert record.verdict != "refuted"
+
+
+def test_an_argument_whose_name_ends_in_a_question_mark_is_read_as_written() -> None:
+    # valgebra's dict display reads `x?` as an optional `x`, which the relation never names.
+    act = read_contract(
+        {
+            "name": "act",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"x?": {"type": "integer"}, "y": {"type": "integer"}},
+                "dependentRequired": {"x?": ["y"]},
+            },
+        }
+    )
+    task = read_task("act", {"n": {"type": "integer"}}, True)
+    alone = Block((Call("act", (("x?", Ref("n")),), "c1"),), Stop(Ref("n")))
+    checked = verify(alone, {"act": act}, task)
+    record = next(link for link in checked.links if "arguments" in link.claim)
+    assert record.verdict == "refuted"
+    assert set(record.counterexample[0]) == {"x?"}
+    broken = run(alone, {"act": act}, task, {"n": 1}, {"act": lambda **_: {}})
+    assert broken.broken == ("act refuses its arguments {'x?': 1}",)
 
 
 def test_a_program_reads_as_python() -> None:

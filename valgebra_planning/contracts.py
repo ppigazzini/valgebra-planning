@@ -19,6 +19,7 @@ from valgebra_planning._valgebra import (
     Unsupported,
     Validator,
     compile_schema,
+    intersection,
     older,
     read_tool,
     upgrade,
@@ -276,3 +277,19 @@ def read_task(name: str, inputs: Mapping[str, object], goal: object) -> Task:
 def listed(values: Sequence[Any]) -> Validator[Any]:
     """Return the set of JSON values ``values`` lists, as an ``enum`` reads them."""
     return compile_schema({"enum": list(values)})
+
+
+def record_of(fields: Mapping[str, Validator[Any]], *, closed: bool) -> Validator[Any]:
+    """Return the objects holding every key of ``fields`` as written, each value in its set.
+
+    valgebra's dict display reads a trailing ``?`` as an optional field and strips it, so a
+    key ending in one is required through the companion's ``required``, which reads a key as
+    written, and spelled optional with a ``?`` appended, which the display strips once. Any
+    other key keeps the display valgebra decides most often. ``closed`` admits no other key.
+    """
+    if any(key.endswith("?") for key in fields):
+        present = compile_schema({"type": "object", "required": sorted(fields)})
+        spelled = Validator({f"{key}?": values for key, values in fields.items()})
+        return intersection(present, spelled.close() if closed else spelled.open())
+    plain = Validator(dict(fields))
+    return plain.close() if closed else plain.open()

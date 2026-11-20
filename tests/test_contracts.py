@@ -5,9 +5,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
-from valgebra_planning._valgebra import Unsupported
-from valgebra_planning.contracts import RESULT_DEPTH, read_contract, read_task
+from valgebra_planning._valgebra import Unsupported, anything, compile_schema
+from valgebra_planning.contracts import RESULT_DEPTH, read_contract, read_task, record_of
 from valgebra_planning.critic import critique, read_program
 from valgebra_planning.library import read_library
 from valgebra_planning.planner import plan
@@ -218,3 +220,26 @@ def test_a_library_whose_task_names_an_input_as_a_tool_is_refused(tmp_path: Path
     (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}))
     with pytest.raises(ValueError, match="names an input as a tool: find_order"):
         read_library(tmp_path)
+
+
+#: Key names a record may hold, a trailing `?` among them, as a JSON key may carry one.
+KEYS = st.text(alphabet="ab?", min_size=1, max_size=3)
+INTEGER = compile_schema({"type": "integer"})
+
+
+@settings(max_examples=300, deadline=None)
+@given(
+    typed=st.dictionaries(KEYS, st.booleans(), max_size=3),
+    value=st.dictionaries(KEYS, st.one_of(st.integers(-2, 2), st.text(max_size=1)), max_size=4),
+    closed=st.booleans(),
+)
+def test_a_record_holds_the_objects_carrying_each_key_as_written(
+    *, typed: dict[str, bool], value: dict[str, object], closed: bool
+) -> None:
+    # Each field takes integers or anything; the record is read against its definition.
+    fields = {key: INTEGER if integral else anything for key, integral in typed.items()}
+    inside = all(
+        key in value and (not integral or isinstance(value[key], int))
+        for key, integral in typed.items()
+    ) and (not closed or set(value) <= set(typed))
+    assert record_of(fields, closed=closed).is_valid(value) == inside

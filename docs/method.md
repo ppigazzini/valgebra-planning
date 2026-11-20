@@ -20,7 +20,8 @@ a tool: `verify`, `critique`, `plan`, `run` and `read_library` raise `ValueError
 
 Where the input schema relates its arguments, through `oneOf`, `dependentRequired` or any
 keyword beside `type`, `properties`, `required` and `additionalProperties`, a call is accepted
-only once the whole argument record is proven inside the input set.
+only once the whole argument record is proven inside the input set, each argument under its
+name as written, a trailing `?` included.
 
 ## The verifier
 
