@@ -6,6 +6,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- A task naming an input as a tool is refused: `verify`, `critique`, `plan`, `run` and
+  `read_library` raise `ValueError` naming it. Such an input's value read as that tool's
+  result, so a key test on it held the tool's optional fields with the tool's schemas, and a
+  flow rule with `only` naming the tool as its source let it reach the sink: a program passing
+  a value outside a tool's argument, or breaking the rule, was accepted.
+
 ## [0.0.4] - 2026-11-19
 
 A release of the dependency range: the planner is 0.0.3's, and every published count is the one

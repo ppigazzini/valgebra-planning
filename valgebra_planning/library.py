@@ -19,7 +19,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from valgebra_planning.contracts import Contract, Task, read_contract, read_task
+from valgebra_planning.contracts import Contract, Task, read_contract, read_task, unclashed
 from valgebra_planning.flows import Flow, read_flow
 from valgebra_planning.mining import Types, infer_outputs, mine
 from valgebra_planning.policy import Policy, read_policy
@@ -63,7 +63,8 @@ def _listed(path: Path, key: str) -> list[Any]:
 def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -> Library:
     """Read a library directory; a rule a task names and the directory lacks is a `KeyError`.
 
-    ``tools``, read from a live server, replaces the directory's ``tools.json``.
+    ``tools``, read from a live server, replaces the directory's ``tools.json``. A task naming
+    an input as a tool is a `ValueError`.
     """
     specs = _listed(directory / "tasks.json", "tasks")
     logs = sorted({spec["types"] for spec in specs if "types" in spec})
@@ -91,9 +92,11 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
     problems = []
     for spec in specs:
         log = spec.get("types")
+        task = read_task(spec["name"], spec["inputs"], spec["goal"])
+        unclashed(task, tools)
         problems.append(
             Problem(
-                task=read_task(spec["name"], spec["inputs"], spec["goal"]),
+                task=task,
                 errors=bool(spec.get("errors", False)),
                 policies=tuple(policies[name] for name in spec.get("policies", [])),
                 flows=tuple(flows[name] for name in spec.get("flows", [])),

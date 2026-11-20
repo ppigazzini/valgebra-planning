@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from valgebra_planning.contracts import Contract, Task, listed
+from valgebra_planning.contracts import Contract, Task, listed, unclashed
 from valgebra_planning.policy import Monitor, Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 
@@ -223,8 +223,10 @@ def run(
     Each policy is stepped on a call before it is made, and reaching a bad state is a broken
     check like a broken contract, as is a run ending, in a return or a stop, in a pending one.
     With ``enforce``, the default, the first broken check ends the run, named in `Run.refused`;
-    without it every break is recorded and the run goes on.
+    without it every break is recorded and the run goes on. Raises `ValueError` for a task
+    naming an input as a tool.
     """
+    unclashed(task, contracts)
     monitors = [Monitor(policy) for policy in policies]
     runner = _Runner(contracts, tools, task, monitors, enforce)
     ended = runner.block(program, dict(inputs))

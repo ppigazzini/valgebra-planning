@@ -14,7 +14,9 @@ schema as root, so a `$ref` resolves where the tool wrote it and an older draft 
 means. A field the output schema declares and does not guarantee is a slot held apart: a
 program holds it only in the branch of a test showing its key, `if "note" in c1.parcel:`
 (occurrence typing, the test refining the record). A task holds the slots of each value the agent
-starts with, read as a result's are, and the set its goal is.
+starts with, read as a result's are, and the set its goal is. A value's source is read by its
+name, as a flow rule names its sources by input or by tool alike, so a task names no input as
+a tool: `verify`, `critique`, `plan`, `run` and `read_library` raise `ValueError` on one.
 
 Where the input schema relates its arguments, through `oneOf`, `dependentRequired` or any
 keyword beside `type`, `properties`, `required` and `additionalProperties`, a call is accepted

@@ -196,7 +196,7 @@ it does not name reaches the sink only inside the endorsed set. **[LOAD-BEARING:
 
 IMPLEMENTED-BY: flows.py
 
-HELD-BY: test_only_refutes_an_identifier_written_into_the_program, test_only_refutes_an_input_or_a_tool_it_does_not_name, test_only_lets_a_literal_inside_the_endorsed_set_through, test_the_planner_grounds_every_identifier_a_rule_names
+HELD-BY: test_only_refutes_an_identifier_written_into_the_program, test_only_refutes_an_input_or_a_tool_it_does_not_name, test_only_lets_a_literal_inside_the_endorsed_set_through, test_the_planner_grounds_every_identifier_a_rule_names, test_a_task_naming_an_input_as_a_rule_s_source_tool_is_refused
 
 **A privilege policy is a set of argument records.** A policy maps each tool to rules with an
 effect, a condition on the arguments and a fallback (Shi et al. 2025, §4.1), applied with the

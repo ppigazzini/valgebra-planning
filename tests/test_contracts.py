@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
+from pathlib import Path
+
 import pytest
 
 from valgebra_planning._valgebra import Unsupported
 from valgebra_planning.contracts import RESULT_DEPTH, read_contract, read_task
+from valgebra_planning.critic import critique, read_program
+from valgebra_planning.library import read_library
+from valgebra_planning.planner import plan
+from valgebra_planning.run import run
+from valgebra_planning.verify import verify
 
 LOOKUP = {
     "name": "find_order",
@@ -179,3 +188,33 @@ def test_an_output_that_is_not_an_object_is_one_result_slot(
     assert slot.path == ()
     assert slot.values.is_valid(member)
     assert not slot.values.is_valid(outsider)
+
+
+#: A task whose input bears a tool's name: its value would read as that tool's result.
+POSING = read_task("posing", {"find_order": {"type": "string"}}, {"type": "string"})
+POSED = {"find_order": read_contract(LOOKUP)}
+
+
+@pytest.mark.parametrize(
+    "meet",
+    [
+        lambda: verify(read_program("return find_order\n"), POSED, POSING),
+        lambda: critique("return find_order\n", POSED, POSING),
+        lambda: plan(POSED, POSING),
+        lambda: run(read_program("return find_order\n"), POSED, POSING, {"find_order": "x"}, {}),
+    ],
+    ids=["verify", "critique", "plan", "run"],
+)
+def test_a_task_naming_an_input_as_a_tool_is_refused_wherever_it_meets_the_tools(
+    meet: Callable[[], object],
+) -> None:
+    with pytest.raises(ValueError, match="names an input as a tool: find_order"):
+        meet()
+
+
+def test_a_library_whose_task_names_an_input_as_a_tool_is_refused(tmp_path: Path) -> None:
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [LOOKUP]}))
+    task = {"name": "posing", "inputs": {"find_order": {"type": "string"}}, "goal": {}}
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}))
+    with pytest.raises(ValueError, match="names an input as a tool: find_order"):
+        read_library(tmp_path)

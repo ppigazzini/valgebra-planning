@@ -251,6 +251,19 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
     )
 
 
+def unclashed(task: Task, contracts: Mapping[str, object]) -> None:
+    """Raise `ValueError` where ``task`` names a value it starts with as one of ``contracts``.
+
+    A value's source is read by its name: an input's slots carry the input's name where a
+    result's carry its tool, and a flow rule names its sources by input or by tool alike. An
+    input named as a tool would read as that tool's result.
+    """
+    clash = sorted(set(task.held) & set(contracts))
+    if clash:
+        msg = f"task {task.name!r} names an input as a tool: {', '.join(clash)}"
+        raise ValueError(msg)
+
+
 def read_task(name: str, inputs: Mapping[str, object], goal: object) -> Task:
     """Read a task: the schema of each value the agent starts with, and of the goal."""
     held = {}

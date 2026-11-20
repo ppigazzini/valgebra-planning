@@ -29,7 +29,7 @@ from valgebra_planning._valgebra import (
     complement,
     intersection,
 )
-from valgebra_planning.contracts import Contract, Slot, Task, item_slots, listed
+from valgebra_planning.contracts import Contract, Slot, Task, item_slots, listed, unclashed
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
@@ -474,8 +474,10 @@ def verify(
     adds a link at the end of every path: proven where no bad state can be reached there,
     refuted where one surely is, undecided where one possibly is. Each flow rule adds a link
     for every value from one of its sources bound to its sink, and, where implicit flows are
-    read, for every call to the sink under a test on such a value.
+    read, for every call to the sink under a test on such a value. Raises `ValueError` for a
+    task naming an input as a tool, whose source no name could tell apart.
     """
+    unclashed(task, contracts)
     walk = _Walk(
         contracts, task, examples or {}, random.Random(seed), errors, tuple(policies), tuple(flows)
     )

@@ -28,7 +28,7 @@ from typing import Any
 
 from valgebra_planning._valgebra import Validator, intersection, nothing, union
 from valgebra_planning.cells import Abstraction, Predicate, abstract, gather
-from valgebra_planning.contracts import Contract, Slot, Task
+from valgebra_planning.contracts import Contract, Slot, Task, unclashed
 from valgebra_planning.flows import Flow
 from valgebra_planning.mining import SlotKey, Types
 from valgebra_planning.policy import Policy
@@ -646,8 +646,10 @@ def plan(
     a stop, only where no policy holds a pending state. A value reaches a flow
     rule's sink only as `valgebra_planning.verify.verify` holds it with the same rules. With
     mined ``types``, a value fills an argument only where their types agree, and the plan
-    names every binding that rests on one.
+    names every binding that rests on one. Raises `ValueError` for a task naming an input as
+    a tool.
     """
+    unclashed(task, contracts)
     kept = frozenset(tool for policy in policies for tool in policy.tools()) | frozenset(
         name
         for name, contract in contracts.items()

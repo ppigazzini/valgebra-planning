@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from valgebra_planning.codemode import repair
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import read_program
@@ -184,6 +186,17 @@ def test_only_refutes_an_input_or_a_tool_it_does_not_name() -> None:
         "refuted",
     )
     assert _held(GROUNDED, FOUND) == []
+
+
+def test_a_task_naming_an_input_as_a_rule_s_source_tool_is_refused() -> None:
+    # The input would read as the source's result, and pass a rule holding every other origin.
+    posing = read_task(
+        "settle the parcel the user names",
+        {"find_parcel": {"type": "object", "properties": {"parcel": {"type": "object"}}}},
+        SETTLE.goal_schema,
+    )
+    with pytest.raises(ValueError, match="names an input as a tool: find_parcel"):
+        verify(read_program(GROUNDED), TOOLS, posing, flows=[FOUND])
 
 
 def test_only_lets_a_literal_inside_the_endorsed_set_through() -> None:
