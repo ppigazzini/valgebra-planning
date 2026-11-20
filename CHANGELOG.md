@@ -6,6 +6,18 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The verifier reads any field below a value the program holds, at any depth, where valgebra
+  proves every value held there an object holding its key: a loop item's field under a test
+  showing its key, a field below an optional one under both tests, a task input's field under
+  its test, and an item's field past the third level from the call's result. Each was a value
+  the program does not hold.
+- A field a record's declared schema leaves optional and its root requires, as an `allOf` may,
+  is asked of the root, and never refuted on a value the declared schema admits and no result
+  carries. A field whose presence valgebra leaves undecided reads undecided, not refuted.
+- A flow rule reads a value as the verifier reads it, a field read below an item included.
+
 ### Security
 
 - A task naming an input as a tool is refused: `verify`, `critique`, `plan`, `run` and

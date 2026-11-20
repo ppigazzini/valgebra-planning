@@ -18,6 +18,7 @@ from valgebra_planning._valgebra import (
     Compiler,
     Unsupported,
     Validator,
+    anything,
     compile_schema,
     intersection,
     older,
@@ -192,6 +193,29 @@ def item_slots(slot: Slot) -> tuple[Slot, ...]:
     return tuple(_result_slots(slot.tool, compiler, node["items"], (*slot.path, "[]")))
 
 
+def field_slot(slot: Slot, key: str) -> Slot:
+    """Return the slot of the field ``key`` of the object ``slot`` holds, present or not.
+
+    A field selected lies in the projection of its record's type on the key (Castagna 2023,
+    §4.2), which valgebra does not compute: the field is read from the ``properties`` of the
+    record's schema against its root, a belief holding every value the field takes (Bertoli et
+    al. 2006, Def. 3.4) that other keywords of the record may narrow further. A key no property
+    declares takes any JSON value. Whether the field is present is not the slot's to say.
+    """
+    compiler = Compiler(slot.root)
+    node = _object_node(compiler, slot.schema)
+    properties, _ = _properties(node) if node is not None else ({}, frozenset())
+    schema = properties.get(key, True)
+    return Slot(
+        slot.tool,
+        (*slot.path, key),
+        schema,
+        compiler.compile(schema),
+        required=True,
+        root=slot.root,
+    )
+
+
 def _hints(annotations: object) -> frozenset[str]:
     if not isinstance(annotations, Mapping):
         return frozenset()
@@ -285,11 +309,16 @@ def record_of(fields: Mapping[str, Validator[Any]], *, closed: bool) -> Validato
     valgebra's dict display reads a trailing ``?`` as an optional field and strips it, so a
     key ending in one is required through the companion's ``required``, which reads a key as
     written, and spelled optional with a ``?`` appended, which the display strips once. Any
-    other key keeps the display valgebra decides most often. ``closed`` admits no other key.
+    other key keeps the display valgebra decides most often. ``closed`` admits no other key;
+    otherwise a clause admits every other key with any value. valgebra's ``open`` would admit
+    them too, but it opens every record of the schema, those inside the fields' sets as well.
     """
     if any(key.endswith("?") for key in fields):
         present = compile_schema({"type": "object", "required": sorted(fields)})
-        spelled = Validator({f"{key}?": values for key, values in fields.items()})
-        return intersection(present, spelled.close() if closed else spelled.open())
-    plain = Validator(dict(fields))
-    return plain.close() if closed else plain.open()
+        spelled = {f"{key}?": values for key, values in fields.items()}
+        if closed:
+            return intersection(present, Validator(spelled).close())
+        return intersection(present, Validator({**spelled, str: anything}))
+    if closed:
+        return Validator(dict(fields)).close()
+    return Validator({**fields, str: anything})

@@ -70,6 +70,33 @@ IMPLEMENTED-BY: verify.py
 
 HELD-BY: test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole
 
+**A field is read where the held set proves it present.** Selection requires the selected
+field to be defined, the record's type a subtype of a record holding it (Castagna 2023,
+§3.2.2). A reference to a field below a value the program holds is held where valgebra proves
+every value held for its record an object holding the key, as a test showing the key narrows
+the record to (Bertoli et al. 2006, Def. 3.4), and otherwise where it proves every value of the
+root carries the path. A field valgebra proves absent from some value of the root, with no test
+narrowing a field on the way, or one a member of the root is proven to lack, is refuted; any
+other is undecided, so an undecided presence can cost a program and never admit a wrong one.
+**[LOAD-BEARING: field-selection]**
+
+IMPLEMENTED-BY: verify.py::_Walk.resolve, verify.py::_Walk.present
+
+HELD-BY: test_a_key_test_on_an_item_makes_its_field_a_value_the_program_holds, test_a_field_two_objects_down_an_item_is_read_as_a_result_s_is, test_a_field_below_an_optional_one_is_held_under_both_tests, test_a_key_test_on_a_task_input_holds_its_field, test_a_field_another_keyword_requires_is_never_refuted, test_a_field_valgebra_cannot_prove_present_is_undecided, test_a_field_is_held_only_where_every_member_carries_it_and_refuted_where_one_lacks_it, test_a_field_a_test_on_the_way_may_have_kept_is_never_refuted
+
+**The field read lies in its declared schema, not in its projection.** The type selected is
+the projection of the record's type on the label (Castagna 2023, §4.2), which valgebra does not
+compute. A field read lies in the subschema its record's schema declares for the key, a belief
+holding every value the field takes (Bertoli et al. 2006, Def. 3.4) that another keyword of the
+record, as an `allOf`, may narrow further. A proof over it stands. The cost is a link the
+projection would prove and the declared set does not, and a value the declared set admits that
+no member carries, so a witness drawn from it refutes only once valgebra proves a member of the
+root carries it. **[DEVIATION: declared-fields]**
+
+IMPLEMENTED-BY: contracts.py::field_slot, verify.py::_Walk.lacking
+
+HELD-BY: test_a_flow_rule_reads_a_field_the_verifier_reads_below_an_item, test_a_field_another_keyword_requires_is_never_refuted, test_reading_the_field_without_the_test_is_refuted_by_a_record_lacking_it
+
 **A retry is a strong cyclic solution.** A call made again in its own error block is a loop that
 can always reach the goal (Daniele et al. 2000, Def. 7), and it ends under fairness: an
 execution looping forever is one where the outcome reaching the goal never occurs, which a

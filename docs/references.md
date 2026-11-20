@@ -41,6 +41,12 @@ directions.
   Logical Methods in Computer Science 8(1:09), 2012. Parametric trace slicing, which a policy
   does not read.
 
+## Records and their fields
+
+- **Castagna 2023.** G. Castagna. Typing records, maps, and structs. Proc. ACM Program. Lang.
+  7 (ICFP), 2023, article 196. [doi:10.1145/3607838](https://doi.org/10.1145/3607838).
+  Selection of a field the record's type proves defined, and the projection that types it.
+
 ## Synthesis from typed components
 
 - **Feng et al. 2017.** Y. Feng, R. Martins, Y. Wang, I. Dillig, T. W. Reps.

@@ -11,9 +11,14 @@ An agent fills each argument of a call from a value it holds, so a tool is read 
 no property declares included, and one per field its `outputSchema` guarantees, nested to three
 levels, beside the whole result. valgebra-jsonschema compiles each slot against the tool's own
 schema as root, so a `$ref` resolves where the tool wrote it and an older draft reads as it
-means. A field the output schema declares and does not guarantee is a slot held apart: a
-program holds it only in the branch of a test showing its key, `if "note" in c1.parcel:`
-(occurrence typing, the test refining the record). A task holds the slots of each value the agent
+means. The verifier reads any field below a value the program holds, at any depth, where
+valgebra proves every value held there an object holding its key (Castagna 2023): the record's
+schema requires it, or a test showing the key, `if "note" in c1.parcel:`, narrows the record to
+the values holding it, or the schema of the record's root requires it, as an `allOf` may of a
+key its object leaves optional. The field read lies in what its record's schema declares for
+the key, an upper bound of its values. A field valgebra proves some value lacks, with no test
+narrowing a field on the way, reads refuted, and one whose presence valgebra leaves undecided
+reads undecided. A task holds the slots of each value the agent
 starts with, read as a result's are, and the set its goal is. A value's source is read by its
 name, as a flow rule names its sources by input or by tool alike, so a task names no input as
 a tool: `verify`, `critique`, `plan`, `run` and `read_library` raise `ValueError` on one.
@@ -41,7 +46,7 @@ its own counterexample where it lies outside. The verifier reads neither the cel
 search.
 
 A loop, `for item in ref:` over an array, is walked once for an arbitrary item of the array's
-item set, the item's fields read as a result's are. Nothing crosses iterations, since what the
+item set, the item and its fields read as a result's are, a test showing a key included. Nothing crosses iterations, since what the
 body calls is scoped to its iteration and a body never returns, so the one walk holds for every
 item.
 
@@ -191,10 +196,10 @@ refused, and a value from a task input with it, since a proxy sees no task.
 - **Types are the specification.** A slot whose schema admits any string, as an unasserted
   `format` does, takes any string; distinct schemas, patterns, enums and ranges are what make a
   plan mean what it should, and mined types narrow what observations support.
-- **What is not modeled.** Side effects beyond the calls a policy reads; a field the output
-  schema does not guarantee below another such field, or in a task's input; an array with
-  `prefixItems`; and a program the planner writes holds no constant, tests no key and loops
-  over no array. A program written elsewhere may do all three, and each is checked like any
+- **What is not modeled.** Side effects beyond the calls a policy reads; an array with
+  `prefixItems`; a field whose record's `properties` do not declare it, which takes any JSON
+  value, as one an `anyOf` alone declares; and a program the planner writes holds no
+  constant, tests no key and loops over no array. A program written elsewhere may do all three, and each is checked like any
   value.
 - **No Python door.** A tool is read from the JSON Schema its server publishes, never from a
   Python function's annotations. Where a call travels as JSON, the MCP SDK, FastMCP and the

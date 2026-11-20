@@ -208,3 +208,95 @@ def test_a_run_calls_the_body_once_for_each_item() -> None:
 def test_a_return_in_a_body_a_loop_else_and_two_items_are_refused(source: str) -> None:
     with pytest.raises(ProgramError):
         read_program(source)
+
+
+TAG = {"enum": ["a", "b"]}
+RUN = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string"},
+        "tags": {"type": "array", "items": TAG},
+        "meta": {"type": "object", "properties": {"tag": TAG}, "required": ["tag"]},
+    },
+    "required": ["id", "meta"],
+}
+RUNS = {
+    contract.name: contract
+    for contract in map(
+        read_contract,
+        [
+            {
+                "name": "list_runs",
+                "inputSchema": {"type": "object", "properties": {}},
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {"runs": {"type": "array", "items": RUN}},
+                    "required": ["runs"],
+                },
+            },
+            {
+                "name": "find_by_tag",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"tag": TAG},
+                    "required": ["tag"],
+                },
+                "outputSchema": {"type": "object"},
+            },
+        ],
+    )
+}
+LISTED = read_task("tagged runs", {}, {"type": "object"})
+TAGGED = """\
+found = list_runs()
+for run in found.runs:
+    if "tags" in run:
+        for tag in run.tags:
+            hits = find_by_tag(tag=tag)
+return found"""
+
+
+def test_a_key_test_on_an_item_makes_its_field_a_value_the_program_holds() -> None:
+    program = read_program(TAGGED)
+    checked = verify(program, RUNS, LISTED)
+    assert [(link.claim, link.verdict) for link in checked.links] == [
+        ("tag <= find_by_tag.tag", "proven"),
+        ("return found <= goal", "proven"),
+    ]
+    asked: list[str] = []
+    runs = [
+        {"id": "x", "meta": {"tag": "a"}, "tags": ["a", "b"]},
+        {"id": "y", "meta": {"tag": "b"}},
+    ]
+    tools = {
+        "list_runs": lambda **_: {"runs": runs},
+        "find_by_tag": lambda tag: asked.append(tag) or {},
+    }
+    ran = run(program, RUNS, LISTED, {}, tools)
+    assert (ran.broken, asked) == ((), ["a", "b"])
+
+
+def test_a_field_two_objects_down_an_item_is_read_as_a_result_s_is() -> None:
+    source = (
+        "found = list_runs()\nfor run in found.runs:\n"
+        "    hits = find_by_tag(tag=run.meta.tag)\nreturn found"
+    )
+    checked = verify(read_program(source), RUNS, LISTED)
+    assert {link.claim: link.verdict for link in checked.links} == {
+        "run.meta.tag <= find_by_tag.tag": "proven",
+        "return found <= goal": "proven",
+    }
+
+
+def test_a_flow_rule_reads_a_field_the_verifier_reads_below_an_item() -> None:
+    # No environment holds `run.meta.tag`: the rule reads it as the verifier does.
+    rule = read_flow(
+        {"name": "tags are trusted", "sources": ["list_runs"], "sink": "find_by_tag.tag"}
+    )
+    source = TAGGED.replace(
+        "for tag in run.tags:\n            hits = find_by_tag(tag=tag)",
+        "hits = find_by_tag(tag=run.meta.tag)",
+    )
+    checked = verify(read_program(source), RUNS, LISTED, flows=[rule])
+    claim = "flow tags are trusted: run.meta.tag from list_runs reaches find_by_tag.tag"
+    assert {link.claim: link.verdict for link in checked.links}[claim] == "refuted"

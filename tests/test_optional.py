@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import itertools
 from typing import Any
+
+import pytest
 
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import read_program
-from valgebra_planning.program import render
+from valgebra_planning.program import Block, Call, Ref, Return, render
 from valgebra_planning.run import run
 from valgebra_planning.verify import verify
 
@@ -101,3 +104,155 @@ def test_a_run_takes_the_branch_the_key_shows() -> None:
     assert noted.value == "t_1"
     assert noted.stopped is None
     assert bare.stopped == "c1.parcel"
+
+
+def _reads(output: object, path: tuple[str, ...]) -> str:
+    """Return the verdict on reading ``path`` of a result of ``output``, `held` where it reads."""
+    tool = {"name": "get", "inputSchema": {"type": "object"}, "outputSchema": output}
+    contracts = {"get": read_contract(tool)}
+    program = Block((Call("get", (), "r"),), Return(Ref("r", path)))
+    claim = f"r.{'.'.join(path)} is a value the program holds"
+    links = verify(program, contracts, read_task("read", {}, True)).links
+    return next((link.verdict for link in links if link.claim == claim), "held")
+
+
+def test_a_field_below_an_optional_one_is_held_under_both_tests() -> None:
+    memo = {"type": "object", "properties": {"memo": NOTE}}
+    extra = {
+        "type": "object",
+        "properties": {
+            "parcel": {
+                "type": "object",
+                "properties": {"id": {"type": "string"}, "extra": memo},
+                "required": ["id"],
+            }
+        },
+        "required": ["parcel"],
+    }
+    track = read_contract(
+        {
+            "name": "track",
+            "inputSchema": {"type": "object", "properties": {"tracking": {"type": "string"}}},
+            "outputSchema": extra,
+        }
+    )
+    source = (
+        "c1 = track(tracking=tracking)\n"
+        'if "extra" in c1.parcel:\n'
+        '    if "memo" in c1.parcel.extra:\n'
+        "        c2 = annotate(note=c1.parcel.extra.memo)\n"
+        "        return c2.ticket\n"
+        "    stop(c1)\n"
+        "stop(c1)\n"
+    )
+    checked = verify(read_program(source), {**TOOLS, "track": track}, TASK)
+    assert {link.claim: link.verdict for link in checked.links} == {
+        "tracking <= track.tracking": "proven",
+        "c1.parcel.extra.memo <= annotate.note": "proven",
+        "return c2.ticket <= goal": "proven",
+    }
+
+
+def test_a_key_test_on_a_task_input_holds_its_field() -> None:
+    given = read_task(
+        "annotate a given parcel",
+        {"parcel": {"type": "object", "properties": {"note": NOTE}}},
+        {"type": "string", "pattern": "^t_[0-9]+$"},
+    )
+    source = (
+        'if "note" in parcel:\n    c1 = annotate(note=parcel.note)\n    return c1.ticket\n'
+        "stop(parcel)"
+    )
+    checked = verify(read_program(source), TOOLS, given)
+    assert {link.claim: link.verdict for link in checked.links} == {
+        "parcel.note <= annotate.note": "proven",
+        "return c1.ticket <= goal": "proven",
+    }
+
+
+def test_a_field_another_keyword_requires_is_never_refuted() -> None:
+    # The object declares `k` optional; the root's `allOf` requires it of every `a`. A value
+    # the object's set admits without `k` is a witness no result carries.
+    output = {
+        "type": "object",
+        "properties": {"a": {"type": "object", "properties": {"k": NOTE}}},
+        "required": ["a"],
+        "allOf": [{"properties": {"a": {"required": ["k"]}}}],
+    }
+    assert _reads(output, ("a", "k")) != "refuted"
+
+
+def test_a_field_valgebra_cannot_prove_present_is_undecided() -> None:
+    # Every member holds `k`, the one key its names may take, and valgebra cannot prove it.
+    output = {"type": "object", "propertyNames": {"enum": ["k"]}, "minProperties": 1}
+    assert _reads(output, ("k",)) == "undecided"
+
+
+@pytest.mark.parametrize(
+    ("root_requires", "object_requires", "all_of_requires", "path"),
+    list(itertools.product([False, True], [False, True], [False, True], [("a",), ("a", "k")])),
+)
+def test_a_field_is_held_only_where_every_member_carries_it_and_refuted_where_one_lacks_it(
+    *, root_requires: bool, object_requires: bool, all_of_requires: bool, path: tuple[str, ...]
+) -> None:
+    # The members' shapes, as far as `a` and `k` go, are these three. Without `allOf` the
+    # verdict is exact; with it valgebra may leave presence undecided, never decide it wrong.
+    output: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "a": {
+                "type": "object",
+                "properties": {"k": {"type": "integer"}},
+                "required": ["k"] if object_requires else [],
+            }
+        },
+        "required": ["a"] if root_requires else [],
+    }
+    if all_of_requires:
+        output["allOf"] = [{"properties": {"a": {"required": ["k"]}}}]
+    returns = read_contract(
+        {"name": "get", "inputSchema": {"type": "object"}, "outputSchema": output}
+    ).returns
+    assert returns is not None
+    members = [shape for shape in ({}, {"a": {}}, {"a": {"k": 1}}) if returns.is_valid(shape)]
+    carried = all(
+        path[0] in member and (len(path) == 1 or path[1] in member[path[0]]) for member in members
+    )
+    verdict = _reads(output, path)
+    assert verdict != ("refuted" if carried else "held")
+    if not all_of_requires:
+        assert verdict == ("held" if carried else "refuted")
+
+
+def test_a_field_a_test_on_the_way_may_have_kept_is_never_refuted() -> None:
+    # The test keeps the `a` whose only key is `k`, which valgebra cannot prove holds `k`; the
+    # root's `a` may lack it, but the test excluded every such `a`.
+    keyed = {"type": "object", "propertyNames": {"enum": ["k"]}, "minProperties": 1}
+    tools = {
+        contract.name: contract
+        for contract in map(
+            read_contract,
+            [
+                {
+                    "name": "get",
+                    "inputSchema": {"type": "object"},
+                    "outputSchema": {
+                        "type": "object",
+                        "properties": {"a": {"type": "object"}},
+                        "required": ["a"],
+                    },
+                },
+                {
+                    "name": "keep",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"a": keyed},
+                        "required": ["a"],
+                    },
+                },
+            ],
+        )
+    }
+    source = "r = get()\nif r.a in keep.a:\n    return r.a.k\nstop(r)"
+    claims = {link.claim: link.verdict for link in verify(read_program(source), tools, TASK).links}
+    assert claims["r.a.k is a value the program holds"] == "undecided"

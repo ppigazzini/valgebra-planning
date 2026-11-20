@@ -15,6 +15,7 @@ proof.
 
 from __future__ import annotations
 
+import functools
 import itertools
 import random
 from collections.abc import Mapping, Sequence
@@ -25,14 +26,16 @@ from valgebra_planning._valgebra import (
     Sampler,
     Unsupported,
     Validator,
-    compile_schema,
+    anything,
     complement,
     intersection,
+    nothing,
 )
 from valgebra_planning.contracts import (
     Contract,
     Slot,
     Task,
+    field_slot,
     item_slots,
     listed,
     record_of,
@@ -189,11 +192,8 @@ class _Walk:
 
     def branch(self, test: Branch, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         held = self.held(env, test.ref, where)
-        opened: dict[Ref, _Held] = {}
         if test.key:
-            tested = compile_schema({"type": "object", "required": [test.key]})
-            if held is not None:
-                opened = self.opened(test.ref, held, test.key)
+            tested = _having(test.key)
         elif test.tool:
             slot = self.argument(test.tool, test.argument, where)
             tested = None if slot is None else slot.values
@@ -205,7 +205,7 @@ class _Walk:
         outside = _Held(intersection(held.values, complement(tested)), held.origin)
         # Which branch runs carries the tested value's influence: an implicit flow.
         tested = _Path(path.states, path.tested | {held.origin.tool}, path.acted)
-        self.block(test.then, {**env, test.ref: inside, **opened}, _join(where, "then"), tested)
+        self.block(test.then, {**env, test.ref: inside}, _join(where, "then"), tested)
         self.block(test.otherwise, {**env, test.ref: outside}, _join(where, "else"), tested)
 
     def call(
@@ -288,7 +288,7 @@ class _Walk:
                     if flow.holds(None):
                         self.literal(where, flow, ref)
                     continue
-                held = env.get(ref)
+                held = self.resolve(env, ref).held
                 if held is None or not flow.holds(held.origin.tool):
                     continue
                 claim = f"flow {flow.name}: {ref} from {held.origin.tool} reaches {flow.sink}"
@@ -355,31 +355,86 @@ class _Walk:
             return ()
         return (f"the output of {contract.name} as observed",)
 
-    def opened(self, ref: Ref, held: _Held, key: str) -> dict[Ref, _Held]:
-        """Return the optional fields a test showing ``key`` in ``ref`` makes the program hold."""
-        contract = self.contracts.get(held.origin.tool)
-        base = (*held.origin.path, key)
-        return {
-            Ref(ref.variable, (*ref.path, *slot.path[len(held.origin.path) :])): _Held(
-                slot.values, slot
-            )
-            for slot in (() if contract is None else contract.optional)
-            if slot.path[: len(base)] == base
-        }
+    def resolve(self, env: dict[Ref, _Held], ref: Ref) -> _Read:
+        """Read ``ref`` from the nearest value the program holds above it, a field at a time.
 
-    def absent(self, env: dict[Ref, _Held], ref: Ref) -> tuple[Any, ...]:
-        """Return a value of the nearest field the program holds above ``ref`` lacking the next."""
+        Selection requires the selected field to be defined (Castagna 2023, §3.2.2): a field is
+        read where valgebra proves every value held for its record an object holding the key,
+        as a test showing the key narrows the record to (Bertoli et al. 2006, Def. 3.4), and
+        otherwise where it proves every value of the root carries the path. The field lies in
+        what its record's schema declares of it, `valgebra_planning.contracts.field_slot`.
+        """
+        if ref in env:
+            return _Read(env[ref])
         for depth in range(len(ref.path) - 1, -1, -1):
-            parent = Ref(ref.variable, ref.path[:depth])
-            if parent not in env:
+            held = env.get(Ref(ref.variable, ref.path[:depth]))
+            if held is None:
                 continue
-            for value in self.candidates(parent, env[parent]):
-                if isinstance(value, dict):
-                    lacking = {k: v for k, v in value.items() if k != ref.path[depth]}
-                    if env[parent].values.is_valid(lacking):
-                        return (lacking,)
+            for at in range(depth, len(ref.path)):
+                key = ref.path[at]
+                answer = held.values.relation_to(_having(key))
+                if answer != "subset" and at:
+                    answer = self.present(env, ref.variable, ref.path[: at + 1])
+                if answer != "subset":
+                    return _Read(None, answer, held, at)
+                slot = field_slot(held.origin, key)
+                held = _Held(slot.values, slot)
+            return _Read(held)
+        return _Read(None, "unbound")
+
+    def present(self, env: dict[Ref, _Held], variable: str, path: tuple[str, ...]) -> str:
+        """Return valgebra's answer on every value of the root carrying ``path``.
+
+        A record's declared set may admit a value lacking the key that another keyword of the
+        root requires, so presence the record's set leaves open is asked of the root, whose set
+        is the belief the program holds of every value there (Bertoli et al. 2006, Def. 3.4).
+        Where a test narrowed a field on the way, a root value lacking the key may be one the
+        test excluded, so a refutation there is undecided.
+        """
+        root = env.get(Ref(variable))
+        if root is None:
+            return "undecided"
+        answer = root.values.relation_to(_selecting(path, anything))
+        if answer == "not_subset" and _narrowed(env, variable, path[:-1]):
+            return "undecided"
+        return answer
+
+    def lacking(self, env: dict[Ref, _Held], ref: Ref, read: _Read) -> tuple[Any, ...]:
+        """Return a value of the record ``read`` stopped at, lacking the next key of ``ref``.
+
+        A value drawn for the record is a witness only where valgebra proves a member of the
+        root carries it there: the record's declared set is a belief holding every value the
+        record takes (Bertoli et al. 2006, Def. 3.4), and may admit one no member carries.
+        """
+        if read.record is None:
             return ()
+        key, path = ref.path[read.at], ref.path[: read.at]
+        for value in self.candidates(Ref(ref.variable, path), read.record):
+            if not isinstance(value, dict):
+                continue
+            bare = {name: item for name, item in value.items() if name != key}
+            if read.record.values.is_valid(bare) and self.carried(env, ref.variable, path, bare):
+                return (bare,)
         return ()
+
+    def carried(
+        self, env: dict[Ref, _Held], variable: str, path: tuple[str, ...], value: Any
+    ) -> bool:
+        """Return whether valgebra proves a member of the root carries ``value`` at ``path``.
+
+        The member also lies inside every set the program holds on the way.
+        """
+        root = env.get(Ref(variable))
+        if root is None:
+            return False
+        if not path:
+            return root.values.is_valid(value)
+        meet = intersection(root.values, _selecting(path, listed([value])))
+        for depth in range(1, len(path)):
+            held = env.get(Ref(variable, path[:depth]))
+            if held is not None:
+                meet = intersection(meet, _selecting(path[:depth], held.values))
+        return meet.relation_to(nothing) == "not_subset"
 
     def candidates(self, ref: Ref, held: _Held) -> list[Any]:
         """Return values the reference may hold there: the examples given, then draws."""
@@ -399,11 +454,20 @@ class _Walk:
         )
 
     def held(self, env: dict[Ref, _Held], ref: Ref, where: str) -> _Held | None:
-        if ref not in env:
-            claim = f"{ref} is a value the program holds"
-            self.links.append(Link(where, claim, "refuted", self.absent(env, ref)))
-            return None
-        return env[ref]
+        """Return the set ``ref`` lies in, or None with the link it fails added.
+
+        A reference no value of the program reaches, or a field valgebra proves absent from
+        some value, or one a member of the root is found lacking, is refuted; a field whose
+        presence valgebra leaves undecided is undecided.
+        """
+        read = self.resolve(env, ref)
+        if read.held is not None:
+            return read.held
+        claim = f"{ref} is a value the program holds"
+        lacking = self.lacking(env, ref, read)
+        refuted = bool(lacking) or read.answer in ("unbound", "not_subset")
+        self.links.append(Link(where, claim, "refuted" if refuted else "undecided", lacking))
+        return None
 
     def argument(self, tool: str, name: str, where: str) -> Slot | None:
         contract = self.contracts.get(tool)
@@ -412,6 +476,38 @@ class _Walk:
         except KeyError:
             self.links.append(Link(where, f"{tool}.{name} is an argument", "refuted"))
             return None
+
+
+@dataclass(frozen=True, slots=True)
+class _Read:
+    """A reference read: its set, or valgebra's answer where it stopped, and the record there."""
+
+    held: _Held | None
+    answer: str = "subset"
+    record: _Held | None = None
+    at: int = 0
+
+
+@functools.cache
+def _having(key: str) -> Validator[Any]:
+    """Return the objects holding ``key``, whatever else they hold."""
+    return record_of({key: anything}, closed=False)
+
+
+def _selecting(path: tuple[str, ...], values: Validator[Any]) -> Validator[Any]:
+    """Return the objects whose field at ``path`` lies in ``values``, whatever else they hold."""
+    for key in reversed(path):
+        values = record_of({key: values}, closed=False)
+    return values
+
+
+def _narrowed(env: dict[Ref, _Held], variable: str, path: tuple[str, ...]) -> bool:
+    """Return whether a test narrowed a field of ``variable`` on the way down ``path``."""
+    return any(
+        (held := env.get(Ref(variable, path[:depth]))) is not None
+        and held.values is not held.origin.values
+        for depth in range(1, len(path) + 1)
+    )
 
 
 def _join(where: str, branch: str) -> str:
