@@ -53,6 +53,14 @@ def test_citations_and_the_references_page_are_held_equal() -> None:
     assert "lists 'Feng et al. 2017'" in problems[1]
 
 
+def test_an_entry_of_one_surname_is_read_no_more_than_a_citation_of_one() -> None:
+    texts = {
+        docs_lint.REFERENCES: "- **Castagna 2023.** G. Castagna.\n",
+        "docs/method.md": "selection (Castagna 2023)\n",
+    }
+    assert docs_lint.check_citations(texts) == []
+
+
 def test_a_citation_names_its_place_across_a_line_break() -> None:
     text = (
         "planning (Cimatti et al.\n    2003, Def. 2.11), the order (Shi et al. 2025, §4.2,"

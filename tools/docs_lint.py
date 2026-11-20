@@ -147,9 +147,10 @@ ATTRIBUTION = re.compile(
 NAME = r"[A-Z][\w'\u2019-]*[a-z]"
 #: A citation key read anywhere: two surnames, or one with `et al.`, and the year.
 CITATION = re.compile(rf"\b{NAME}(?: et al\.| and {NAME}) (?:19|20)[0-9]{{2}}\b")
-#: An entry of the references page: its key, bold, opening a list item.
+#: An entry of the references page, its key bold and opening a list item, read as a citation
+#: is: an entry of one surname is not, since no citation of one is.
 ENTRY = re.compile(
-    rf"^- \*\*({NAME}(?: et al\.| and {NAME})? (?:19|20)[0-9]{{2}})\.\*\*", re.MULTILINE
+    rf"^- \*\*({NAME}(?: et al\.| and {NAME}) (?:19|20)[0-9]{{2}})\.\*\*", re.MULTILINE
 )
 #: A line break inside prose, a comment or a docstring, with what continues it.
 BREAK = re.compile(r"\s*\n\s*(?:#+\s*)?")
