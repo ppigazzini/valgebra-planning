@@ -4,6 +4,11 @@ description: Contracts, the cells, the planner, the verifier, the rules a progra
 
 # Method
 
+What each part holds a program to, in full: the contracts a program is read against, the
+verifier, the cells and the planner, the rules beside the types, the critic, a run, and the
+limits. [How it works](how-it-works.md) covers the same ground in brief, with a diagram for
+each step.
+
 ## Contracts as slots
 
 An agent fills each argument of a call from a value it holds, so a tool is read as slots

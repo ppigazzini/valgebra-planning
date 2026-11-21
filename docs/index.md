@@ -62,6 +62,12 @@ pip install valgebra-planning            # Python 3.11 or later
 pip install "valgebra-planning[mcp]"     # with a live MCP server's tools, and the proxy
 ```
 
+Every inclusion a program rests on is a link, and each reads proven, refuted, with a value
+that breaks it where one is found, or undecided where valgebra cannot tell, which never counts
+as proven. A program is accepted when every link is proven and no path stops.
+[How it works](how-it-works.md) builds this from a tool's contract up, with a diagram for each
+step.
+
 Start with [the command line](command-line.md), [a model's program checked](code-mode.md)
 or [the recipes](recipes.md); [the method](method.md) is what every answer means.
 

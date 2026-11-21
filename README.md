@@ -45,7 +45,8 @@ pip install "valgebra-planning[mcp]"     # with a live MCP server's tools, and t
 | serve an MCP proxy holding every call to the contracts, policies and flow rules | `valgebra_planning/proxy.py` |
 | give a model typed stubs, and repair its program with the critique | `valgebra_planning/codemode.py` |
 
-The guide has [the command line](https://ppigazzini.github.io/valgebra-planning/command-line/),
+The guide has [how a program is proven, a diagram for each step](https://ppigazzini.github.io/valgebra-planning/how-it-works/),
+[the command line](https://ppigazzini.github.io/valgebra-planning/command-line/),
 [the Python names each module promises](https://ppigazzini.github.io/valgebra-planning/api/),
 [how a model's program is proven before it runs](https://ppigazzini.github.io/valgebra-planning/code-mode/),
 [tasks done end to end in Python](https://ppigazzini.github.io/valgebra-planning/recipes/), a policy, a flow rule and a privilege

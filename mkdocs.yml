@@ -40,6 +40,7 @@ nav:
       - Recipes: recipes.md
   - Release notes: changelog.md
   - Explanation:
+      - How it works: how-it-works.md
       - The method: method.md
       - Results: results.md
   - Reference:
@@ -71,7 +72,15 @@ validation:
 markdown_extensions:
   - admonition
   - pymdownx.details
-  - pymdownx.superfences
+  # A diagram is a `mermaid` block, text the page carries: Material loads Mermaid on a page
+  # holding one and draws it in the site's palette, light or dark, and GitHub draws the same
+  # block. The formatter is named by a Python tag, which is why the YAML hook parses this file
+  # with --unsafe.
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
@@ -137,6 +146,7 @@ plugins:
         Release notes:
           - changelog.md: Every released version, what it changed, and what counts as a break.
         Explanation:
+          - how-it-works.md: What a program of tool calls is, what proving it means, and how valgebra-planning, valgebra-jsonschema and valgebra share the work.
           - method.md: Contracts, the cells, the planner, the verifier, the rules a program is held to, the critic, and the limits.
           - results.md: The studies, each count with the command that checks it.
         Reference:
