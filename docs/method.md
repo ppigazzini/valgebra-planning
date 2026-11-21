@@ -57,7 +57,9 @@ its own counterexample where it lies outside. The verifier reads neither the cel
 search.
 
 A loop, `for item in ref:` over an array, is walked once for an arbitrary item of the array's
-item set, the item and its fields read as a result's are, a test showing a key included. Nothing crosses iterations, since what the
+item set, the item and its fields read as a result's are, a test showing a key included. The
+item's name holds the item alone, never a field of a value the program held under that name
+before. Nothing crosses iterations, since what the
 body calls is scoped to its iteration and a body never returns, so the one walk holds for every
 item.
 

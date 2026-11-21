@@ -300,3 +300,61 @@ def test_a_flow_rule_reads_a_field_the_verifier_reads_below_an_item() -> None:
     checked = verify(read_program(source), RUNS, LISTED, flows=[rule])
     claim = "flow tags are trusted: run.meta.tag from list_runs reaches find_by_tag.tag"
     assert {link.claim: link.verdict for link in checked.links}[claim] == "refuted"
+
+
+ONE = {"type": "object", "properties": {"tag": TAG}, "required": ["tag"]}
+
+
+@pytest.mark.parametrize(
+    ("given", "first"), [({}, "x = one()\n"), ({"x": ONE}, "")], ids=["a result", "a task input"]
+)
+@pytest.mark.parametrize(
+    "item",
+    [{"properties": {"tag": {"type": "string"}}, "required": ["tag"]}, {}],
+    ids=["declaring the field wider", "declaring no field"],
+)
+def test_a_loop_item_reads_no_field_of_a_value_its_name_held(
+    given: dict[str, Any], first: str, item: dict[str, Any]
+) -> None:
+    tools = {
+        contract.name: contract
+        for contract in map(
+            read_contract,
+            [
+                {"name": "one", "inputSchema": {"type": "object"}, "outputSchema": ONE},
+                {
+                    "name": "many",
+                    "inputSchema": {"type": "object"},
+                    "outputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "rs": {"type": "array", "items": {"type": "object", **item}}
+                        },
+                        "required": ["rs"],
+                    },
+                },
+                {
+                    "name": "find_by_tag",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"tag": TAG},
+                        "required": ["tag"],
+                    },
+                    "outputSchema": {"type": "object"},
+                },
+            ],
+        )
+    }
+    task = read_task("shadowed", given, {"type": "object"})
+    source = f"{first}m = many()\nfor x in m.rs:\n    hits = find_by_tag(tag=x.tag)\nreturn m"
+    program = read_program(source)
+    checked = verify(program, tools, task)
+    assert [link.verdict for link in checked.links if link.claim.startswith("x.tag")] == ["refuted"]
+    calls = {
+        "one": lambda **_: {"tag": "a"},
+        "many": lambda **_: {"rs": [{"tag": "zz"}]},
+        "find_by_tag": lambda **_: {},
+    }
+    ran = run(program, tools, task, {"x": {"tag": "a"}} if given else {}, calls)
+    assert ran.why is not None
+    assert ran.why.check == "arguments"

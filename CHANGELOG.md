@@ -47,6 +47,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Security
 
+- A loop's item binds its name alone. A field of a value the program held under that name
+  before the loop, a result or a task input, was read in the body as the item's field, so a
+  program passing an item's field outside a tool's argument was proven where the item declares
+  the field wider or not at all.
 - A task naming an input as a tool is refused: `verify`, `critique`, `plan`, `run` and
   `read_library` raise `ValueError` naming it. Such an input's value read as that tool's
   result, so a key test on it held the tool's optional fields with the tool's schemas, and a
