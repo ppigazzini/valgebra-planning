@@ -19,6 +19,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
   each page's former address, `llms.txt` and `llms-full.txt`, the Mermaid diagrams and the API
   reference through the mkdocstrings Python handler. No page moves.
 
+- The package requires valgebra 0.0.31 or later, which relates a meet of records as the one
+  record it is. A loop's item an array's `allOf` narrows is proven inside the argument it
+  feeds, as its field and its optional field are, where each read `undecided`, and a field the
+  root's `allOf` requires of a nested object is held. A result field one member may carry
+  outside the argument is refuted rather than `undecided`. The parcels and bench studies read
+  no difference.
+
 ### Removed
 
 - `Contract.optional`. The verifier reads a field below any value a program holds where

@@ -408,7 +408,7 @@ NARROW = {"properties": {"k": TAG}, "required": ["o"]}
     ],
     ids=["an item", "its field", "its optional field", "its field under a test on the holder"],
 )
-def test_an_item_its_array_narrows_is_never_refuted_on_a_value_no_item_takes(
+def test_an_item_its_array_narrows_is_proven_by_the_narrowing(
     items: dict[str, Any], source: str
 ) -> None:
     # The array's `allOf` keeps every item inside the argument, and every item's `o` present;
@@ -416,12 +416,7 @@ def test_an_item_its_array_narrows_is_never_refuted_on_a_value_no_item_takes(
     narrowed = {"enum": ["a", "b"]} if items["type"] == "string" else NARROW
     tools = _listing(items, **narrowed)
     checked = verify(read_program(source), tools, LISTED_ANY)
-    assert [
-        (link.verdict, link.counterexample) for link in checked.links if link.verdict != "proven"
-    ] in (
-        [],
-        [("undecided", ())],
-    )
+    assert [link for link in checked.links if link.verdict != "proven"] == []
     held = "a" if items["type"] == "string" else {"k": "a", "o": "b"}
     calls = {"get": lambda **_: {"n": 1, "rs": [held]}, "use": lambda **_: {}}
     assert run(read_program(source), tools, LISTED_ANY, {}, calls).why is None
@@ -470,8 +465,6 @@ def test_an_item_s_field_is_held_only_where_every_item_carries_it(
     *, item_requires: bool, array_requires: bool, tested: bool
 ) -> None:
     # Every item holds `k` where `items` or the array's `allOf` requires it, or a test shows it.
-    # Without `allOf` the verdict is exact; with it valgebra may leave presence undecided,
-    # never decide it wrong.
     item = {"type": "object", "properties": {"k": TAG}, "required": ["k"] if item_requires else []}
     tools = _listing(item, **({"required": ["k"]} if array_requires else {}))
     body = '    if "k" in x:\n        u = use(tag=x.k)\n' if tested else "    u = use(tag=x.k)\n"
@@ -479,9 +472,7 @@ def test_an_item_s_field_is_held_only_where_every_item_carries_it(
     links = verify(read_program(source), tools, LISTED_ANY).links
     verdicts = {link.verdict for link in links if link.claim == "x.k is a value the program holds"}
     carried = item_requires or array_requires or tested
-    assert verdicts <= ({"undecided"} if carried else {"refuted", "undecided"})
-    if not array_requires:
-        assert verdicts == (set() if carried else {"refuted"})
+    assert verdicts == (set() if carried else {"refuted"})
 
 
 #: Four ways to declare an array's items the walk does not read: through an `allOf`, through
@@ -527,12 +518,12 @@ SHAPES = ["an allOf", "a reference beside a keyword", "a tuple", "no items keywo
 
 
 @pytest.mark.parametrize(("rs", "defs"), _unread(TAG)[:3], ids=SHAPES[:3])
-def test_a_loop_over_items_the_walk_cannot_read_is_never_refuted_where_each_is_inside(
+def test_a_loop_over_items_the_walk_cannot_read_is_proven_where_each_is_inside(
     rs: dict[str, Any], defs: dict[str, Any]
 ) -> None:
     tools = _holding(rs, defs)
     checked = verify(read_program(LOOPED), tools, LISTED_ANY)
-    assert all(link.verdict != "refuted" for link in checked.links), checked.links
+    assert all(link.verdict == "proven" for link in checked.links), checked.links
     calls = {"get": lambda **_: {"n": 1, "rs": ["a", "b"]}, "use": lambda **_: {}}
     assert run(read_program(LOOPED), tools, LISTED_ANY, {}, calls).why is None
 

@@ -189,20 +189,20 @@ def test_a_key_test_on_a_task_input_holds_its_field() -> None:
     }
 
 
-def test_a_field_another_keyword_requires_is_never_refuted() -> None:
-    # The object declares `k` optional; the root's `allOf` requires it of every `a`. A value
-    # the object's set admits without `k` is a witness no result carries.
+def test_a_field_another_keyword_requires_is_held() -> None:
+    # The object declares `k` optional; the root's `allOf` requires it of every `a`.
     output = {
         "type": "object",
         "properties": {"a": {"type": "object", "properties": {"k": NOTE}}},
         "required": ["a"],
         "allOf": [{"properties": {"a": {"required": ["k"]}}}],
     }
-    assert _reads(output, ("a", "k")) != "refuted"
+    assert _reads(output, ("a", "k")) == "held"
 
 
-def test_a_field_valgebra_cannot_prove_present_is_undecided() -> None:
-    # Every member holds `k`, the one key its names may take, and valgebra cannot prove it.
+def test_a_field_only_a_predicate_holds_present_is_undecided() -> None:
+    # Every member holds `k`, the one key its names may take. valgebra-jsonschema 0.0.3 reads
+    # `propertyNames` as a predicate, inside which no relation looks.
     output = {"type": "object", "propertyNames": {"enum": ["k"]}, "minProperties": 1}
     assert _reads(output, ("k",)) == "undecided"
 
@@ -214,8 +214,7 @@ def test_a_field_valgebra_cannot_prove_present_is_undecided() -> None:
 def test_a_field_is_held_only_where_every_member_carries_it_and_refuted_where_one_lacks_it(
     *, root_requires: bool, object_requires: bool, all_of_requires: bool, path: tuple[str, ...]
 ) -> None:
-    # The members' shapes, as far as `a` and `k` go, are these three. Without `allOf` the
-    # verdict is exact; with it valgebra may leave presence undecided, never decide it wrong.
+    # The members' shapes, as far as `a` and `k` go, are these three.
     output: dict[str, Any] = {
         "type": "object",
         "properties": {
@@ -237,15 +236,13 @@ def test_a_field_is_held_only_where_every_member_carries_it_and_refuted_where_on
     carried = all(
         path[0] in member and (len(path) == 1 or path[1] in member[path[0]]) for member in members
     )
-    verdict = _reads(output, path)
-    assert verdict != ("refuted" if carried else "held")
-    if not all_of_requires:
-        assert verdict == ("held" if carried else "refuted")
+    assert _reads(output, path) == ("held" if carried else "refuted")
 
 
 def test_a_field_a_test_on_the_way_may_have_kept_is_never_refuted() -> None:
-    # The test keeps the `a` whose only key is `k`, which valgebra cannot prove holds `k`; the
-    # root's `a` may lack it, but the test excluded every such `a`.
+    # The test keeps the `a` whose only key is `k`, a key set valgebra-jsonschema 0.0.3 reads
+    # as a predicate, so nothing proves it holds `k`; the root's `a` may lack it, but the test
+    # excluded every such `a`.
     keyed = {"type": "object", "propertyNames": {"enum": ["k"]}, "minProperties": 1}
     tools = {
         contract.name: contract
@@ -325,13 +322,14 @@ def test_a_value_no_member_carries_is_never_a_witness() -> None:
         "allOf": [{"properties": {"tag": narrowed}}],
     }
     [(claim, verdict, found)] = _bound(output, "r = get()\nu = use(tag=r.tag)\nstop(r)")
-    assert (claim, verdict != "proven") == ("r.tag <= use.tag", True)
+    assert (claim, verdict) == ("r.tag <= use.tag", "refuted")
     assert found in ((), ("zz",))
 
 
 def test_a_record_s_refutation_a_test_on_the_way_may_have_excluded_is_undecided() -> None:
-    # The test keeps the `a` whose only key is `k`, inside the argument though valgebra cannot
-    # prove it; the record refutes the binding on an `a` without `k`, which the test excluded.
+    # The test keeps the `a` whose only key is `k`, inside the argument though nothing proves it:
+    # valgebra-jsonschema 0.0.3 reads the key set as a predicate. The record refutes the binding
+    # on an `a` without `k`, which the test excluded.
     keyed = {"type": "object", "propertyNames": {"enum": ["k"]}, "minProperties": 1}
     tools = {
         contract.name: contract
