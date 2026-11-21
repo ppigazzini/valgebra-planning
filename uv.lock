@@ -1683,6 +1683,7 @@ build = [
     { name = "hatchling" },
 ]
 dev = [
+    { name = "griffelib" },
     { name = "hypothesis" },
     { name = "mcp" },
     { name = "pre-commit" },
@@ -1711,6 +1712,7 @@ provides-extras = ["mcp"]
 [package.metadata.requires-dev]
 build = [{ name = "hatchling", specifier = ">=1.33.0" }]
 dev = [
+    { name = "griffelib", specifier = ">=2.4.1" },
     { name = "hypothesis", specifier = ">=6.170.17" },
     { name = "mcp", specifier = ">=2.3.0,<3" },
     { name = "pre-commit", specifier = ">=4.7.0" },

@@ -116,8 +116,9 @@ and repository, `release.yml` and the environment.
    `Unreleased` entries roll into a section for the version, dated the day of the commit, with its
    compare and tag links. It lands on `main`, and the push runs `ci.yml` on the tree about to
    be published; the dispatches wait until it passes. The run's `api` job lists each public name
-   removed or changed since the last tag, and each is an entry under Changed or Removed: one it
-   lists and the changelog does not is fixed in the bump commit before any dispatch.
+   removed or changed since the last tag and fails on one no entry under Changed or Removed
+   names, so the bump commit records each before any dispatch:
+   `uv run --no-sync python tools/api_changes.py` runs it locally.
 3. **Dispatch to TestPyPI**, with the version confirmed:
 
    ```bash

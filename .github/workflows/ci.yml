@@ -116,11 +116,11 @@ jobs:
     name: the public API against the last release
     runs-on: ubuntu-26.04
     timeout-minutes: 10
-    # Each public name a release removed or changed since the last tag, as griffe reads it from
-    # every module's `__all__`, written as an annotation on the line that changed it. Under 0.0.x
-    # a release may break any name, so nothing waits on this job: its list is what the release's
-    # changelog records under Changed and Removed.
-    continue-on-error: true
+    # Each public name removed or changed since the last tag, as griffe reads it from every
+    # module's `__all__`, stands under Changed or Removed among the changelog's entries since
+    # that tag, as the releasing page asks before a dispatch. Under 0.0.x a release may break any
+    # name, so the job holds the record, not the name: `tools/api_changes.py` prints each change
+    # as an annotation and fails on one the changelog does not record.
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -129,11 +129,12 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v10.4.0
         with: { version: "0.13.9", python-version: "3.15", enable-cache: false }
-      - name: Compare the API with the last tag
+      - run: uv sync --locked
+      - name: Hold the changelog to the API's changes since the last tag
         run: |
           set -euo pipefail
           if git describe --tags --abbrev=0 --match 'v*' > /dev/null 2>&1; then
-            uvx griffe==2.4.1 check valgebra_planning -f github
+            uv run --no-sync python tools/api_changes.py
           else
             echo "no release tag yet: nothing to compare"
           fi
