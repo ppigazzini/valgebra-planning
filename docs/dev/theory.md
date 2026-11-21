@@ -58,7 +58,8 @@ IMPLEMENTED-BY: planner.py
 HELD-BY: test_a_strong_program_branches_on_every_status_and_verifies, test_a_weak_program_names_the_status_no_tool_settles, test_a_strong_program_breaks_no_contract_whatever_the_tools_return, test_the_depth_bounds_the_calls_and_tests_on_a_path
 
 **The verifier reads a program as belief execution.** The set a reference lies in at a point of
-a program is its belief there: a call's result enters as its output set, and a test narrows the
+a program is its belief there: a call's result enters as its output set, a loop's item as its
+array's item set, each replacing every belief held under its name, and a test narrows the
 tested reference to the set on its `then` branch and to the complement on its `else` branch
 (Bertoli et al. 2006, Def. 3.4). A plan applicable at every call is a strong solution exactly
 when every final belief lies inside the goal (Bertoli et al. 2006, Thm. 3.5), so a program whose
@@ -68,7 +69,7 @@ neither the cells nor the search. **[LOAD-BEARING: belief-execution]**
 
 IMPLEMENTED-BY: verify.py
 
-HELD-BY: test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole, test_a_record_no_call_makes_is_never_a_witness, test_a_record_a_call_makes_refutes_two_fields_of_one_value
+HELD-BY: test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole, test_a_record_no_call_makes_is_never_a_witness, test_a_record_a_call_makes_refutes_two_fields_of_one_value, test_a_loop_item_reads_no_field_of_a_value_its_name_held
 
 **A field is read where the held set proves it present.** Selection requires the selected
 field to be defined, the record's type a subtype of a record holding it (Castagna 2023,

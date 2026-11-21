@@ -150,7 +150,9 @@ class _Walk:
         Nothing crosses iterations, so one walk over the item's set holds for every item. The
         body may run any number of times, so the states a policy may be in when it starts are
         taken to a fixpoint, the states being finite. How many times it runs is the array's, so
-        its calls run under a test on the array's source.
+        its calls run under a test on the array's source. The item's name binds the item
+        alone: nothing the program held under that name, nor any field of it, is read in the
+        body.
         """
         held = self.held(env, end.ref, where)
         try:
@@ -171,7 +173,8 @@ class _Walk:
             # inside what it read: a link on an item could rest on a set the array refuses.
             self.links.append(Link(where, f"{end.ref}'s items lie in its item schema", "undecided"))
             return
-        inner = env | {Ref(end.item): _Held(item.values, item)}
+        inner = {ref: held for ref, held in env.items() if ref.variable != end.item}
+        inner[Ref(end.item)] = _Held(item.values, item)
         inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
         states = path.states
         while self.policies:
