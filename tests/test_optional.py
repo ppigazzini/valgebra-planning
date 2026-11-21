@@ -8,7 +8,7 @@ import pytest
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.program import Block, Call, Ref, Return, render
-from valgebra_planning.run import run
+from valgebra_planning.run import blame, run
 from valgebra_planning.verify import verify
 
 NOTE = {"type": "string", "pattern": "^n_[a-z]+$"}
@@ -89,6 +89,24 @@ def test_reading_the_field_without_the_test_is_refuted_by_a_record_lacking_it() 
     (lacking,) = refuted[0].counterexample
     assert "note" not in lacking
     assert TOOLS["track"].result("parcel").values.is_valid(lacking)
+
+
+def test_a_run_reading_a_field_the_value_lacks_ends_named() -> None:
+    untested = (
+        "c1 = track(tracking=tracking)\nc2 = annotate(note=c1.parcel.note)\nreturn c2.ticket\n"
+    )
+    tools = {
+        "track": lambda **_: {"parcel": {"id": "a"}},
+        "annotate": lambda **_: {"ticket": "t_1"},
+    }
+    for enforce in (True, False):
+        ended = run(read_program(untested), TOOLS, TASK, {"tracking": "x"}, tools, enforce=enforce)
+        assert ended.broken == ("c1.parcel.note is no value the run holds",)
+        assert ended.why is not None
+        assert ended.why.check == "read"
+    assert blame(ended, TOOLS, proven=False) == (
+        "a value the program reads no link of the program proves broke"
+    )
 
 
 def test_a_run_takes_the_branch_the_key_shows() -> None:

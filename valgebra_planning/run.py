@@ -4,7 +4,9 @@ The runner calls the tools a program names with the values the program binds, ta
 branch by testing the value it reads, and checks every argument record against the tool's
 input set, every policy's step before the call, every result against its output set and the
 returned value against the goal. It fails closed: a broken check stops the run before the call
-is made, the result bound or the value returned, and the run names the check. A proof of the
+is made, the result bound or the value returned, and the run names the check. A field the
+program reads and the value it holds lacks ends the run, named as a check too, since no value
+can be passed on in its place. A proof of the
 program rests on the contracts; a tool that answers outside its own is what a run must not pass
 on. With ``enforce=False`` a break is recorded and the run goes on, so one run reports every
 break it meets: a diagnosis, never a guard.
@@ -55,7 +57,10 @@ class ToolError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class Refusal:
-    """Which check ended a run: `arguments`, `policy`, `result`, `goal` or `error`, and its tool."""
+    """Which check ended a run: `arguments`, `policy`, `result`, `goal`, `error` or `read`.
+
+    ``tool`` is the tool the check was on, where it was on one.
+    """
 
     check: str
     tool: str | None = None
@@ -201,9 +206,22 @@ class _Runner:
         return self.block(taken, env)
 
 
+class _AbsentError(Exception):
+    """A reference the values a run holds do not reach."""
+
+    def __init__(self, ref: Ref) -> None:
+        super().__init__(str(ref))
+        self.ref = ref
+
+
 def _read(env: Mapping[str, Any], ref: Ref) -> Any:
+    """Return the value ``ref`` names in ``env``, or raise `_AbsentError` where none holds it."""
+    if ref.variable not in env:
+        raise _AbsentError(ref)
     value = env[ref.variable]
     for name in ref.path:
+        if not isinstance(value, dict) or name not in value:
+            raise _AbsentError(ref)
         value = value[name]
     return value
 
@@ -229,7 +247,12 @@ def run(
     unclashed(task, contracts)
     monitors = [Monitor(policy) for policy in policies]
     runner = _Runner(contracts, tools, task, monitors, enforce)
-    ended = runner.block(program, dict(inputs))
+    try:
+        ended = runner.block(program, dict(inputs))
+    except _AbsentError as absent:
+        message = f"{absent.ref} is no value the run holds"
+        runner.broken.append(message)
+        return Run(None, None, tuple(runner.broken), message, Refusal("read"))
     if ended is None:
         runner.broken.append("the program ends an iteration outside a loop")
         return Run(None, "the end of an iteration", tuple(runner.broken))
@@ -241,6 +264,7 @@ _CHECKED = {
     "arguments": "an argument record",
     "policy": "a policy",
     "goal": "the value returned",
+    "read": "a value the program reads",
 }
 
 
