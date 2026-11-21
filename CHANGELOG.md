@@ -58,6 +58,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
   proves an item carrying it in an array of a value the program may hold, on a value drawn or
   given for that value.
 
+- A loop over an array whose items the walk reads no single `items` for, as under
+  `prefixItems`, an `allOf` or a `$ref` beside another keyword, or reads a set valgebra does not
+  prove, takes each item as any value and asks every question on it of the array. The first was
+  refuted as no array of one item schema, a program every run of which passes; the others read
+  undecided. The loop's body and every step after it are walked either way, so a link there is
+  reported.
+
 ### Security
 
 - A loop's item binds its name alone. A field of a value the program held under that name

@@ -303,9 +303,14 @@ def test_a_field_read_its_record_refuses_takes_any_value() -> None:
     assert all(isinstance(value, int) for value in found)
 
 
-def test_a_loop_over_items_the_array_refuses_is_undecided() -> None:
+def test_a_loop_over_items_the_walk_misreads_is_asked_of_the_array() -> None:
+    # The walk resolves `T` from the document's root, a string; the array's own resource says
+    # an integer. The walk's reading is dropped, and the array is asked: no item is a string.
     output = _embedded({"type": "array", "items": {"$ref": "#/$defs/T"}}, required=False)
     output["$defs"] = {"T": {"type": "string"}}
     output["properties"]["a"]["$defs"] = {"T": {"type": "integer"}}
     links = _bound(output, "r = get()\nfor k in r.a:\n    u = use(k=k)\nreturn r")
-    assert links["r.a's items lie in its item schema"] == ("undecided", ())
+    verdict, found = links["k <= use.k"]
+    assert verdict == "refuted"
+    assert all(isinstance(value, int) for value in found)
+    assert links["return r <= goal"] == ("proven", ())

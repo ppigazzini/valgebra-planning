@@ -482,3 +482,82 @@ def test_an_item_s_field_is_held_only_where_every_item_carries_it(
     assert verdicts <= ({"undecided"} if carried else {"refuted", "undecided"})
     if not array_requires:
         assert verdicts == (set() if carried else {"refuted"})
+
+
+#: Four ways to declare an array's items the walk does not read: through an `allOf`, through
+#: a `$ref` beside another keyword, as a tuple of `items`, and not at all.
+def _unread(items: object) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    return [
+        ({"type": "array", "allOf": [{"items": items}]}, {}),
+        ({"$ref": "#/$defs/L", "minItems": 0}, {"L": {"type": "array", "items": items}}),
+        ({"type": "array", "prefixItems": [items, items], "items": False}, {}),
+        ({"type": "array"}, {}),
+    ]
+
+
+def _holding(rs: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
+    output: dict[str, Any] = {
+        "type": "object",
+        "properties": {"n": {"type": "integer"}, "rs": rs},
+        "required": ["n", "rs"],
+    }
+    if defs:
+        output["$defs"] = defs
+    return {
+        contract.name: contract
+        for contract in map(
+            read_contract,
+            [
+                {"name": "get", "inputSchema": {"type": "object"}, "outputSchema": output},
+                {
+                    "name": "use",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"tag": TAG},
+                        "required": ["tag"],
+                    },
+                },
+            ],
+        )
+    }
+
+
+LOOPED = "r = get()\nfor x in r.rs:\n    u = use(tag=x)\nreturn r"
+SHAPES = ["an allOf", "a reference beside a keyword", "a tuple", "no items keyword"]
+
+
+@pytest.mark.parametrize(("rs", "defs"), _unread(TAG)[:3], ids=SHAPES[:3])
+def test_a_loop_over_items_the_walk_cannot_read_is_never_refuted_where_each_is_inside(
+    rs: dict[str, Any], defs: dict[str, Any]
+) -> None:
+    tools = _holding(rs, defs)
+    checked = verify(read_program(LOOPED), tools, LISTED_ANY)
+    assert all(link.verdict != "refuted" for link in checked.links), checked.links
+    calls = {"get": lambda **_: {"n": 1, "rs": ["a", "b"]}, "use": lambda **_: {}}
+    assert run(read_program(LOOPED), tools, LISTED_ANY, {}, calls).why is None
+
+
+@pytest.mark.parametrize(("rs", "defs"), _unread({"type": "string"}), ids=SHAPES)
+def test_a_loop_over_items_the_walk_cannot_read_is_never_proven_where_one_is_outside(
+    rs: dict[str, Any], defs: dict[str, Any]
+) -> None:
+    tools = _holding(rs, defs)
+    [link] = [
+        link for link in verify(read_program(LOOPED), tools, LISTED_ANY).links if "x" in link.claim
+    ]
+    assert link.verdict != "proven"
+    assert all(value not in ("a", "b") for value in link.counterexample)
+    calls = {"get": lambda **_: {"n": 1, "rs": ["zz", "zz"]}, "use": lambda **_: {}}
+    ran = run(read_program(LOOPED), tools, LISTED_ANY, {}, calls)
+    assert ran.why is not None
+    assert ran.why.check == "arguments"
+
+
+def test_what_follows_a_loop_over_items_the_walk_cannot_read_is_verified() -> None:
+    # The loop's body and every step after it are walked, so a wrong return is reported.
+    tools = _holding(*_unread(TAG)[0])
+    task = read_task("listed", {}, TAG)
+    checked = verify(
+        read_program("r = get()\nfor x in r.rs:\n    u = use(tag=x)\nreturn r.n"), tools, task
+    )
+    assert {link.claim: link.verdict for link in checked.links}["return r.n <= goal"] == "refuted"

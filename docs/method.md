@@ -18,8 +18,8 @@ levels, beside the whole result. valgebra-jsonschema compiles each slot against 
 schema as root, and an older draft reads as it means. The walk listing the slots reads
 `properties`, `required`, `items` and a bare `$ref` itself, resolving a reference from the
 document's root, so a slot it yields is kept only where valgebra proves the whole schema's set
-inside it; a field it reads otherwise takes any value, and a loop over items it reads
-otherwise is undecided. The verifier reads any field below a value the program holds, at any depth, where
+inside it; a field it reads otherwise takes any value, and so does an item of an array it
+reads otherwise or not at all, a question on the item then asked of the array. The verifier reads any field below a value the program holds, at any depth, where
 valgebra proves every value held there an object holding its key (Castagna 2023): the record's
 schema requires it, or a test showing the key, `if "note" in c1.parcel:`, narrows the record to
 the values holding it, or the schema of the record's root requires it, as an `allOf` may of a
@@ -68,7 +68,10 @@ item set, the item and its fields read as a result's are, a test showing a key i
 item's name holds the item alone, never a field of a value the program held under that name
 before. The item set is what the array declares in `items`, which another keyword of the array
 may narrow, so a question it leaves open is asked of the value holding the array: whether every
-item the body's tests admit carries the field, or lies inside. A value refutes a link on an item
+item the body's tests admit carries the field, or lies inside. Where the walk reads no single
+`items`, as under `prefixItems`, an `allOf` or a `$ref` beside another keyword, the item set is
+every value, and each question is asked of the array so; the loop's body and every step after it
+are walked either way. A value refutes a link on an item
 only where valgebra proves an item carrying it in an array of a value the program may hold,
 proven on a value drawn or given for that value with such an array in place of its own.
 Nothing crosses iterations, since what the
@@ -221,8 +224,7 @@ refused, and a value from a task input with it, since a proxy sees no task.
 - **Types are the specification.** A slot whose schema admits any string, as an unasserted
   `format` does, takes any string; distinct schemas, patterns, enums and ranges are what make a
   plan mean what it should, and mined types narrow what observations support.
-- **What is not modeled.** Side effects beyond the calls a policy reads; an array with
-  `prefixItems`; a field or an item inside a resource with an `$id` of its own that refers into that resource,
+- **What is not modeled.** Side effects beyond the calls a policy reads; a field or an item inside a resource with an `$id` of its own that refers into that resource,
   which the walk resolves from the document's root and so reads as any value, a gap the
   companion's reader of the whole schema closes; a field whose record's `properties` do not declare it, which takes any JSON
   value, as one an `anyOf` alone declares; and a program the planner writes holds no
