@@ -32,8 +32,9 @@ only once the whole argument record is proven inside the input set, each argumen
 name as written, a trailing `?` included. The record is asked as the product of its arguments'
 sets, which holds every record the call can make, so a proof stands. Two arguments read from
 one value may move together, so the product refutes only where each argument is a constant or
-a whole result or input, no two the same; otherwise a record refutes only where valgebra proves
-the values the program holds carry it jointly, and the link is undecided where none does.
+a whole result or input, no two the same, with no field of it tested on the way; otherwise a
+record refutes only where valgebra proves the values the program holds carry it jointly, and
+the link is undecided where none does.
 
 ## The verifier
 
@@ -51,9 +52,10 @@ values drawn from the value's own schema hold one. A concrete member is a proof,
 refutes an undecided link. A field's declared schema may admit more than its record allows, as
 where an `allOf` narrows it, so a link on a field its declared set does not prove is asked of
 the value the field belongs to: whether the field lies inside on every such value carrying it.
-That value's answer refutes only where no test narrowed a field on the way, and a value drawn
-for the field is reported only where valgebra proves a value of the program carries it there. A constant's link is decided by membership alone, the constant being
-its own counterexample where it lies outside. The verifier reads neither the cells nor the
+That value is asked in its belief, its own set met with each field of it a test on the way
+narrowed, so its answer is exact both ways, and a value drawn for the field is reported only
+where valgebra proves a value of that belief carries it there. A constant's link is decided by
+membership alone, the constant being its own counterexample where it lies outside. The verifier reads neither the cells nor the
 search.
 
 A loop, `for item in ref:` over an array, is walked once for an arbitrary item of the array's

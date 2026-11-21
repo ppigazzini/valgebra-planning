@@ -64,26 +64,29 @@ tested reference to the set on its `then` branch and to the complement on its `e
 (Bertoli et al. 2006, Def. 3.4). A plan applicable at every call is a strong solution exactly
 when every final belief lies inside the goal (Bertoli et al. 2006, Thm. 3.5), so a program whose
 every link is proven and on which no path stops is strong. Each reference's set is read apart
-from the others', a belief containing the real one, so a proof stands; the verifier reads
-neither the cells nor the search. **[LOAD-BEARING: belief-execution]**
+from the others', a belief containing the real one, so a proof stands. A question asked of a
+value rather than its field is asked of the value's belief, its own set met with each field of
+it a test narrowed, so a refutation there names a value the program may hold; the verifier
+reads neither the cells nor the search. **[LOAD-BEARING: belief-execution]**
 
 IMPLEMENTED-BY: verify.py
 
-HELD-BY: test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole, test_a_record_no_call_makes_is_never_a_witness, test_a_record_a_call_makes_refutes_two_fields_of_one_value, test_a_loop_item_reads_no_field_of_a_value_its_name_held
+HELD-BY: test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole, test_a_record_no_call_makes_is_never_a_witness, test_a_record_a_call_makes_refutes_two_fields_of_one_value, test_a_loop_item_reads_no_field_of_a_value_its_name_held, test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads
 
 **A field is read where the held set proves it present.** Selection requires the selected
 field to be defined, the record's type a subtype of a record holding it (Castagna 2023,
 §3.2.2). A reference to a field below a value the program holds is held where valgebra proves
 every value held for its record an object holding the key, as a test showing the key narrows
 the record to (Bertoli et al. 2006, Def. 3.4), and otherwise where it proves every value of the
-root carries the path. A field valgebra proves absent from some value of the root, with no test
-narrowing a field on the way, or one a member of the root is proven to lack, is refuted; any
-other is undecided, so an undecided presence can cost a program and never admit a wrong one.
+root's belief carries the path: the root's set met with each field of it a test on the way
+narrowed. A field valgebra proves absent from some value of that belief, or one a value of it
+is proven to lack, is refuted; any other is undecided, so an undecided presence can cost a
+program and never admit a wrong one.
 **[LOAD-BEARING: field-selection]**
 
-IMPLEMENTED-BY: verify.py::_Walk.resolve, verify.py::_Walk.present
+IMPLEMENTED-BY: verify.py::_Walk.resolve, verify.py::_Walk.present, verify.py::_Walk.belief
 
-HELD-BY: test_a_key_test_on_an_item_makes_its_field_a_value_the_program_holds, test_a_field_two_objects_down_an_item_is_read_as_a_result_s_is, test_a_field_below_an_optional_one_is_held_under_both_tests, test_a_key_test_on_a_task_input_holds_its_field, test_a_field_another_keyword_requires_is_never_refuted, test_a_field_valgebra_cannot_prove_present_is_undecided, test_a_field_is_held_only_where_every_member_carries_it_and_refuted_where_one_lacks_it, test_a_field_a_test_on_the_way_may_have_kept_is_never_refuted, test_every_held_value_is_read_as_a_result_is
+HELD-BY: test_a_key_test_on_an_item_makes_its_field_a_value_the_program_holds, test_a_field_two_objects_down_an_item_is_read_as_a_result_s_is, test_a_field_below_an_optional_one_is_held_under_both_tests, test_a_key_test_on_a_task_input_holds_its_field, test_a_field_another_keyword_requires_is_never_refuted, test_a_field_valgebra_cannot_prove_present_is_undecided, test_a_field_is_held_only_where_every_member_carries_it_and_refuted_where_one_lacks_it, test_a_field_a_test_on_the_way_may_have_kept_is_never_refuted, test_every_held_value_is_read_as_a_result_is, test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads
 
 **The field read lies in its declared schema, not in its projection.** The type selected is
 the projection of the record's type on the label (Castagna 2023, §4.2), which valgebra does not
@@ -92,7 +95,7 @@ holding every value the field takes (Bertoli et al. 2006, Def. 3.4) that another
 record, as an `allOf`, may narrow further; valgebra proves each subschema the walk reads holds
 the values it stands for, or the field takes any value. A proof over it stands. The cost is a value the
 declared set admits that no member carries, so a witness drawn from it refutes only once valgebra
-proves a member of the root carries it, and an item of an array whose declared `items` another
+proves a value of the root's belief carries it, and an item of an array whose declared `items` another
 keyword narrows, which a loop reads in `items` alone. **[DEVIATION: declared-fields]**
 
 IMPLEMENTED-BY: contracts.py::field_slot, verify.py::_Walk.lacking
@@ -104,13 +107,13 @@ is the least type the record holding that label under it includes (Castagna 2023
 field lies inside a set on every value carrying it exactly when the value's set lies inside the
 record of values carrying the field in that set, which valgebra decides without the projection.
 The program's own tests prove the field carried on the path the link sits on (Bertoli et al.
-2006, Def. 3.4). A link the field's declared set does not prove is asked so; the answer refutes
-only where no test narrowed a field on the way, since a value it names may be one a test
-excluded. **[LOAD-BEARING: field-links]**
+2006, Def. 3.4). A link the field's declared set does not prove is asked so, of the value's
+belief, every test on the way included, so a refutation names a value the program may hold
+there. **[LOAD-BEARING: field-links]**
 
-IMPLEMENTED-BY: verify.py::_Walk.inclusion
+IMPLEMENTED-BY: verify.py::_Walk.inclusion, verify.py::_Walk.asked
 
-HELD-BY: test_a_field_its_record_narrows_is_proven_by_the_record, test_a_value_no_member_carries_is_never_a_witness, test_a_record_s_refutation_a_test_on_the_way_may_have_excluded_is_undecided, test_a_witness_drawn_for_a_field_is_reported_where_a_member_carries_it, test_a_field_link_is_proven_only_where_every_member_s_field_lies_inside
+HELD-BY: test_a_field_its_record_narrows_is_proven_by_the_record, test_a_value_no_member_carries_is_never_a_witness, test_a_record_s_refutation_a_test_on_the_way_may_have_excluded_is_undecided, test_a_witness_drawn_for_a_field_is_reported_where_a_member_carries_it, test_a_field_link_is_proven_only_where_every_member_s_field_lies_inside, test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads
 
 **A retry is a strong cyclic solution.** A call made again in its own error block is a loop that
 can always reach the goal (Daniele et al. 2000, Def. 7), and it ends under fairness: an

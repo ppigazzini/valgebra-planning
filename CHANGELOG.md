@@ -46,6 +46,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
   value only the declared schema admits, which no result carries, is never reported as a
   counterexample.
 
+- A value a test narrowed a field of is asked in its belief, its set met with each field
+  tested: a field, a presence and an argument record are refuted only on a value the program
+  may hold there. Under `if r.n in (1,):`, a read of `r.f` that every member with `n` 1 keeps
+  inside its argument was refuted on a member with `n` 2, which the test excluded.
+
 ### Security
 
 - A loop's item binds its name alone. A field of a value the program held under that name
