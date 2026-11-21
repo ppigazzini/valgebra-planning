@@ -25,6 +25,8 @@ All notable changes to valgebra-planning are recorded here. The format follows
 - A flow rule reads a value as the verifier reads it, a field read below an item included.
 - A loop over an array whose `items` refers into a resource with an `$id` of its own reads
   undecided; the verifier raised `Unsupported`.
+- A run reading a field the value it holds lacks ends with the read named as a broken check,
+  `Refusal.check` `read`, with `enforce` or without; it raised `KeyError`.
 - A link on a field whose declared schema another keyword narrows, as an `allOf`, is asked of
   the value the field belongs to: such a field bound inside its argument is proven, and a
   value only the declared schema admits, which no result carries, is never reported as a
