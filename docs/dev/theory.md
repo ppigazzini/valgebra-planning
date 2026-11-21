@@ -88,14 +88,27 @@ HELD-BY: test_a_key_test_on_an_item_makes_its_field_a_value_the_program_holds, t
 the projection of the record's type on the label (Castagna 2023, §4.2), which valgebra does not
 compute. A field read lies in the subschema its record's schema declares for the key, a belief
 holding every value the field takes (Bertoli et al. 2006, Def. 3.4) that another keyword of the
-record, as an `allOf`, may narrow further. A proof over it stands. The cost is a link the
-projection would prove and the declared set does not, and a value the declared set admits that
-no member carries, so a witness drawn from it refutes only once valgebra proves a member of the
-root carries it. **[DEVIATION: declared-fields]**
+record, as an `allOf`, may narrow further. A proof over it stands. The cost is a value the
+declared set admits that no member carries, so a witness drawn from it refutes only once valgebra
+proves a member of the root carries it, and an item of an array whose declared `items` another
+keyword narrows, which a loop reads in `items` alone. **[DEVIATION: declared-fields]**
 
 IMPLEMENTED-BY: contracts.py::field_slot, verify.py::_Walk.lacking
 
-HELD-BY: test_a_flow_rule_reads_a_field_the_verifier_reads_below_an_item, test_a_field_another_keyword_requires_is_never_refuted, test_reading_the_field_without_the_test_is_refuted_by_a_record_lacking_it
+HELD-BY: test_a_flow_rule_reads_a_field_the_verifier_reads_below_an_item, test_a_field_another_keyword_requires_is_never_refuted, test_reading_the_field_without_the_test_is_refuted_by_a_record_lacking_it, test_a_value_no_member_carries_is_never_a_witness
+
+**A link on a field is asked of the value it belongs to.** The projection of a type on a label
+is the least type the record holding that label under it includes (Castagna 2023, §4.2), so the
+field lies inside a set on every value carrying it exactly when the value's set lies inside the
+record of values carrying the field in that set, which valgebra decides without the projection.
+The program's own tests prove the field carried on the path the link sits on (Bertoli et al.
+2006, Def. 3.4). A link the field's declared set does not prove is asked so; the answer refutes
+only where no test narrowed a field on the way, since a value it names may be one a test
+excluded. **[LOAD-BEARING: field-links]**
+
+IMPLEMENTED-BY: verify.py::_Walk.inclusion
+
+HELD-BY: test_a_field_its_record_narrows_is_proven_by_the_record, test_a_value_no_member_carries_is_never_a_witness, test_a_record_s_refutation_a_test_on_the_way_may_have_excluded_is_undecided, test_a_witness_drawn_for_a_field_is_reported_where_a_member_carries_it, test_a_field_link_is_proven_only_where_every_member_s_field_lies_inside
 
 **A retry is a strong cyclic solution.** A call made again in its own error block is a loop that
 can always reach the goal (Daniele et al. 2000, Def. 7), and it ends under fairness: an

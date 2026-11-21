@@ -17,6 +17,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
   is asked of the root, and never refuted on a value the declared schema admits and no result
   carries. A field whose presence valgebra leaves undecided reads undecided, not refuted.
 - A flow rule reads a value as the verifier reads it, a field read below an item included.
+- A link on a field whose declared schema another keyword narrows, as an `allOf`, is asked of
+  the value the field belongs to: such a field bound inside its argument is proven, and a
+  value only the declared schema admits, which no result carries, is never reported as a
+  counterexample.
 
 ### Security
 

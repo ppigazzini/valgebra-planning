@@ -256,3 +256,138 @@ def test_a_field_a_test_on_the_way_may_have_kept_is_never_refuted() -> None:
     source = "r = get()\nif r.a in keep.a:\n    return r.a.k\nstop(r)"
     claims = {link.claim: link.verdict for link in verify(read_program(source), tools, TASK).links}
     assert claims["r.a.k is a value the program holds"] == "undecided"
+
+
+TAG = {"enum": ["a", "b"]}
+
+
+def _bound(output: object, source: str) -> list[tuple[str, str, tuple[object, ...]]]:
+    """Return the links not proven of ``source``, over `get` returning ``output`` and `use`."""
+    tools = {
+        contract.name: contract
+        for contract in map(
+            read_contract,
+            [
+                {"name": "get", "inputSchema": {"type": "object"}, "outputSchema": output},
+                {
+                    "name": "use",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"tag": TAG},
+                        "required": ["tag"],
+                    },
+                },
+            ],
+        )
+    }
+    links = verify(read_program(source), tools, read_task("use", {}, True)).links
+    return [(ln.claim, ln.verdict, ln.counterexample) for ln in links if ln.verdict != "proven"]
+
+
+def test_a_field_its_record_narrows_is_proven_by_the_record() -> None:
+    # The field declares any string; the record's `allOf` keeps it inside the argument.
+    output = {
+        "type": "object",
+        "properties": {"tag": {"type": "string"}},
+        "required": ["tag"],
+        "allOf": [{"properties": {"tag": TAG}}],
+    }
+    assert _bound(output, "r = get()\nu = use(tag=r.tag)\nstop(r)") == []
+
+
+def test_a_value_no_member_carries_is_never_a_witness() -> None:
+    # `"zz"` lies outside the argument and every result may carry it; a string drawn for the
+    # declared field is a witness only where the record admits it too.
+    narrowed = {"enum": ["a", "b", "zz"]}
+    output = {
+        "type": "object",
+        "properties": {"tag": {"type": "string"}},
+        "required": ["tag"],
+        "allOf": [{"properties": {"tag": narrowed}}],
+    }
+    [(claim, verdict, found)] = _bound(output, "r = get()\nu = use(tag=r.tag)\nstop(r)")
+    assert (claim, verdict != "proven") == ("r.tag <= use.tag", True)
+    assert found in ((), ("zz",))
+
+
+def test_a_record_s_refutation_a_test_on_the_way_may_have_excluded_is_undecided() -> None:
+    # The test keeps the `a` whose only key is `k`, inside the argument though valgebra cannot
+    # prove it; the record refutes the binding on an `a` without `k`, which the test excluded.
+    keyed = {"type": "object", "propertyNames": {"enum": ["k"]}, "minProperties": 1}
+    tools = {
+        contract.name: contract
+        for contract in map(
+            read_contract,
+            [
+                {
+                    "name": "get",
+                    "inputSchema": {"type": "object"},
+                    "outputSchema": {
+                        "type": "object",
+                        "properties": {"a": {"type": "object"}},
+                        "required": ["a"],
+                    },
+                },
+                {
+                    "name": "keep",
+                    "inputSchema": {"type": "object", "properties": {"a": keyed}},
+                },
+                {
+                    "name": "use",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"a": {"type": "object", "required": ["k"]}},
+                        "required": ["a"],
+                    },
+                },
+            ],
+        )
+    }
+    source = "r = get()\nif r.a in keep.a:\n    u = use(a=r.a)\n    stop(r)\nstop(r)"
+    links = verify(read_program(source), tools, read_task("use", {}, True)).links
+    assert {link.claim: link.verdict for link in links}["r.a <= use.a"] == "undecided"
+
+
+def test_a_witness_drawn_for_a_field_is_reported_where_a_member_carries_it() -> None:
+    worker = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "pattern": "^[a-z]{3}-[0-9]{4}$"},
+            "key": {"type": "string", "pattern": "^[0-9a-f]{8}$"},
+            "arch": {"enum": ["a", "unknown"]},
+        },
+        "required": ["name", "key", "arch"],
+        "additionalProperties": False,
+    }
+    output = {"type": "object", "properties": {"w": worker}, "required": ["w"]}
+    [(claim, verdict, found)] = _bound(output, "r = get()\nu = use(tag=r.w.arch)\nstop(r)")
+    assert (claim, verdict, found) == ("r.w.arch <= use.tag", "refuted", ("unknown",))
+
+
+@pytest.mark.parametrize(
+    ("declared", "narrowed"),
+    list(
+        itertools.product(
+            [["a", "b"], ["a", "b", "zz"], ["a", "zz"]], [None, ["a", "b"], ["a", "zz"], ["zz"]]
+        )
+    ),
+)
+def test_a_field_link_is_proven_only_where_every_member_s_field_lies_inside(
+    *, declared: list[str], narrowed: list[str] | None
+) -> None:
+    # The members' tags are the declared ones the `allOf` keeps; a witness is one of them.
+    output: dict[str, Any] = {
+        "type": "object",
+        "properties": {"tag": {"enum": declared}},
+        "required": ["tag"],
+    }
+    if narrowed is not None:
+        output["allOf"] = [{"properties": {"tag": {"enum": narrowed}}}]
+    tags = {tag for tag in declared if narrowed is None or tag in narrowed}
+    [*links] = _bound(output, "r = get()\nu = use(tag=r.tag)\nstop(r)")
+    if tags <= {"a", "b"}:
+        assert links == []
+    else:
+        [(_, verdict, found)] = links
+        assert verdict != "proven"
+        assert set(found) <= tags - {"a", "b"}

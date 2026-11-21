@@ -41,7 +41,11 @@ program rests on: a value inside the argument it fills, the record where the arg
 related, the returned value inside the goal. Each link reads proven, refuted or undecided, and a
 refuted or undecided one carries a value outside the inclusion where the examples given or the
 values drawn from the value's own schema hold one. A concrete member is a proof, so such a value
-refutes an undecided link. A constant's link is decided by membership alone, the constant being
+refutes an undecided link. A field's declared schema may admit more than its record allows, as
+where an `allOf` narrows it, so a link on a field its declared set does not prove is asked of
+the value the field belongs to: whether the field lies inside on every such value carrying it.
+That value's answer refutes only where no test narrowed a field on the way, and a value drawn
+for the field is reported only where valgebra proves a value of the program carries it there. A constant's link is decided by membership alone, the constant being
 its own counterexample where it lies outside. The verifier reads neither the cells nor the
 search.
 
@@ -197,7 +201,8 @@ refused, and a value from a task input with it, since a proxy sees no task.
   `format` does, takes any string; distinct schemas, patterns, enums and ranges are what make a
   plan mean what it should, and mined types narrow what observations support.
 - **What is not modeled.** Side effects beyond the calls a policy reads; an array with
-  `prefixItems`; a field whose record's `properties` do not declare it, which takes any JSON
+  `prefixItems`; an item of an array another keyword narrows, as an `allOf` beside `items`,
+  which a loop reads in `items` alone, so a link on it can be refuted on a value no item takes; a field whose record's `properties` do not declare it, which takes any JSON
   value, as one an `anyOf` alone declares; and a program the planner writes holds no
   constant, tests no key and loops over no array. A program written elsewhere may do all three, and each is checked like any
   value.

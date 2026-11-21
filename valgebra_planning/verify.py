@@ -126,7 +126,8 @@ class _Walk:
         if isinstance(end, Return):
             held = self.held(env, end.ref, where)
             if held is not None:
-                self.inclusion(where, f"return {end.ref} <= goal", end.ref, held, self.task.goal)
+                claim = f"return {end.ref} <= goal"
+                self.inclusion(where, claim, end.ref, held, self.task.goal, env)
             self.obeyed(where, path.states)
         elif isinstance(end, Stop):
             self.gaps.append(Gap(where, str(end.ref)))
@@ -270,7 +271,7 @@ class _Walk:
             if slot is None or held is None:
                 continue
             bound[name] = held
-            self.inclusion(where, f"{ref} <= {slot.name}", ref, held, slot.values)
+            self.inclusion(where, f"{ref} <= {slot.name}", ref, held, slot.values, env)
         return bound
 
     def flowing(self, call: Call, env: dict[Ref, _Held], where: str, path: _Path) -> None:
@@ -295,7 +296,7 @@ class _Walk:
                 if flow.endorsed is None:
                     self.links.append(Link(where, claim, "refuted"))
                 else:
-                    self.inclusion(where, claim, ref, held, flow.endorsed)
+                    self.inclusion(where, claim, ref, held, flow.endorsed, env)
 
     def literal(self, where: str, flow: Flow, const: Const) -> None:
         """Add the link of a literal a rule holds: proven only inside the endorsed set."""
@@ -338,11 +339,37 @@ class _Walk:
         self.links.append(Link(where, claim, "refuted" if found else verdict, found))
 
     def inclusion(
-        self, where: str, claim: str, ref: Ref, held: _Held, target: Validator[Any]
+        self,
+        where: str,
+        claim: str,
+        ref: Ref,
+        held: _Held,
+        target: Validator[Any],
+        env: dict[Ref, _Held],
     ) -> None:
+        """Add the link of ``ref`` inside ``target``, with a value outside it where one is found.
+
+        A field's set is what its record's schema declares, which another keyword may narrow,
+        so a link that set leaves open is asked of the root: the field lies inside ``target``
+        on every value of the root carrying it, the inclusion that types a selected field
+        (Castagna 2023, §4.2), and the program's own tests prove it carried on this path
+        (Bertoli et al. 2006, Def. 3.4). A refutation rests on the root's answer only where no
+        test narrowed a field on the way, and on a value drawn for the field only where
+        valgebra proves a member of the root carries it there.
+        """
         verdict = _relation(held.values, target)
         found: tuple[Any, ...] = ()
-        if verdict != "proven":
+        root = env.get(Ref(ref.variable)) if ref.path else None
+        if verdict != "proven" and root is not None:
+            # Realize a witness first: a wrong program is refuted on one question of valgebra,
+            # and the root is asked only where none is, the case where it may prove the link.
+            outside = [v for v in self.candidates(ref, held) if not target.is_valid(v)][:8]
+            found = self.realized(env, ref, outside)
+            if not found:
+                verdict = _relation(root.values, _within(ref.path, target))
+                if verdict == "refuted" and _narrowed(env, ref.variable, ref.path):
+                    verdict = "undecided"
+        elif verdict != "proven":
             outside = [v for v in self.candidates(ref, held) if not target.is_valid(v)]
             found = tuple(outside[:1])
         verdict = "refuted" if found else verdict
@@ -415,6 +442,13 @@ class _Walk:
             bare = {name: item for name, item in value.items() if name != key}
             if read.record.values.is_valid(bare) and self.carried(env, ref.variable, path, bare):
                 return (bare,)
+        return ()
+
+    def realized(self, env: dict[Ref, _Held], ref: Ref, values: Sequence[Any]) -> tuple[Any, ...]:
+        """Return one of ``values`` valgebra proves a member of the root carries at ``ref``."""
+        for value in values:
+            if self.carried(env, ref.variable, ref.path, value):
+                return (value,)
         return ()
 
     def carried(
@@ -498,6 +532,17 @@ def _selecting(path: tuple[str, ...], values: Validator[Any]) -> Validator[Any]:
     """Return the objects whose field at ``path`` lies in ``values``, whatever else they hold."""
     for key in reversed(path):
         values = record_of({key: values}, closed=False)
+    return values
+
+
+def _within(path: tuple[str, ...], values: Validator[Any]) -> Validator[Any]:
+    """Return the values whose field at ``path``, wherever each key on it is, lies in ``values``.
+
+    Each key is spelled optional with a ``?`` appended, which valgebra's display strips once,
+    so a key is read as written; a clause admits every other key with any value.
+    """
+    for key in reversed(path):
+        values = Validator({f"{key}?": values, str: anything})
     return values
 
 
