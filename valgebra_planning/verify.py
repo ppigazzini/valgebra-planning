@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import itertools
 import random
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -240,7 +240,7 @@ class _Walk:
             if slot.required and slot.path[0] not in dict(call.bindings):
                 self.links.append(Link(where, f"{slot.name} is bound", "refuted"))
         if not contract.plain and len(bound) == len(call.bindings):
-            self.record(call, contract, bound, where)
+            self.record(call, contract, bound, where, env)
         after = states
         if self.policies:
             record = record_of({name: held.values for name, held in bound.items()}, closed=True)
@@ -339,19 +339,67 @@ class _Walk:
         elif not call.retry and self.errors:
             self.gaps.append(Gap(where, f"an error of {call.tool}"))
 
-    def record(self, call: Call, contract: Contract, bound: dict[str, _Held], where: str) -> None:
+    def record(
+        self,
+        call: Call,
+        contract: Contract,
+        bound: dict[str, _Held],
+        where: str,
+        env: dict[Ref, _Held],
+    ) -> None:
+        """Add the link of a call's argument record inside the tool's input set.
+
+        The record is asked as the product of each argument's set, which holds every record the
+        call can make, so a proof over it stands. Two arguments read from one value may move
+        together, and a field's set may admit what its record refuses, so the product admits
+        records no call makes: it refutes only where each argument is a constant or a whole value
+        the program holds, no two the same, and otherwise a record refutes only where valgebra
+        proves the values the program holds carry it, jointly.
+        """
         record = record_of({name: held.values for name, held in bound.items()}, closed=True)
         claim = f"the arguments of {call.tool} <= its input schema"
         verdict = _relation(record, contract.accepts)
         found: tuple[Any, ...] = ()
         if verdict != "proven":
+            refs = dict(call.bindings)
             choices = [self.candidates(Ref(name), held)[:3] for name, held in bound.items()]
             for values in itertools.islice(itertools.product(*choices), 64):
                 value = dict(zip(bound, values, strict=True))
-                if not contract.accepts.is_valid(value):
+                if not contract.accepts.is_valid(value) and self.jointly(env, refs, value):
                     found = (value,)
                     break
+            if not found and verdict == "refuted" and not _apart(env, refs.values()):
+                verdict = "undecided"
         self.links.append(Link(where, claim, "refuted" if found else verdict, found))
+
+    def jointly(
+        self, env: dict[Ref, _Held], refs: Mapping[str, Ref | Const], record: Mapping[str, Any]
+    ) -> bool:
+        """Return whether valgebra proves the values the program holds carry ``record`` jointly.
+
+        Arguments read from one value must be carried by one of its members, inside every set
+        held on the way; arguments read from distinct values, and constants, are apart.
+        """
+        held: dict[str, list[tuple[tuple[str, ...], Any]]] = {}
+        for name, ref in refs.items():
+            if isinstance(ref, Ref):
+                held.setdefault(ref.variable, []).append((ref.path, record[name]))
+        for variable, read in held.items():
+            root = env.get(Ref(variable))
+            if root is None:
+                return False
+            meet = root.values
+            for path, value in read:
+                meet = intersection(
+                    meet, selecting(path, listed([value])) if path else listed([value])
+                )
+                for depth in range(1, len(path)):
+                    on = env.get(Ref(variable, path[:depth]))
+                    if on is not None:
+                        meet = intersection(meet, selecting(path[:depth], on.values))
+            if meet.relation_to(nothing) != "not_subset":
+                return False
+        return True
 
     def inclusion(
         self,
@@ -558,6 +606,24 @@ class _Read:
     answer: str = "subset"
     record: _Held | None = None
     at: int = 0
+
+
+def _apart(env: dict[Ref, _Held], refs: Iterable[Ref | Const]) -> bool:
+    """Return whether each argument is a constant or a whole result or input, no two the same.
+
+    Such values are read in the sets their schemas compile to and are independent, so their
+    product is every record the call can make. A loop's item is read in the `items` the walk
+    read, which may hold more than the array's items.
+    """
+    variables = []
+    for ref in refs:
+        if isinstance(ref, Const):
+            continue
+        held = env.get(Ref(ref.variable))
+        if ref.path or held is None or held.origin.path:
+            return False
+        variables.append(ref.variable)
+    return len(variables) == len(set(variables))
 
 
 def _narrowed(env: dict[Ref, _Held], variable: str, path: tuple[str, ...]) -> bool:
