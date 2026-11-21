@@ -15,7 +15,6 @@ proof.
 
 from __future__ import annotations
 
-import functools
 import itertools
 import random
 from collections.abc import Mapping, Sequence
@@ -23,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from valgebra_planning._valgebra import (
+    ARRAY,
     Sampler,
     Unsupported,
     Validator,
@@ -36,10 +36,14 @@ from valgebra_planning.contracts import (
     Slot,
     Task,
     field_slot,
+    having,
     item_slots,
     listed,
     record_of,
+    selecting,
     unclashed,
+    unread,
+    within,
 )
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Policy
@@ -149,14 +153,25 @@ class _Walk:
         its calls run under a test on the array's source.
         """
         held = self.held(env, end.ref, where)
-        items = () if held is None else item_slots(held.origin)
+        try:
+            items = () if held is None else item_slots(held.origin)
+        except Unsupported:
+            # The walk compiles `items` apart from the resource it sits in, which the companion
+            # may refuse though it reads the whole schema.
+            self.links.append(Link(where, f"{end.ref}'s items lie in its item schema", "undecided"))
+            return
         if held is None or not items:
             if held is not None:
                 claim = f"{end.ref} is an array of one item schema"
                 self.links.append(Link(where, claim, "refuted"))
             return
-        base = len(held.origin.path) + 1
-        inner = env | {Ref(end.item, s.path[base:]): _Held(s.values, s) for s in items}
+        item = items[0]
+        if intersection(held.values, ARRAY).relation_to(Validator([item.values])) != "subset":
+            # The walk read `items` itself, and valgebra does not prove the array's items lie
+            # inside what it read: a link on an item could rest on a set the array refuses.
+            self.links.append(Link(where, f"{end.ref}'s items lie in its item schema", "undecided"))
+            return
+        inner = env | {Ref(end.item): _Held(item.values, item)}
         inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
         states = path.states
         while self.policies:
@@ -194,7 +209,7 @@ class _Walk:
     def branch(self, test: Branch, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         held = self.held(env, test.ref, where)
         if test.key:
-            tested = _having(test.key)
+            tested = having(test.key)
         elif test.tool:
             slot = self.argument(test.tool, test.argument, where)
             tested = None if slot is None else slot.values
@@ -366,7 +381,7 @@ class _Walk:
             outside = [v for v in self.candidates(ref, held) if not target.is_valid(v)][:8]
             found = self.realized(env, ref, outside)
             if not found:
-                verdict = _relation(root.values, _within(ref.path, target))
+                verdict = _relation(root.values, within(ref.path, target))
                 if verdict == "refuted" and _narrowed(env, ref.variable, ref.path):
                     verdict = "undecided"
         elif verdict != "proven":
@@ -399,15 +414,38 @@ class _Walk:
                 continue
             for at in range(depth, len(ref.path)):
                 key = ref.path[at]
-                answer = held.values.relation_to(_having(key))
+                answer = held.values.relation_to(having(key))
                 if answer != "subset" and at:
                     answer = self.present(env, ref.variable, ref.path[: at + 1])
                 if answer != "subset":
                     return _Read(None, answer, held, at)
-                slot = field_slot(held.origin, key)
+                slot = self.field(held, key)
                 held = _Held(slot.values, slot)
             return _Read(held)
         return _Read(None, "unbound")
+
+    def field(self, held: _Held, key: str) -> Slot:
+        """Return the slot of field ``key`` of the record ``held``, as far as valgebra proves it.
+
+        The walk reads the record's schema itself, so what it reads is kept only where valgebra
+        proves the record's values carry the key nowhere outside it; a reading it does not
+        prove, or one the companion refuses apart from its resource, takes any value.
+        """
+        try:
+            slot = field_slot(held.origin, key)
+        except Unsupported:
+            path = (*held.origin.path, key)
+            return Slot(
+                held.origin.tool,
+                path,
+                schema=True,
+                values=anything,
+                required=True,
+                root=held.origin.root,
+            )
+        if held.values.relation_to(within((key,), slot.values)) != "subset":
+            return unread(slot)
+        return slot
 
     def present(self, env: dict[Ref, _Held], variable: str, path: tuple[str, ...]) -> str:
         """Return valgebra's answer on every value of the root carrying ``path``.
@@ -421,7 +459,7 @@ class _Walk:
         root = env.get(Ref(variable))
         if root is None:
             return "undecided"
-        answer = root.values.relation_to(_selecting(path, anything))
+        answer = root.values.relation_to(selecting(path, anything))
         if answer == "not_subset" and _narrowed(env, variable, path[:-1]):
             return "undecided"
         return answer
@@ -463,11 +501,11 @@ class _Walk:
             return False
         if not path:
             return root.values.is_valid(value)
-        meet = intersection(root.values, _selecting(path, listed([value])))
+        meet = intersection(root.values, selecting(path, listed([value])))
         for depth in range(1, len(path)):
             held = env.get(Ref(variable, path[:depth]))
             if held is not None:
-                meet = intersection(meet, _selecting(path[:depth], held.values))
+                meet = intersection(meet, selecting(path[:depth], held.values))
         return meet.relation_to(nothing) == "not_subset"
 
     def candidates(self, ref: Ref, held: _Held) -> list[Any]:
@@ -520,30 +558,6 @@ class _Read:
     answer: str = "subset"
     record: _Held | None = None
     at: int = 0
-
-
-@functools.cache
-def _having(key: str) -> Validator[Any]:
-    """Return the objects holding ``key``, whatever else they hold."""
-    return record_of({key: anything}, closed=False)
-
-
-def _selecting(path: tuple[str, ...], values: Validator[Any]) -> Validator[Any]:
-    """Return the objects whose field at ``path`` lies in ``values``, whatever else they hold."""
-    for key in reversed(path):
-        values = record_of({key: values}, closed=False)
-    return values
-
-
-def _within(path: tuple[str, ...], values: Validator[Any]) -> Validator[Any]:
-    """Return the values whose field at ``path``, wherever each key on it is, lies in ``values``.
-
-    Each key is spelled optional with a ``?`` appended, which valgebra's display strips once,
-    so a key is read as written; a clause admits every other key with any value.
-    """
-    for key in reversed(path):
-        values = Validator({f"{key}?": values, str: anything})
-    return values
 
 
 def _narrowed(env: dict[Ref, _Held], variable: str, path: tuple[str, ...]) -> bool:
