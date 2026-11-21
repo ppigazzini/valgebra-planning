@@ -13,6 +13,7 @@ The text reads as Python, so a program written elsewhere in that form is read ba
 from __future__ import annotations
 
 import json
+import keyword
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,7 +40,17 @@ class Ref:
     path: tuple[str, ...] = ()
 
     def __str__(self) -> str:
-        return ".".join((self.variable, *self.path))
+        """Return the reference as a program writes it, a key no attribute names subscripted.
+
+        A key that is no Python identifier, or is a keyword, as `a-b` or `class`, reads back only
+        as a subscript, `x["a-b"]`, the form the critic reads it in.
+        """
+        return self.variable + "".join(
+            f".{key}"
+            if key.isidentifier() and not keyword.iskeyword(key)
+            else f"[{json.dumps(key)}]"
+            for key in self.path
+        )
 
 
 @dataclass(frozen=True, slots=True)

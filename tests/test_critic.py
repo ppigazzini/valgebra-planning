@@ -186,3 +186,10 @@ def test_a_constant_is_one_json_value_in_either_spelling() -> None:
 def test_a_constant_that_is_no_json_value_is_refused(written: str) -> None:
     with pytest.raises(ProgramError, match="line 2"):
         read_program(LITERAL.replace("500", written))
+
+
+def test_a_key_no_attribute_names_reads_back_as_a_subscript() -> None:
+    source = 'c1 = get()\nc2 = use(tag=c1["a-b"]["c.d"])\nreturn c1["class"].k'
+    program = read_program(source)
+    assert render(program) == source
+    assert render(read_program(render(program))) == source

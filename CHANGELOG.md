@@ -26,6 +26,9 @@ All notable changes to valgebra-planning are recorded here. The format follows
 - A flow rule reads a value as the verifier reads it, a field read below an item included.
 - A loop over an array whose `items` refers into a resource with an `$id` of its own reads
   undecided; the verifier raised `Unsupported`.
+- A key that is no Python identifier, or is a keyword, as `a-b` or `class`, is written as a
+  subscript, `x["a-b"]`, in a rendered program, a link's claim and a critique, so each reads
+  back; it was joined with a dot, which no reader reads.
 - A run reading a field the value it holds lacks ends with the read named as a broken check,
   `Refusal.check` `read`, with `enforce` or without; it raised `KeyError`.
 - A link on a field whose declared schema another keyword narrows, as an `allOf`, is asked of
