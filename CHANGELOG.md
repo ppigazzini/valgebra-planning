@@ -12,6 +12,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
   record lacking the key or valgebra leaves its presence undecided, names the key test to add:
   `if "note" in c1.parcel:`, and the read in its branch.
 
+### Changed
+
+- The documentation site is built by Zensical, Material for MkDocs' maintained successor, from
+  `mkdocs.yml` as written under `zensical build --strict`: its own search, the redirects from
+  each page's former address, `llms.txt` and `llms-full.txt`, the Mermaid diagrams and the API
+  reference through the mkdocstrings Python handler. No page moves.
+
 ### Removed
 
 - `Contract.optional`. The verifier reads a field below any value a program holds where
