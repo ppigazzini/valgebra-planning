@@ -64,10 +64,10 @@ else:
     stop(c1.parcel)"""
 
 
-def test_an_optional_field_is_a_slot_held_apart_from_the_guaranteed_ones() -> None:
-    track = TOOLS["track"]
-    assert [slot.name for slot in track.optional] == ["track.parcel.note"]
-    assert "track.parcel.note" not in [slot.name for slot in track.results]
+def test_an_optional_field_is_no_result_slot() -> None:
+    # The planner holds every result slot after a call, so a field that may be absent is none.
+    assert "track.parcel.note" not in [slot.name for slot in TOOLS["track"].results]
+    assert "track.parcel.id" in [slot.name for slot in TOOLS["track"].results]
 
 
 def test_a_test_for_the_key_makes_the_field_a_value_the_program_holds() -> None:

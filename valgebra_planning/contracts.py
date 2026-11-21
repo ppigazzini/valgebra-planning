@@ -85,9 +85,6 @@ class Contract:
     hints: frozenset[str] = frozenset()
     #: Whether the server's annotations are trusted, waiving the assumption a retry makes.
     trusted: bool = False
-    #: Each field the output schema declares and does not guarantee, below guaranteed objects,
-    #: with the fields it guarantees in turn: held only where a test shows the field present.
-    optional: tuple[Slot, ...] = ()
     #: Whether the output schema was shaped from observed results, the server declaring none:
     #: an assumption every link and binding resting on it names.
     inferred: bool = False
@@ -153,16 +150,12 @@ def _plain(node: dict[str, Any]) -> bool:
 
 
 def _result_slots(
-    tool: str,
-    compiler: Compiler,
-    schema: object,
-    path: tuple[str, ...],
-    optional: list[Slot] | None = None,
+    tool: str, compiler: Compiler, schema: object, path: tuple[str, ...]
 ) -> list[Slot]:
     """Return the slot of ``schema`` at ``path`` and of every field it guarantees below.
 
-    With ``optional``, each field an object declares and does not guarantee is gathered there in
-    the same walk, with the fields it guarantees in turn; one below another such field is not.
+    A field an object declares and does not guarantee is no slot: the planner holds every slot
+    after a call, and the verifier reads such a field where valgebra proves it present.
     """
     slots = [Slot(tool, path, schema, compiler.compile(schema), required=True, root=compiler.root)]
     if len(path) >= RESULT_DEPTH:
@@ -174,9 +167,7 @@ def _result_slots(
     for name in sorted(properties):
         below = (*path, name)
         if name in required:
-            slots.extend(_result_slots(tool, compiler, properties[name], below, optional))
-        elif optional is not None:
-            optional.extend(_result_slots(tool, compiler, properties[name], below))
+            slots.extend(_result_slots(tool, compiler, properties[name], below))
     return slots
 
 
@@ -257,12 +248,9 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
     )
     output = spec.get("outputSchema")
     results: tuple[Slot, ...] = ()
-    optional: tuple[Slot, ...] = ()
     if output is not None:
         out_root = _root(output)
-        gathered: list[Slot] = []
-        results = tuple(_result_slots(tool.name, Compiler(out_root), out_root, (), gathered))
-        optional = tuple(gathered)
+        results = tuple(_result_slots(tool.name, Compiler(out_root), out_root, ()))
     return Contract(
         name=tool.name,
         arguments=arguments,
@@ -272,7 +260,6 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
         plain=_plain(node),
         idempotent=_idempotent(spec.get("annotations")),
         hints=_hints(spec.get("annotations")),
-        optional=optional,
     )
 
 

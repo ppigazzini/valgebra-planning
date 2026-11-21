@@ -6,6 +6,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- `Contract.optional`. The verifier reads a field below any value a program holds where
+  valgebra proves it present, so a list of the optional fields along a result's guaranteed
+  objects names fewer than it reads, and nothing reads the list. Without it, `inferred` is
+  the tenth positional parameter of `Contract`, where it was the eleventh.
+
 ### Fixed
 
 - The verifier reads any field below a value the program holds, at any depth, where valgebra
