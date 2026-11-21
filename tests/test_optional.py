@@ -367,6 +367,95 @@ def test_a_record_s_refutation_a_test_on_the_way_may_have_excluded_is_undecided(
     assert {link.claim: link.verdict for link in links}["r.a <= use.a"] == "undecided"
 
 
+#: A result whose `f` lies inside the argument, and whose `g` holds `k`, where its `n` is 1.
+SPLIT = {
+    "anyOf": [
+        {
+            "type": "object",
+            "properties": {
+                "n": {"const": 1},
+                "f": TAG,
+                "g": {"type": "object", "properties": {"k": TAG}, "required": ["k"]},
+            },
+            "required": ["n", "f", "g"],
+        },
+        {
+            "type": "object",
+            "properties": {"n": {"const": 2}, "f": {"const": "zz"}},
+            "required": ["n", "f"],
+        },
+    ]
+}
+#: The two shapes of `SPLIT`'s members.
+SPLIT_MEMBERS = ({"n": 1, "f": "a", "g": {"k": "b"}}, {"n": 2, "f": "zz"})
+
+
+def _split() -> tuple[dict[str, Any], Any]:
+    tools = {
+        contract.name: contract
+        for contract in map(
+            read_contract,
+            [
+                {"name": "get", "inputSchema": {"type": "object"}, "outputSchema": SPLIT},
+                {
+                    "name": "use",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"tag": TAG},
+                        "required": ["tag"],
+                    },
+                },
+                {
+                    "name": "pair",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"x": {"type": "object"}, "y": TAG},
+                        "required": ["x", "y"],
+                        "if": {"properties": {"x": {"properties": {"n": {"const": 2}}}}},
+                        "then": {"properties": {"y": {"const": "b"}}},
+                    },
+                },
+            ],
+        )
+    }
+    return tools, read_task("split", {"y": TAG}, True)
+
+
+@pytest.mark.parametrize(
+    ("bound", "claim"),
+    [
+        ("u = use(tag=r.f)", "r.f <= use.tag"),
+        ("u = use(tag=r.g.k)", "r.g.k is a value the program holds"),
+        ("p = pair(x=r, y=y)", "the arguments of pair <= its input schema"),
+    ],
+)
+def test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads(
+    bound: str, claim: str
+) -> None:
+    # Under `n == 1` every member's `f` lies inside the argument and its `g` holds `k`, and
+    # `pair` takes any `y`; a member with `n` 2, which the test excluded, breaks all three.
+    source = f"r = get()\nif r.n in (1,):\n    {bound}\n    stop(r)\n{bound}\nstop(r)"
+    tools, task = _split()
+    links = {
+        link.where: link
+        for link in verify(read_program(source), tools, task).links
+        if link.claim == claim
+    }
+    assert links["then"].verdict != "refuted"
+    assert links["else"].verdict != "proven"
+    for witness in links["else"].counterexample:
+        # Each is what a member with `n` 2 holds there: its `f`, itself, or a record of it.
+        assert witness in ("zz", SPLIT_MEMBERS[1]) or witness["x"]["n"] == 2
+    for member, y in itertools.product(SPLIT_MEMBERS, ("a", "b")):
+        calls = {
+            "get": lambda member=member, **_: member,
+            "use": lambda **_: {},
+            "pair": lambda **_: {},
+        }
+        ran = run(read_program(source), tools, task, {"y": y}, calls)
+        assert (ran.why is None) == (member["n"] == 1 or (bound.startswith("p") and y == "b"))
+
+
 def test_a_witness_drawn_for_a_field_is_reported_where_a_member_carries_it() -> None:
     worker = {
         "type": "object",

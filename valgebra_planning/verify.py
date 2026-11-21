@@ -380,29 +380,14 @@ class _Walk:
     ) -> bool:
         """Return whether valgebra proves the values the program holds carry ``record`` jointly.
 
-        Arguments read from one value must be carried by one of its members, inside every set
-        held on the way; arguments read from distinct values, and constants, are apart.
+        Arguments read from one value must be carried by one value of its belief; arguments
+        read from distinct values, and constants, are apart.
         """
         held: dict[str, list[tuple[tuple[str, ...], Any]]] = {}
         for name, ref in refs.items():
             if isinstance(ref, Ref):
                 held.setdefault(ref.variable, []).append((ref.path, record[name]))
-        for variable, read in held.items():
-            root = env.get(Ref(variable))
-            if root is None:
-                return False
-            meet = root.values
-            for path, value in read:
-                meet = intersection(
-                    meet, selecting(path, listed([value])) if path else listed([value])
-                )
-                for depth in range(1, len(path)):
-                    on = env.get(Ref(variable, path[:depth]))
-                    if on is not None:
-                        meet = intersection(meet, selecting(path[:depth], on.values))
-            if meet.relation_to(nothing) != "not_subset":
-                return False
-        return True
+        return all(self.member(env, variable, read) for variable, read in held.items())
 
     def inclusion(
         self,
@@ -418,27 +403,22 @@ class _Walk:
         A field's set is what its record's schema declares, which another keyword may narrow,
         so a link that set leaves open is asked of the root: the field lies inside ``target``
         on every value of the root carrying it, the inclusion that types a selected field
-        (Castagna 2023, §4.2), and the program's own tests prove it carried on this path
-        (Bertoli et al. 2006, Def. 3.4). A refutation rests on the root's answer only where no
-        test narrowed a field on the way, and on a value drawn for the field only where
-        valgebra proves a member of the root carries it there.
+        (Castagna 2023, §4.2). The root is asked through its belief, the program's tests on
+        the way included (Bertoli et al. 2006, Def. 3.4), so valgebra's answer is exact, and a
+        value drawn for the reference refutes only where valgebra proves a value of that
+        belief carries it there.
         """
-        verdict = _relation(held.values, target)
+        answer = held.values.relation_to(target)
         found: tuple[Any, ...] = ()
-        root = env.get(Ref(ref.variable)) if ref.path else None
-        if verdict != "proven" and root is not None:
+        if answer != "subset":
             # Realize a witness first: a wrong program is refuted on one question of valgebra,
             # and the root is asked only where none is, the case where it may prove the link.
             outside = [v for v in self.candidates(ref, held) if not target.is_valid(v)][:8]
             found = self.realized(env, ref, outside)
             if not found:
-                verdict = _relation(root.values, within(ref.path, target))
-                if verdict == "refuted" and _narrowed(env, ref.variable, ref.path):
-                    verdict = "undecided"
-        elif verdict != "proven":
-            outside = [v for v in self.candidates(ref, held) if not target.is_valid(v)]
-            found = tuple(outside[:1])
-        verdict = "refuted" if found else verdict
+                whole = None if ref.path else answer
+                answer = self.asked(env, ref.variable, within(ref.path, target), whole)
+        verdict = "refuted" if found else _VERDICTS[answer]
         self.links.append(Link(where, claim, verdict, found, self.assumption(held)))
 
     def assumption(self, held: _Held) -> tuple[str, ...]:
@@ -454,8 +434,9 @@ class _Walk:
         Selection requires the selected field to be defined (Castagna 2023, §3.2.2): a field is
         read where valgebra proves every value held for its record an object holding the key,
         as a test showing the key narrows the record to (Bertoli et al. 2006, Def. 3.4), and
-        otherwise where it proves every value of the root carries the path. The field lies in
-        what its record's schema declares of it, `valgebra_planning.contracts.field_slot`.
+        otherwise where it proves every value of the root's belief carries the path. The field
+        lies in what its record's schema declares of it,
+        `valgebra_planning.contracts.field_slot`.
         """
         if ref in env:
             return _Read(env[ref])
@@ -466,8 +447,9 @@ class _Walk:
             for at in range(depth, len(ref.path)):
                 key = ref.path[at]
                 answer = held.values.relation_to(having(key))
-                if answer != "subset" and at:
-                    answer = self.present(env, ref.variable, ref.path[: at + 1])
+                if answer != "subset":
+                    known = None if at else answer
+                    answer = self.present(env, ref.variable, ref.path[: at + 1], known)
                 if answer != "subset":
                     return _Read(None, answer, held, at)
                 slot = self.field(held, key)
@@ -498,29 +480,56 @@ class _Walk:
             return unread(slot)
         return slot
 
-    def present(self, env: dict[Ref, _Held], variable: str, path: tuple[str, ...]) -> str:
+    def present(
+        self, env: dict[Ref, _Held], variable: str, path: tuple[str, ...], answer: str | None
+    ) -> str:
         """Return valgebra's answer on every value of the root carrying ``path``.
 
         A record's declared set may admit a value lacking the key that another keyword of the
-        root requires, so presence the record's set leaves open is asked of the root, whose set
-        is the belief the program holds of every value there (Bertoli et al. 2006, Def. 3.4).
-        Where a test narrowed a field on the way, a root value lacking the key may be one the
-        test excluded, so a refutation there is undecided.
+        root requires, so presence the record's set leaves open is asked of the root's belief
+        (Bertoli et al. 2006, Def. 3.4). ``answer`` is valgebra's on the root's own set, where
+        it was asked.
         """
-        root = env.get(Ref(variable))
-        if root is None:
+        return self.asked(env, variable, selecting(path, anything), answer)
+
+    def asked(
+        self, env: dict[Ref, _Held], variable: str, question: Validator[Any], answer: str | None
+    ) -> str:
+        """Return valgebra's answer on whether every value of ``variable``'s belief lies inside.
+
+        The value's own set is asked first, ``answer`` where it was; where that leaves the
+        question open and a test narrowed a field of the value, its belief is, the set of
+        values every test on the way admits (Bertoli et al. 2006, Def. 3.4). A value outside
+        the belief is one the program may hold here, so a refutation is exact.
+        """
+        held = env.get(Ref(variable))
+        if held is None:
             return "undecided"
-        answer = root.values.relation_to(selecting(path, anything))
-        if answer == "not_subset" and _narrowed(env, variable, path[:-1]):
-            return "undecided"
+        if answer is None:
+            answer = held.values.relation_to(question)
+        if answer != "subset" and _tested(env, variable):
+            answer = self.belief(env, variable).relation_to(question)
         return answer
+
+    def belief(self, env: dict[Ref, _Held], variable: str) -> Validator[Any]:
+        """Return the values ``variable`` may hold here: its set, met with each field tested.
+
+        A test narrows the reference it reads, a field of the value among them (Bertoli et al.
+        2006, Def. 3.4), so a value the program may hold here carries each field a test
+        narrowed inside that field's narrowed set.
+        """
+        meet = env[Ref(variable)].values
+        for path, values in _tested(env, variable):
+            meet = intersection(meet, selecting(path, values))
+        return meet
 
     def lacking(self, env: dict[Ref, _Held], ref: Ref, read: _Read) -> tuple[Any, ...]:
         """Return a value of the record ``read`` stopped at, lacking the next key of ``ref``.
 
-        A value drawn for the record is a witness only where valgebra proves a member of the
-        root carries it there: the record's declared set is a belief holding every value the
-        record takes (Bertoli et al. 2006, Def. 3.4), and may admit one no member carries.
+        A value drawn for the record is a witness only where valgebra proves a value of the
+        root's belief carries it there: the record's declared set is a belief holding every
+        value the record takes (Bertoli et al. 2006, Def. 3.4), and may admit one no member
+        carries.
         """
         if read.record is None:
             return ()
@@ -529,35 +538,33 @@ class _Walk:
             if not isinstance(value, dict):
                 continue
             bare = {name: item for name, item in value.items() if name != key}
-            if read.record.values.is_valid(bare) and self.carried(env, ref.variable, path, bare):
+            if read.record.values.is_valid(bare) and self.member(env, ref.variable, [(path, bare)]):
                 return (bare,)
         return ()
 
     def realized(self, env: dict[Ref, _Held], ref: Ref, values: Sequence[Any]) -> tuple[Any, ...]:
-        """Return one of ``values`` valgebra proves a member of the root carries at ``ref``."""
+        """Return one of ``values`` valgebra proves a value of the root's belief holds there."""
         for value in values:
-            if self.carried(env, ref.variable, ref.path, value):
+            if self.member(env, ref.variable, [(ref.path, value)]):
                 return (value,)
         return ()
 
-    def carried(
-        self, env: dict[Ref, _Held], variable: str, path: tuple[str, ...], value: Any
+    def member(
+        self, env: dict[Ref, _Held], variable: str, placed: Sequence[tuple[tuple[str, ...], Any]]
     ) -> bool:
-        """Return whether valgebra proves a member of the root carries ``value`` at ``path``.
+        """Return whether valgebra proves a value of ``variable``'s belief holds each one placed.
 
-        The member also lies inside every set the program holds on the way.
+        Each value is placed at its path, the empty path being the whole value; the value
+        also carries every field a test on the way narrowed inside its narrowed set.
         """
-        root = env.get(Ref(variable))
-        if root is None:
+        if Ref(variable) not in env:
             return False
-        if not path:
-            return root.values.is_valid(value)
-        meet = intersection(root.values, selecting(path, listed([value])))
-        for depth in range(1, len(path)):
-            held = env.get(Ref(variable, path[:depth]))
-            if held is not None:
-                meet = intersection(meet, selecting(path[:depth], held.values))
-        return meet.relation_to(nothing) == "not_subset"
+        belief = self.belief(env, variable)
+        if [path for path, _ in placed] == [()]:
+            return belief.is_valid(placed[0][1])
+        for path, value in placed:
+            belief = intersection(belief, selecting(path, listed([value])))
+        return belief.relation_to(nothing) == "not_subset"
 
     def candidates(self, ref: Ref, held: _Held) -> list[Any]:
         """Return values the reference may hold there: the examples given, then draws."""
@@ -614,28 +621,36 @@ class _Read:
 def _apart(env: dict[Ref, _Held], refs: Iterable[Ref | Const]) -> bool:
     """Return whether each argument is a constant or a whole result or input, no two the same.
 
-    Such values are read in the sets their schemas compile to and are independent, so their
-    product is every record the call can make. A loop's item is read in the `items` the walk
-    read, which may hold more than the array's items.
+    Such values are read in the sets their schemas compile to, narrowed by the tests on them,
+    and are independent, so their product is every record the call can make. A loop's item is
+    read in the `items` the walk read, which may hold more than the array's items, and a value
+    whose field a test narrowed holds more than its belief.
     """
     variables = []
     for ref in refs:
         if isinstance(ref, Const):
             continue
         held = env.get(Ref(ref.variable))
-        if ref.path or held is None or held.origin.path:
+        if ref.path or held is None or held.origin.path or _tested(env, ref.variable):
             return False
         variables.append(ref.variable)
     return len(variables) == len(set(variables))
 
 
-def _narrowed(env: dict[Ref, _Held], variable: str, path: tuple[str, ...]) -> bool:
-    """Return whether a test narrowed a field of ``variable`` on the way down ``path``."""
-    return any(
-        (held := env.get(Ref(variable, path[:depth]))) is not None
-        and held.values is not held.origin.values
-        for depth in range(1, len(path) + 1)
-    )
+def _tested(
+    env: Mapping[Ref, _Held], variable: str
+) -> list[tuple[tuple[str, ...], Validator[Any]]]:
+    """Return each field of ``variable`` a test narrowed, with the set it narrowed it to.
+
+    A test's branch holds the tested reference in a set of its own, met with what it tests; a
+    call's result and a task input hold each slot in the set the slot compiles to, which the
+    value's own set already implies.
+    """
+    return [
+        (ref.path, held.values)
+        for ref, held in env.items()
+        if ref.variable == variable and ref.path and held.values is not held.origin.values
+    ]
 
 
 def _join(where: str, branch: str) -> str:
