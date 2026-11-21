@@ -101,7 +101,7 @@ proves a value of the root's belief carries it, and a loop's item read in the ar
 
 IMPLEMENTED-BY: contracts.py::field_slot, verify.py::_Walk.lacking
 
-HELD-BY: test_a_flow_rule_reads_a_field_the_verifier_reads_below_an_item, test_a_field_another_keyword_requires_is_never_refuted, test_reading_the_field_without_the_test_is_refuted_by_a_record_lacking_it, test_a_value_no_member_carries_is_never_a_witness, test_a_result_slot_the_whole_schema_refuses_is_no_slot, test_a_field_read_its_record_refuses_takes_any_value, test_a_loop_over_items_the_array_refuses_is_undecided
+HELD-BY: test_a_flow_rule_reads_a_field_the_verifier_reads_below_an_item, test_a_field_another_keyword_requires_is_never_refuted, test_reading_the_field_without_the_test_is_refuted_by_a_record_lacking_it, test_a_value_no_member_carries_is_never_a_witness, test_a_result_slot_the_whole_schema_refuses_is_no_slot, test_a_field_read_its_record_refuses_takes_any_value, test_a_loop_over_items_the_walk_misreads_is_asked_of_the_array
 
 **A link on a field is asked of the value it belongs to.** The projection of a type on a label
 is the least type the record holding that label under it includes (Castagna 2023, §4.2), so the
@@ -127,11 +127,12 @@ the one the program holds there: the holder is unchanged since the loop began, o
 took its name. A value refutes an item only where valgebra proves it held: the item's belief
 holds values carrying it, and a value of the holder's belief holds a non-empty array of them,
 a level at a time up to a value no loop reads, there proven on a value drawn or given for it
-with that array in place of its own. **[LOAD-BEARING: item-links]**
+with that array in place of its own. An item set the walk does not read, or valgebra does not
+prove, is every value, and every question on the item is asked so. **[LOAD-BEARING: item-links]**
 
 IMPLEMENTED-BY: verify.py::_Walk.asked, verify.py::_Walk.built
 
-HELD-BY: test_an_item_its_array_narrows_is_never_refuted_on_a_value_no_item_takes, test_an_item_s_witness_is_one_an_array_of_some_result_holds, test_an_item_s_field_is_held_only_where_every_item_carries_it, test_every_held_value_is_read_as_a_result_is, test_a_binding_in_the_body_outside_its_argument_is_refuted
+HELD-BY: test_an_item_its_array_narrows_is_never_refuted_on_a_value_no_item_takes, test_an_item_s_witness_is_one_an_array_of_some_result_holds, test_an_item_s_field_is_held_only_where_every_item_carries_it, test_every_held_value_is_read_as_a_result_is, test_a_binding_in_the_body_outside_its_argument_is_refuted, test_a_loop_over_items_the_walk_cannot_read_is_never_refuted_where_each_is_inside, test_a_loop_over_items_the_walk_cannot_read_is_never_proven_where_one_is_outside, test_a_loop_over_items_the_walk_misreads_is_asked_of_the_array
 
 **A retry is a strong cyclic solution.** A call made again in its own error block is a loop that
 can always reach the goal (Daniele et al. 2000, Def. 7), and it ends under fairness: an

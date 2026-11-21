@@ -177,24 +177,9 @@ class _Walk:
         asked of every item of the array, `_Walk.asked`.
         """
         held = self.held(env, end.ref, where)
-        try:
-            items = () if held is None else item_slots(held.origin)
-        except Unsupported:
-            # The walk compiles `items` apart from the resource it sits in, which the companion
-            # may refuse though it reads the whole schema.
-            self.links.append(Link(where, f"{end.ref}'s items lie in its item schema", "undecided"))
+        if held is None:
             return
-        if held is None or not items:
-            if held is not None:
-                claim = f"{end.ref} is an array of one item schema"
-                self.links.append(Link(where, claim, "refuted"))
-            return
-        item = items[0]
-        if intersection(held.values, ARRAY).relation_to(Validator([item.values])) != "subset":
-            # The walk read `items` itself, and valgebra does not prove the array's items lie
-            # inside what it read: a link on an item could rest on a set the array refuses.
-            self.links.append(Link(where, f"{end.ref}'s items lie in its item schema", "undecided"))
-            return
+        item = self.element(held)
         inner = {ref: held for ref, held in env.items() if ref.variable != end.item}
         inner[Ref(end.item)] = _Held(item.values, item, _Loop(end.ref, end.item, env))
         inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
@@ -209,6 +194,31 @@ class _Walk:
             states = grown
         self.iterate(end.body, inner, inside, _Path(states, tested, path.acted), silent=False)
         self.block(end.after, env, where, _Path(states, path.tested, path.acted))
+
+    def element(self, held: _Held) -> Slot:
+        """Return the slot of an element of the array ``held``, as far as valgebra proves it.
+
+        The walk reads ``items`` itself, so what it reads is kept only where valgebra proves
+        every array held there holds its elements inside it. An element it does not read, as
+        under ``prefixItems`` or an ``items`` an ``allOf`` or a ``$ref`` beside other keywords
+        declares, one the companion refuses apart from its resource, and one valgebra does not
+        prove takes any value: every question that set leaves open is asked of the value holding
+        the array, `_Walk.asked`, so a link on the element is decided as exactly, and only the
+        proof from the element's own set and the witness drawn from its schema are lost.
+        """
+        try:
+            items = item_slots(held.origin)
+        except Unsupported:
+            items = ()
+        if items and intersection(held.values, ARRAY).relation_to(Validator([items[0].values])) == (
+            "subset"
+        ):
+            return items[0]
+        origin = held.origin
+        path = (*origin.path, "[]")
+        return Slot(
+            origin.tool, path, schema=True, values=anything, required=True, root=origin.root
+        )
 
     def iterate(
         self, body: Block, env: dict[Ref, _Held], where: str, path: _Path, *, silent: bool
