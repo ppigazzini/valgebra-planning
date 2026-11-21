@@ -50,6 +50,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
   may hold there. Under `if r.n in (1,):`, a read of `r.f` that every member with `n` 1 keeps
   inside its argument was refuted on a member with `n` 2, which the test excluded.
 
+- A question a loop's item set leaves open, whether the item carries a field or lies with its
+  field inside an argument, is asked of the value holding the array: an item an `allOf` beside
+  the array's `items` keeps inside the argument is never refuted on a value no item takes, and
+  is proven where valgebra decides the array. A value refutes an item only where valgebra
+  proves an item carrying it in an array of a value the program may hold, on a value drawn or
+  given for that value.
+
 ### Security
 
 - A loop's item binds its name alone. A field of a value the program held under that name

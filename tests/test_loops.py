@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 import pytest
@@ -358,3 +359,126 @@ def test_a_loop_item_reads_no_field_of_a_value_its_name_held(
     ran = run(program, tools, task, {"x": {"tag": "a"}} if given else {}, calls)
     assert ran.why is not None
     assert ran.why.check == "arguments"
+
+
+def _listing(items: dict[str, Any], **narrowed: Any) -> dict[str, Any]:
+    """Return the contracts of `get`, listing `rs` of ``items`` beside `n`, and of `use`."""
+    output: dict[str, Any] = {
+        "type": "object",
+        "properties": {"n": {"enum": [1, 2]}, "rs": {"type": "array", "items": items}},
+        "required": ["n", "rs"],
+    }
+    if narrowed:
+        output["allOf"] = [{"properties": {"rs": {"items": narrowed}}}]
+    return {
+        contract.name: contract
+        for contract in map(
+            read_contract,
+            [
+                {"name": "get", "inputSchema": {"type": "object"}, "outputSchema": output},
+                {
+                    "name": "use",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"tag": TAG},
+                        "required": ["tag"],
+                    },
+                },
+            ],
+        )
+    }
+
+
+LISTED_ANY = read_task("listed", {}, True)
+#: An item declaring `k` any string and `o` optional, and the array's narrowing of both.
+WIDE = {"type": "object", "properties": {"k": {"type": "string"}, "o": TAG}, "required": ["k"]}
+NARROW = {"properties": {"k": TAG}, "required": ["o"]}
+
+
+@pytest.mark.parametrize(
+    ("items", "source"),
+    [
+        ({"type": "string"}, "r = get()\nfor x in r.rs:\n    u = use(tag=x)\nstop(r)"),
+        (WIDE, "r = get()\nfor x in r.rs:\n    u = use(tag=x.k)\nstop(r)"),
+        (WIDE, "r = get()\nfor x in r.rs:\n    u = use(tag=x.o)\nstop(r)"),
+        (
+            WIDE,
+            "r = get()\nfor x in r.rs:\n    if r.n in (1, 2):\n        u = use(tag=x.k)\nstop(r)",
+        ),
+    ],
+    ids=["an item", "its field", "its optional field", "its field under a test on the holder"],
+)
+def test_an_item_its_array_narrows_is_never_refuted_on_a_value_no_item_takes(
+    items: dict[str, Any], source: str
+) -> None:
+    # The array's `allOf` keeps every item inside the argument, and every item's `o` present;
+    # what `items` declares admits strings outside it, and items lacking `o`.
+    narrowed = {"enum": ["a", "b"]} if items["type"] == "string" else NARROW
+    tools = _listing(items, **narrowed)
+    checked = verify(read_program(source), tools, LISTED_ANY)
+    assert [
+        (link.verdict, link.counterexample) for link in checked.links if link.verdict != "proven"
+    ] in (
+        [],
+        [("undecided", ())],
+    )
+    held = "a" if items["type"] == "string" else {"k": "a", "o": "b"}
+    calls = {"get": lambda **_: {"n": 1, "rs": [held]}, "use": lambda **_: {}}
+    assert run(read_program(source), tools, LISTED_ANY, {}, calls).why is None
+
+
+@pytest.mark.parametrize(
+    ("source", "read"),
+    [
+        ("r = get()\nfor x in r.rs:\n    u = use(tag=x.k)\nstop(r)", "x.k"),
+        ("r = get()\nfor r in r.rs:\n    u = use(tag=r.k)\nstop(r)", "r.k"),
+        (
+            "r = get()\nfor x in r.rs:\n    if r.n in (1,):\n        u = use(tag=x.k)\nstop(r)",
+            "x.k",
+        ),
+    ],
+    ids=["an item", "an item named as its holder", "an item under a test on its holder"],
+)
+def test_an_item_s_witness_is_one_an_array_of_some_result_holds(source: str, read: str) -> None:
+    # Every item's `k` is `a`, `b` or `zz`: `zz` alone is a witness, and a run on it breaks.
+    tools = _listing(WIDE, properties={"k": {"enum": ["a", "b", "zz"]}})
+    [link] = [
+        link
+        for link in verify(read_program(source), tools, LISTED_ANY).links
+        if link.verdict != "proven"
+    ]
+    assert link.counterexample in ((), ("zz",))
+    # `get`'s `allOf` leaves valgebra-jsonschema's sampler no value, so one is given.
+    given = {read: ["1fH._Z", "zz"], "r": [{"n": 1, "rs": []}]}
+    [link] = [
+        link
+        for link in verify(read_program(source), tools, LISTED_ANY, examples=given).links
+        if link.verdict != "proven"
+    ]
+    assert (link.verdict, link.counterexample) == ("refuted", ("zz",))
+    calls = {"get": lambda **_: {"n": 1, "rs": [{"k": "zz"}]}, "use": lambda **_: {}}
+    ran = run(read_program(source), tools, LISTED_ANY, {}, calls)
+    assert ran.why is not None
+    assert ran.why.check == "arguments"
+
+
+@pytest.mark.parametrize(
+    ("item_requires", "array_requires", "tested"),
+    list(itertools.product([False, True], [False, True], [False, True])),
+)
+def test_an_item_s_field_is_held_only_where_every_item_carries_it(
+    *, item_requires: bool, array_requires: bool, tested: bool
+) -> None:
+    # Every item holds `k` where `items` or the array's `allOf` requires it, or a test shows it.
+    # Without `allOf` the verdict is exact; with it valgebra may leave presence undecided,
+    # never decide it wrong.
+    item = {"type": "object", "properties": {"k": TAG}, "required": ["k"] if item_requires else []}
+    tools = _listing(item, **({"required": ["k"]} if array_requires else {}))
+    body = '    if "k" in x:\n        u = use(tag=x.k)\n' if tested else "    u = use(tag=x.k)\n"
+    source = f"r = get()\nfor x in r.rs:\n{body}stop(r)"
+    links = verify(read_program(source), tools, LISTED_ANY).links
+    verdicts = {link.verdict for link in links if link.claim == "x.k is a value the program holds"}
+    carried = item_requires or array_requires or tested
+    assert verdicts <= ({"undecided"} if carried else {"refuted", "undecided"})
+    if not array_requires:
+        assert verdicts == (set() if carried else {"refuted"})
