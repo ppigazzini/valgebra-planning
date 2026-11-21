@@ -88,14 +88,15 @@ HELD-BY: test_a_key_test_on_an_item_makes_its_field_a_value_the_program_holds, t
 the projection of the record's type on the label (Castagna 2023, §4.2), which valgebra does not
 compute. A field read lies in the subschema its record's schema declares for the key, a belief
 holding every value the field takes (Bertoli et al. 2006, Def. 3.4) that another keyword of the
-record, as an `allOf`, may narrow further. A proof over it stands. The cost is a value the
+record, as an `allOf`, may narrow further; valgebra proves each subschema the walk reads holds
+the values it stands for, or the field takes any value. A proof over it stands. The cost is a value the
 declared set admits that no member carries, so a witness drawn from it refutes only once valgebra
 proves a member of the root carries it, and an item of an array whose declared `items` another
 keyword narrows, which a loop reads in `items` alone. **[DEVIATION: declared-fields]**
 
 IMPLEMENTED-BY: contracts.py::field_slot, verify.py::_Walk.lacking
 
-HELD-BY: test_a_flow_rule_reads_a_field_the_verifier_reads_below_an_item, test_a_field_another_keyword_requires_is_never_refuted, test_reading_the_field_without_the_test_is_refuted_by_a_record_lacking_it, test_a_value_no_member_carries_is_never_a_witness
+HELD-BY: test_a_flow_rule_reads_a_field_the_verifier_reads_below_an_item, test_a_field_another_keyword_requires_is_never_refuted, test_reading_the_field_without_the_test_is_refuted_by_a_record_lacking_it, test_a_value_no_member_carries_is_never_a_witness, test_a_result_slot_the_whole_schema_refuses_is_no_slot, test_a_field_read_its_record_refuses_takes_any_value, test_a_loop_over_items_the_array_refuses_is_undecided
 
 **A link on a field is asked of the value it belongs to.** The projection of a type on a label
 is the least type the record holding that label under it includes (Castagna 2023, §4.2), so the

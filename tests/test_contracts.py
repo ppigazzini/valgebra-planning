@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from hypothesis import given, settings
@@ -243,3 +244,68 @@ def test_a_record_holds_the_objects_carrying_each_key_as_written(
         for key, integral in typed.items()
     ) and (not closed or set(value) <= set(typed))
     assert record_of(fields, closed=closed).is_valid(value) == inside
+
+
+def _embedded(inner: dict[str, object], *, required: bool) -> dict[str, Any]:
+    """Return an output whose `a` is a resource of its own, its `T` apart from the root's."""
+    key: dict[str, object] = {"required": ["k"]} if required else {}
+    return {
+        "$id": "https://example.com/root",
+        "type": "object",
+        "$defs": {"T": {"type": "object", "properties": {"k": {"type": "string"}}, **key}},
+        "properties": {
+            "a": {
+                "$id": "https://example.com/inner",
+                "$defs": {"T": {"type": "object", "properties": {"k": {"type": "integer"}}, **key}},
+                **inner,
+            }
+        },
+        "required": ["a"],
+    }
+
+
+def _bound(output: object, source: str) -> dict[str, tuple[str, tuple[object, ...]]]:
+    """Return each link of ``source``, binding `get`'s result to `use`, with its verdict."""
+    tools = {
+        "get": read_contract(
+            {"name": "get", "inputSchema": {"type": "object"}, "outputSchema": output}
+        ),
+        "use": read_contract(
+            {
+                "name": "use",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"k": {"type": "string"}},
+                    "required": ["k"],
+                },
+            }
+        ),
+    }
+    links = verify(read_program(source), tools, read_task("use", {}, True)).links
+    return {link.claim: (link.verdict, link.counterexample) for link in links}
+
+
+def test_a_result_slot_the_whole_schema_refuses_is_no_slot() -> None:
+    # The walk resolves `#/$defs/T` from the root, a string `k`; the resource's own is integer.
+    output = _embedded({"$ref": "#/$defs/T"}, required=True)
+    get = read_contract({"name": "get", "inputSchema": {"type": "object"}, "outputSchema": output})
+    assert ("a", "k") not in [slot.path for slot in get.results]
+    verdict, found = _bound(output, "r = get()\nu = use(k=r.a.k)\nreturn r")["r.a.k <= use.k"]
+    assert verdict == "refuted"
+    assert all(isinstance(value, int) for value in found)
+
+
+def test_a_field_read_its_record_refuses_takes_any_value() -> None:
+    output = _embedded({"$ref": "#/$defs/T"}, required=False)
+    source = 'r = get()\nif "k" in r.a:\n    u = use(k=r.a.k)\n    return r\nreturn r'
+    verdict, found = _bound(output, source)["r.a.k <= use.k"]
+    assert verdict != "proven"
+    assert all(isinstance(value, int) for value in found)
+
+
+def test_a_loop_over_items_the_array_refuses_is_undecided() -> None:
+    output = _embedded({"type": "array", "items": {"$ref": "#/$defs/T"}}, required=False)
+    output["$defs"] = {"T": {"type": "string"}}
+    output["properties"]["a"]["$defs"] = {"T": {"type": "integer"}}
+    links = _bound(output, "r = get()\nfor k in r.a:\n    u = use(k=k)\nreturn r")
+    assert links["r.a's items lie in its item schema"] == ("undecided", ())

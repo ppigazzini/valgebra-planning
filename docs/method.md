@@ -10,8 +10,11 @@ An agent fills each argument of a call from a value it holds, so a tool is read 
 (`valgebra_planning/contracts.py`): one per property of its MCP `inputSchema`, a required name
 no property declares included, and one per field its `outputSchema` guarantees, nested to three
 levels, beside the whole result. valgebra-jsonschema compiles each slot against the tool's own
-schema as root, so a `$ref` resolves where the tool wrote it and an older draft reads as it
-means. The verifier reads any field below a value the program holds, at any depth, where
+schema as root, and an older draft reads as it means. The walk listing the slots reads
+`properties`, `required`, `items` and a bare `$ref` itself, resolving a reference from the
+document's root, so a slot it yields is kept only where valgebra proves the whole schema's set
+inside it; a field it reads otherwise takes any value, and a loop over items it reads
+otherwise is undecided. The verifier reads any field below a value the program holds, at any depth, where
 valgebra proves every value held there an object holding its key (Castagna 2023): the record's
 schema requires it, or a test showing the key, `if "note" in c1.parcel:`, narrows the record to
 the values holding it, or the schema of the record's root requires it, as an `allOf` may of a
@@ -202,7 +205,10 @@ refused, and a value from a task input with it, since a proxy sees no task.
   plan mean what it should, and mined types narrow what observations support.
 - **What is not modeled.** Side effects beyond the calls a policy reads; an array with
   `prefixItems`; an item of an array another keyword narrows, as an `allOf` beside `items`,
-  which a loop reads in `items` alone, so a link on it can be refuted on a value no item takes; a field whose record's `properties` do not declare it, which takes any JSON
+  which a loop reads in `items` alone, so a link on it can be refuted on a value no item takes;
+  a field or an item inside a resource with an `$id` of its own that refers into that resource,
+  which the walk resolves from the document's root and so reads as any value, a gap the
+  companion's reader of the whole schema closes; a field whose record's `properties` do not declare it, which takes any JSON
   value, as one an `anyOf` alone declares; and a program the planner writes holds no
   constant, tests no key and loops over no array. A program written elsewhere may do all three, and each is checked like any
   value.

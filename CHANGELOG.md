@@ -23,6 +23,8 @@ All notable changes to valgebra-planning are recorded here. The format follows
   is asked of the root, and never refuted on a value the declared schema admits and no result
   carries. A field whose presence valgebra leaves undecided reads undecided, not refuted.
 - A flow rule reads a value as the verifier reads it, a field read below an item included.
+- A loop over an array whose `items` refers into a resource with an `$id` of its own reads
+  undecided; the verifier raised `Unsupported`.
 - A link on a field whose declared schema another keyword narrows, as an `allOf`, is asked of
   the value the field belongs to: such a field bound inside its argument is proven, and a
   value only the declared schema admits, which no result carries, is never reported as a
@@ -40,6 +42,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
   optional field of the name without it, so a relation on such an argument, as
   `dependentRequired`, went unchecked, and the verifier proved a call the input schema
   refuses.
+- A result slot the walk listing slots reads is kept only where valgebra proves the whole output
+  schema's set inside it. The walk resolves a `$ref` from the document's root, so a field inside
+  a resource with an `$id` of its own, referring into that resource, read another schema's
+  set, and a binding of it was proven inside an argument its values lie outside. A field and
+  an item read below a value are held to the same proof.
 
 ## [0.0.4] - 2026-11-19
 

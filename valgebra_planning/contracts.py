@@ -3,12 +3,15 @@
 An agent fills each argument of a call from a value it holds, so a tool is read as its
 argument slots, one per property of its input schema, and its result slots, one per field its
 output schema guarantees. Each slot is a set valgebra decides over, compiled by
-valgebra-jsonschema against the tool's own schema as root, so a ``$ref`` inside a property
-resolves where the tool wrote it. Nothing here reads a keyword: the companion owns that.
+valgebra-jsonschema against the tool's own schema as root. To list the slots, the walk here
+reads five keywords itself, ``properties``, ``required``, ``items``, ``prefixItems`` and a bare
+``$ref``, which it resolves from the document's root; what a keyword means is the companion's,
+so a slot a reading yields is kept only where valgebra proves the whole schema's set inside it.
 """
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -165,9 +168,14 @@ def _result_slots(
         return slots
     properties, required = _properties(node)
     for name in sorted(properties):
-        below = (*path, name)
-        if name in required:
-            slots.extend(_result_slots(tool, compiler, properties[name], below))
+        if name not in required:
+            continue
+        try:
+            slots.extend(_result_slots(tool, compiler, properties[name], (*path, name)))
+        except Unsupported:
+            # The walk compiles a field apart from the resource it sits in, which the
+            # companion may refuse though it reads the whole schema: such a field is no slot.
+            continue
     return slots
 
 
@@ -248,9 +256,14 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
     )
     output = spec.get("outputSchema")
     results: tuple[Slot, ...] = ()
-    if output is not None:
+    if output is not None and tool.result is not None:
         out_root = _root(output)
-        results = tuple(_result_slots(tool.name, Compiler(out_root), out_root, ()))
+        whole = tool.result
+        results = tuple(
+            slot
+            for slot in _result_slots(tool.name, Compiler(out_root), out_root, ())
+            if not slot.path or whole.relation_to(selecting(slot.path, slot.values)) == "subset"
+        )
     return Contract(
         name=tool.name,
         arguments=arguments,
@@ -309,3 +322,34 @@ def record_of(fields: Mapping[str, Validator[Any]], *, closed: bool) -> Validato
     if closed:
         return Validator(dict(fields)).close()
     return Validator({**fields, str: anything})
+
+
+@functools.cache
+def having(key: str) -> Validator[Any]:
+    """Return the objects holding ``key``, whatever else they hold."""
+    return record_of({key: anything}, closed=False)
+
+
+def selecting(path: tuple[str, ...], values: Validator[Any]) -> Validator[Any]:
+    """Return the objects whose field at ``path`` lies in ``values``, whatever else they hold."""
+    for key in reversed(path):
+        values = record_of({key: values}, closed=False)
+    return values
+
+
+def within(path: tuple[str, ...], values: Validator[Any]) -> Validator[Any]:
+    """Return the values whose field at ``path``, wherever each key on it is, lies in ``values``.
+
+    Each key is spelled optional with a ``?`` appended, which valgebra's display strips once,
+    so a key is read as written; a clause admits every other key with any value.
+    """
+    for key in reversed(path):
+        values = Validator({f"{key}?": values, str: anything})
+    return values
+
+
+def unread(slot: Slot) -> Slot:
+    """Return ``slot`` taking any JSON value: what a reading valgebra did not prove leaves."""
+    return Slot(
+        slot.tool, slot.path, schema=True, values=anything, required=slot.required, root=slot.root
+    )
