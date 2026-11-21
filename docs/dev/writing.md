@@ -148,6 +148,12 @@ The renderer is strict and the failures are silent. `tools/docs_lint.py` catches
 - When wrapping prose, never start a continuation line with `+ `, `- ` or `* `.
 - No images, anywhere. A committed plot stops tracking the code that produced it and cannot
   be grepped against a study row.
+- A diagram is a `mermaid` block instead: text the page carries, which the site and GitHub
+  draw alike and grep reads. It shows which part asks which question, or what a program holds
+  on each path, never a number, and each node names a module, a set or a line of a program the
+  text beside it states. No colors of its own: the site draws it in its palette, light or dark.
+  Parse it with Mermaid 11, the version the site loads, before it lands; a block that does not
+  parse is drawn as an error box.
 
 The nav of `mkdocs.yml` is the one list of the site's pages and their order. A page's file is
 named for its topic, never numbered, and no other page keeps a table of the pages: the sidebar
