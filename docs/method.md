@@ -61,7 +61,12 @@ search.
 A loop, `for item in ref:` over an array, is walked once for an arbitrary item of the array's
 item set, the item and its fields read as a result's are, a test showing a key included. The
 item's name holds the item alone, never a field of a value the program held under that name
-before. Nothing crosses iterations, since what the
+before. The item set is what the array declares in `items`, which another keyword of the array
+may narrow, so a question it leaves open is asked of the value holding the array: whether every
+item the body's tests admit carries the field, or lies inside. A value refutes a link on an item
+only where valgebra proves an item carrying it in an array of a value the program may hold,
+proven on a value drawn or given for that value with such an array in place of its own.
+Nothing crosses iterations, since what the
 body calls is scoped to its iteration and a body never returns, so the one walk holds for every
 item.
 
@@ -212,9 +217,7 @@ refused, and a value from a task input with it, since a proxy sees no task.
   `format` does, takes any string; distinct schemas, patterns, enums and ranges are what make a
   plan mean what it should, and mined types narrow what observations support.
 - **What is not modeled.** Side effects beyond the calls a policy reads; an array with
-  `prefixItems`; an item of an array another keyword narrows, as an `allOf` beside `items`,
-  which a loop reads in `items` alone, so a link on it can be refuted on a value no item takes;
-  a field or an item inside a resource with an `$id` of its own that refers into that resource,
+  `prefixItems`; a field or an item inside a resource with an `$id` of its own that refers into that resource,
   which the walk resolves from the document's root and so reads as any value, a gap the
   companion's reader of the whole schema closes; a field whose record's `properties` do not declare it, which takes any JSON
   value, as one an `anyOf` alone declares; and a program the planner writes holds no

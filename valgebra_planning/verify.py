@@ -16,6 +16,7 @@ proof.
 from __future__ import annotations
 
 import itertools
+import json
 import random
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -30,6 +31,7 @@ from valgebra_planning._valgebra import (
     complement,
     intersection,
     nothing,
+    union,
 )
 from valgebra_planning.contracts import (
     Contract,
@@ -56,6 +58,9 @@ Verdict = Literal["proven", "refuted", "undecided"]
 
 #: How many values are drawn from a reference's schema in search of a counterexample.
 DRAWS = 40
+#: How many values a loop's item is proven held on as templates, and how many records lacking
+#: a key are tried for an item.
+_BUILT = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +112,17 @@ class _Held:
 
     values: Validator[Any]
     origin: Slot
+    #: Where the value is a loop's item: the array it is read from.
+    loop: _Loop | None = field(default=None, compare=False)
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class _Loop:
+    """The array a loop reads its item from, the item's name, and what the program held then."""
+
+    array: Ref
+    item: str
+    env: Mapping[Ref, _Held]
 
 
 @dataclass(slots=True)
@@ -122,6 +138,11 @@ class _Walk:
     #: The policy states each iteration of the loop being walked ends in.
     ends: list[_States] | None = None
     gaps: list[Gap] = field(default_factory=list)
+    #: The values drawn for each value holding a loop's array, by the set held for it; drawn
+    #: apart from `rng`, so a witness drawn elsewhere is the same with loops or without.
+    drawn: dict[int, tuple[_Held, list[Any]]] = field(default_factory=dict)
+    builder: random.Random | None = None
+    seed: int = 0
 
     def block(self, block: Block, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         for call in block.calls:
@@ -152,7 +173,8 @@ class _Walk:
         taken to a fixpoint, the states being finite. How many times it runs is the array's, so
         its calls run under a test on the array's source. The item's name binds the item
         alone: nothing the program held under that name, nor any field of it, is read in the
-        body.
+        body. The item keeps the array it is read from, so a question its set leaves open is
+        asked of every item of the array, `_Walk.asked`.
         """
         held = self.held(env, end.ref, where)
         try:
@@ -174,7 +196,7 @@ class _Walk:
             self.links.append(Link(where, f"{end.ref}'s items lie in its item schema", "undecided"))
             return
         inner = {ref: held for ref, held in env.items() if ref.variable != end.item}
-        inner[Ref(end.item)] = _Held(item.values, item)
+        inner[Ref(end.item)] = _Held(item.values, item, _Loop(end.ref, end.item, env))
         inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
         states = path.states
         while self.policies:
@@ -220,8 +242,8 @@ class _Walk:
             tested = listed(test.values)
         if held is None or tested is None:
             return
-        inside = _Held(intersection(held.values, tested), held.origin)
-        outside = _Held(intersection(held.values, complement(tested)), held.origin)
+        inside = _Held(intersection(held.values, tested), held.origin, held.loop)
+        outside = _Held(intersection(held.values, complement(tested)), held.origin, held.loop)
         # Which branch runs carries the tested value's influence: an implicit flow.
         tested = _Path(path.states, path.tested | {held.origin.tool}, path.acted)
         self.block(test.then, {**env, test.ref: inside}, _join(where, "then"), tested)
@@ -493,7 +515,12 @@ class _Walk:
         return self.asked(env, variable, selecting(path, anything), answer)
 
     def asked(
-        self, env: dict[Ref, _Held], variable: str, question: Validator[Any], answer: str | None
+        self,
+        env: Mapping[Ref, _Held],
+        variable: str,
+        question: Validator[Any],
+        answer: str | None,
+        now: Mapping[Ref, _Held] | None = None,
     ) -> str:
         """Return valgebra's answer on whether every value of ``variable``'s belief lies inside.
 
@@ -501,17 +528,33 @@ class _Walk:
         question open and a test narrowed a field of the value, its belief is, the set of
         values every test on the way admits (Bertoli et al. 2006, Def. 3.4). A value outside
         the belief is one the program may hold here, so a refutation is exact.
+
+        A loop's item lies in the array's declared `items`, which another keyword of the array
+        may narrow, so a question its set leaves open is asked of the value holding the array:
+        every item of the array the item's belief admits lies inside, the inclusion that types
+        a selected field (Castagna 2023, §4.2) with the array's items for the field. The
+        value holding the array is read as the program holds it ``now``, `_holder`; where that
+        is only what it held when the loop began, a refutation is undecided.
         """
         held = env.get(Ref(variable))
         if held is None:
             return "undecided"
         if answer is None:
             answer = held.values.relation_to(question)
-        if answer != "subset" and _tested(env, variable):
+        tested = _tested(env, variable)
+        if answer != "subset" and tested:
             answer = self.belief(env, variable).relation_to(question)
-        return answer
+        if answer == "subset" or held.loop is None:
+            return answer
+        loop, now = held.loop, env if now is None else now
+        holder, exact = _holder(now, loop)
+        if tested or held.values is not held.origin.values:
+            question = union(complement(self.belief(env, variable)), question)
+        every = within(loop.array.path, union(complement(ARRAY), Validator([question])))
+        answer = self.asked(holder, loop.array.variable, every, None, now)
+        return "undecided" if answer == "not_subset" and not exact else answer
 
-    def belief(self, env: dict[Ref, _Held], variable: str) -> Validator[Any]:
+    def belief(self, env: Mapping[Ref, _Held], variable: str) -> Validator[Any]:
         """Return the values ``variable`` may hold here: its set, met with each field tested.
 
         A test narrows the reference it reads, a field of the value among them (Bertoli et al.
@@ -534,12 +577,20 @@ class _Walk:
         if read.record is None:
             return ()
         key, path = ref.path[read.at], ref.path[: read.at]
+        root = env.get(Ref(ref.variable))
+        building = root is not None and root.loop is not None
+        seen: list[str] = []
         for value in self.candidates(Ref(ref.variable, path), read.record):
             if not isinstance(value, dict):
                 continue
             bare = {name: item for name, item in value.items() if name != key}
-            if read.record.values.is_valid(bare) and self.member(env, ref.variable, [(path, bare)]):
+            if not read.record.values.is_valid(bare) or _text(bare) in seen:
+                continue
+            seen.append(_text(bare))
+            if self.member(env, ref.variable, [(path, bare)]):
                 return (bare,)
+            if building and len(seen) == _BUILT:
+                break
         return ()
 
     def realized(self, env: dict[Ref, _Held], ref: Ref, values: Sequence[Any]) -> tuple[Any, ...]:
@@ -550,21 +601,93 @@ class _Walk:
         return ()
 
     def member(
-        self, env: dict[Ref, _Held], variable: str, placed: Sequence[tuple[tuple[str, ...], Any]]
+        self,
+        env: Mapping[Ref, _Held],
+        variable: str,
+        placed: Sequence[tuple[tuple[str, ...], Any]],
+        now: Mapping[Ref, _Held] | None = None,
     ) -> bool:
         """Return whether valgebra proves a value of ``variable``'s belief holds each one placed.
 
         Each value is placed at its path, the empty path being the whole value; the value
-        also carries every field a test on the way narrowed inside its narrowed set.
+        also carries every field a test on the way narrowed inside its narrowed set. A loop's
+        item's belief may admit a value no item of the array takes, so for an item the value
+        is built, `_Walk.built`.
         """
-        if Ref(variable) not in env:
+        held = env.get(Ref(variable))
+        if held is None:
             return False
+        if held.loop is not None or now is not None:
+            return self.built(env, variable, placed, env if now is None else now)
         belief = self.belief(env, variable)
         if [path for path, _ in placed] == [()]:
             return belief.is_valid(placed[0][1])
         for path, value in placed:
             belief = intersection(belief, selecting(path, listed([value])))
         return belief.relation_to(nothing) == "not_subset"
+
+    def built(
+        self,
+        env: Mapping[Ref, _Held],
+        variable: str,
+        placed: Sequence[tuple[tuple[str, ...], Any]],
+        now: Mapping[Ref, _Held],
+    ) -> bool:
+        """Return whether valgebra proves a value of ``variable``'s belief holds each one placed.
+
+        For a loop's item, valgebra proves the values of its belief holding each one placed
+        not empty, then a value of its holder's belief holding a non-empty array of them at the
+        array's path, a level at a time up to a value no loop reads (Bertoli et al. 2006, Def.
+        3.4). There a value given or drawn for it serves as a template: valgebra proves it,
+        with any such array in place of its own, inside the belief, or the values holding one
+        not empty. Where the program holds the holder ``now`` only as it did when the loop
+        began, `_holder`, nothing is proven.
+        """
+        held = env[Ref(variable)]
+        loop = held.loop
+        holder, exact = (env, True) if loop is None else _holder(now, loop)
+        if not exact:
+            return False
+        belief = self.belief(env, variable)
+        if loop is None and any(
+            _template(base, path, among.values).relation_to(belief) == "subset"
+            for path, among in placed
+            for base in self.bases(variable, held, belief)
+        ):
+            return True
+        found = belief
+        for path, value in placed:
+            inner = value.values if isinstance(value, _Among) else listed([value])
+            found = intersection(found, selecting(path, inner))
+        if found.relation_to(nothing) != "not_subset":
+            return False
+        if loop is None:
+            return True
+        return self.member(holder, loop.array.variable, [(loop.array.path, _Among(found))], now)
+
+    def bases(self, variable: str, held: _Held, belief: Validator[Any]) -> list[Any]:
+        """Return a few values to template one of ``variable``'s on, those in its belief first."""
+        drawn = self.draws(variable, held)
+        inside = [value for value in drawn if belief.is_valid(value)]
+        return (inside or drawn)[:_BUILT]
+
+    def draws(self, variable: str, held: _Held) -> list[Any]:
+        """Return values to template one of ``variable``'s on: the examples given, then draws.
+
+        They are drawn from the schema of the slot ``held`` comes from, once for each set and
+        apart from the draws a counterexample is searched in. None need lie in the set: a
+        template replaces the array, and what it proves is valgebra's.
+        """
+        known = self.drawn.get(id(held))
+        if known is None:
+            if self.builder is None:
+                self.builder = random.Random(f"items {self.seed}")
+            try:
+                drawn = Sampler(held.origin.root, self.builder).draw(held.origin.schema, DRAWS)
+            except (Unsupported, RecursionError):
+                drawn = []
+            known = self.drawn[id(held)] = (held, [*self.examples.get(variable, ()), *drawn])
+        return known[1]
 
     def candidates(self, ref: Ref, held: _Held) -> list[Any]:
         """Return values the reference may hold there: the examples given, then draws."""
@@ -635,6 +758,47 @@ def _apart(env: dict[Ref, _Held], refs: Iterable[Ref | Const]) -> bool:
             return False
         variables.append(ref.variable)
     return len(variables) == len(set(variables))
+
+
+def _holder(now: Mapping[Ref, _Held], loop: _Loop) -> tuple[Mapping[Ref, _Held], bool]:
+    """Return what holds the value the array of ``loop`` is read from, and whether exactly.
+
+    Where the program ``now`` holds that value in the set it held when the loop began, it holds
+    it with every test the body made on its fields, exactly. Where the item took its name, the
+    body reaches nothing of it, so what the loop began with is exact. Otherwise the body rebound
+    it or tested it whole, and what the loop began with holds every value it may hold, but may
+    hold one the body excluded.
+    """
+    variable = loop.array.variable
+    if now.get(Ref(variable)) is loop.env.get(Ref(variable)):
+        return now, True
+    return loop.env, variable == loop.item
+
+
+@dataclass(frozen=True, slots=True)
+class _Among:
+    """The non-empty arrays of ``items``' values, placed where a loop reads its item."""
+
+    items: Validator[Any]
+
+    @property
+    def values(self) -> Validator[Any]:
+        return intersection(Validator([self.items]), complement(listed([[]])))
+
+
+def _template(base: Any, path: tuple[str, ...], values: Validator[Any]) -> Validator[Any]:
+    """Return the values equal to ``base`` but at ``path``, which lies in ``values`` there."""
+    if not path:
+        return values
+    record = base if isinstance(base, dict) else {}
+    fields = {key: listed([value]) for key, value in record.items() if key != path[0]}
+    fields[path[0]] = _template(record.get(path[0]), path[1:], values)
+    return record_of(fields, closed=True)
+
+
+def _text(value: Any) -> str:
+    """Return ``value`` as JSON text, so two values read equal only where JSON tells them so."""
+    return json.dumps(value, sort_keys=True, default=repr)
 
 
 def _tested(
@@ -728,6 +892,7 @@ def verify(
     walk = _Walk(
         contracts, task, examples or {}, random.Random(seed), errors, tuple(policies), tuple(flows)
     )
+    walk.seed = seed
     env = {
         Ref(var, slot.path): _Held(slot.values, slot)
         for var, slots in task.held.items()

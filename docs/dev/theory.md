@@ -95,8 +95,9 @@ holding every value the field takes (Bertoli et al. 2006, Def. 3.4) that another
 record, as an `allOf`, may narrow further; valgebra proves each subschema the walk reads holds
 the values it stands for, or the field takes any value. A proof over it stands. The cost is a value the
 declared set admits that no member carries, so a witness drawn from it refutes only once valgebra
-proves a value of the root's belief carries it, and an item of an array whose declared `items` another
-keyword narrows, which a loop reads in `items` alone. **[DEVIATION: declared-fields]**
+proves a value of the root's belief carries it, and a loop's item read in the array's declared
+`items`, which another keyword of the array may narrow, as item-links below asks.
+**[DEVIATION: declared-fields]**
 
 IMPLEMENTED-BY: contracts.py::field_slot, verify.py::_Walk.lacking
 
@@ -114,6 +115,23 @@ there. **[LOAD-BEARING: field-links]**
 IMPLEMENTED-BY: verify.py::_Walk.inclusion, verify.py::_Walk.asked
 
 HELD-BY: test_a_field_its_record_narrows_is_proven_by_the_record, test_a_value_no_member_carries_is_never_a_witness, test_a_record_s_refutation_a_test_on_the_way_may_have_excluded_is_undecided, test_a_witness_drawn_for_a_field_is_reported_where_a_member_carries_it, test_a_field_link_is_proven_only_where_every_member_s_field_lies_inside, test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads
+
+**A question on a loop's item is asked of every item of its array.** A loop reads its item in
+the array's declared `items`, which another keyword of the array may narrow, as an `allOf`
+beside `items`. A question that set leaves open, whether the item carries a field or lies with
+its field inside a set, is asked of the value holding the array: every item of its array that
+the tests in the body admit lies inside, the inclusion that types a selected field (Castagna
+2023, §4.2) with the array's items for the field, read in the holder's belief where the
+question sits (Bertoli et al. 2006, Def. 3.4). A refutation stands only where that belief is
+the one the program holds there: the holder is unchanged since the loop began, or the item
+took its name. A value refutes an item only where valgebra proves it held: the item's belief
+holds values carrying it, and a value of the holder's belief holds a non-empty array of them,
+a level at a time up to a value no loop reads, there proven on a value drawn or given for it
+with that array in place of its own. **[LOAD-BEARING: item-links]**
+
+IMPLEMENTED-BY: verify.py::_Walk.asked, verify.py::_Walk.built
+
+HELD-BY: test_an_item_its_array_narrows_is_never_refuted_on_a_value_no_item_takes, test_an_item_s_witness_is_one_an_array_of_some_result_holds, test_an_item_s_field_is_held_only_where_every_item_carries_it, test_every_held_value_is_read_as_a_result_is, test_a_binding_in_the_body_outside_its_argument_is_refuted
 
 **A retry is a strong cyclic solution.** A call made again in its own error block is a loop that
 can always reach the goal (Daniele et al. 2000, Def. 7), and it ends under fairness: an
