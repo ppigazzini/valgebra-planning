@@ -6,6 +6,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
 from valgebra_planning._valgebra import Sampler
 from valgebra_planning.contracts import Contract, Task, read_contract, read_task
 from valgebra_planning.critic import read_program
@@ -202,3 +205,41 @@ def test_a_constant_is_passed_to_the_tool_as_written() -> None:
     result = run(program, TOOLS, TASKS["return a parcel"], {"tracking": "AB123456789IT"}, tools)
     assert result.value == "lbl_2"
     assert seen == [{"parcel_id": "pcl_1", "state": "delivered", "weight_g": 500}]
+
+
+#: Text no schema below declares and no code spells: in a message, a part of the value refused.
+SECRETS = st.text(min_size=1, max_size=40).map(lambda text: f"secret:{text}")
+
+#: A tool taking an `id` of three letters and returning a closed record of a string `v`.
+GET = read_contract(
+    {
+        "name": "get",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"id": {"type": "string", "pattern": "^[a-f]{3}$"}},
+            "required": ["id"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {"v": {"type": "string"}},
+            "required": ["v"],
+            "additionalProperties": False,
+        },
+    }
+)
+
+
+@given(secret=SECRETS)
+@settings(max_examples=40, deadline=None)
+def test_no_message_of_the_runner_holds_a_part_of_the_value_it_refused(secret: str) -> None:
+    # An argument outside its pattern, a result holding a key its schema closes out, and a
+    # returned value outside the goal: each refused, each named without the value.
+    program = read_program("c1 = get(id=id)\nreturn c1.v\n")
+    task = read_task("get one", {"id": {"type": "string"}}, {"enum": ["abc"]})
+    runs = [
+        run(program, {"get": GET}, task, {"id": secret}, {"get": lambda **_: {"v": "abc"}}),
+        run(program, {"get": GET}, task, {"id": "abc"}, {"get": lambda **_: {"v": "a", secret: 1}}),
+        run(program, {"get": GET}, task, {"id": "abc"}, {"get": lambda **_: {"v": secret}}),
+    ]
+    assert [ran.why.check for ran in runs if ran.why] == ["arguments", "result", "goal"]
+    assert all(secret not in message for ran in runs for message in ran.broken), runs

@@ -7,6 +7,7 @@ No other module imports either package, so a rename upstream is one edit here, a
 from __future__ import annotations
 
 from valgebra import (
+    ValidationError,
     Validator,
     anything,
     complement,
@@ -50,6 +51,7 @@ __all__ = [
     "Sampler",
     "Tool",
     "Unsupported",
+    "ValidationError",
     "Validator",
     "anything",
     "compile_schema",

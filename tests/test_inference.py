@@ -93,4 +93,4 @@ def test_a_result_outside_the_inferred_schema_is_refused_naming_the_assumption(
     }
     result = run(found.program, library.tools, problem.task, {"name": "ann"}, tools)
     assert result.refused is not None
-    assert result.refused.endswith("outside the output schema inferred from observed calls")
+    assert "outside the output schema inferred from observed calls" in result.refused

@@ -20,6 +20,7 @@ from valgebra_planning._valgebra import (
     ANNOTATIONS,
     Compiler,
     Unsupported,
+    ValidationError,
     Validator,
     anything,
     compile_schema,
@@ -353,3 +354,66 @@ def unread(slot: Slot) -> Slot:
     return Slot(
         slot.tool, slot.path, schema=True, values=anything, required=slot.required, root=slot.root
     )
+
+
+#: The keywords of a schema document whose keys or items name properties: the names a refusal
+#: may print, since the document publishes them.
+_NAMING = frozenset({"properties", "dependentRequired", "dependentSchemas"})
+
+#: How many failures a refusal lists before it counts the rest.
+_FAILURES_SHOWN = 3
+
+
+def declared(*roots: object) -> frozenset[str]:
+    """Return every property name the schema documents ``roots`` declare."""
+    names: set[str] = set()
+    stack = list(roots)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            for key, value in node.items():
+                naming = key in _NAMING and isinstance(value, dict)
+                if naming or (key == "required" and isinstance(value, list)):
+                    names.update(name for name in value if isinstance(name, str))
+                stack.append(value)
+        elif isinstance(node, list):
+            stack.extend(node)
+    return frozenset(names)
+
+
+def contract_names(contract: Contract) -> frozenset[str]:
+    """Return the property names a contract's input and output schemas declare."""
+    roots = {id(slot.root): slot.root for slot in (*contract.arguments, *contract.results)}
+    return declared(*roots.values())
+
+
+def failures(values: Validator[Any], value: object, names: frozenset[str]) -> str:
+    """Return where ``value`` lies outside ``values``: each failure's path and code.
+
+    The value is never written, nor a key ``names`` does not hold, which is written ``*``:
+    a refusal reaches whoever made the call, and a value outside its contract, or a key it
+    chose, would reach them through it.
+    """
+    try:
+        values.validate(value)
+    except ValidationError as error:
+        listed = [
+            f"{_where(failure['path'], names)}{failure['code']}"
+            for failure in error.errors[:_FAILURES_SHOWN]
+        ]
+        if len(error.errors) > _FAILURES_SHOWN:
+            listed.append(f"{len(error.errors) - _FAILURES_SHOWN} more")
+        return "; ".join(listed)
+    return "no failure valgebra names"
+
+
+def _where(path: object, names: frozenset[str]) -> str:
+    """Return a failure's ``path`` written for a refusal, a colon after it where it is not empty."""
+    written = ""
+    for step in path if isinstance(path, tuple) else ():
+        if isinstance(step, int):
+            written += f"[{step}]"
+        else:
+            key = step if isinstance(step, str) and step in names else "*"
+            written = f"{written}.{key}" if written else key
+    return f"{written}: " if written else ""

@@ -6,6 +6,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- A refusal names each failure's path and valgebra's code for it, never the value. The proxy's
+  refusals and the runner's messages formatted up to 120 characters of the argument record,
+  result or returned value they refused, so a result outside its contract reached the agent
+  through the tool error that refused it. A key the tool's schemas do not declare is the value's
+  own text and is written `*`: `get_run returned a value outside its contract (ok: bool_type)`.
+
 ## [0.0.5] - 2026-11-21
 
 A security release: four ways 0.0.4 proved a wrong program are closed, each under Security. The

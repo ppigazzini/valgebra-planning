@@ -188,9 +188,12 @@ print(blame(ended, contracts, proven=checked.accepted))
 
 ```text
 True None
-find_order returned {'status': 'refunded'}, outside its contract
+find_order returned a value outside its contract (status: union_error)
 find_order broke the output schema its server declares
 ```
+
+The refusal names the field and valgebra's code, never the value: a result outside its contract
+reaches no reader through the message that refuses it.
 
 A proven program breaks at run time only where something it rests on fails, here the server's
 own output schema; an argument record, a policy or a returned value breaking in a proven program

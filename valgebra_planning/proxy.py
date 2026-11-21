@@ -33,7 +33,7 @@ from mcp import Client, InputRequiredRoundsExceededError, MCPError, types
 from mcp.server.lowlevel import Server
 
 from valgebra_planning._valgebra import json_key
-from valgebra_planning.contracts import Contract
+from valgebra_planning.contracts import Contract, contract_names, failures
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Monitor, Policy
 
@@ -66,7 +66,8 @@ class Gate:
         if contract is None:
             return f"{tool} is no tool the proxy holds"
         if not contract.accepts.is_valid(arguments):
-            return f"{tool} refuses its arguments {arguments!r:.120}"
+            detail = failures(contract.accepts, arguments, contract_names(contract))
+            return f"{tool} refuses its arguments ({detail})"
         for flow in self.flows:
             if flow.tool != tool or flow.argument not in arguments:
                 continue
@@ -96,7 +97,8 @@ class Gate:
         """Return why a result may not be passed on, or None; remember untrusted tools' values."""
         contract = self.contracts[tool]
         if contract.returns is not None and not contract.returns.is_valid(value):
-            return f"{tool} returned {value!r:.120}, outside its contract"
+            detail = failures(contract.returns, value, contract_names(contract))
+            return f"{tool} returned a value outside its contract ({detail})"
         if any(tool in flow.sources for flow in self.flows):
             for leaf in _leaves(value):
                 self.seen.setdefault(json_key(leaf), set()).add(tool)

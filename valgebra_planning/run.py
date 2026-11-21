@@ -18,7 +18,15 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from valgebra_planning.contracts import Contract, Task, listed, unclashed
+from valgebra_planning.contracts import (
+    Contract,
+    Task,
+    contract_names,
+    declared,
+    failures,
+    listed,
+    unclashed,
+)
 from valgebra_planning.policy import Monitor, Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 
@@ -107,7 +115,8 @@ class _Runner:
         if isinstance(end, Return):
             value = _read(env, end.ref)
             if not self.task.goal.is_valid(value):
-                refused = self.breaks(f"returned {value!r:.120}, outside the goal", "goal")
+                detail = failures(self.task.goal, value, declared(self.task.goal_schema))
+                refused = self.breaks(f"returned a value outside the goal ({detail})", "goal")
                 if refused is not None:
                     return refused
             return self.settled() or Run(value, None, tuple(self.broken))
@@ -157,7 +166,8 @@ class _Runner:
                 if contract.inferred
                 else "its contract"
             )
-            message = f"{call.tool} returned {result!r:.120}, outside {outside}"
+            detail = failures(contract.returns, result, contract_names(contract))
+            message = f"{call.tool} returned a value outside {outside} ({detail})"
             refused = self.breaks(message, "result", call.tool)
             if refused is not None:
                 return refused
@@ -166,9 +176,8 @@ class _Runner:
     def admitted(self, tool: str, contract: Contract, arguments: dict[str, Any]) -> Run | None:
         """Check a call before it is made: its argument record, then each policy's step."""
         if not contract.accepts.is_valid(arguments):
-            refused = self.breaks(
-                f"{tool} refuses its arguments {arguments!r:.120}", "arguments", tool
-            )
+            detail = failures(contract.accepts, arguments, contract_names(contract))
+            refused = self.breaks(f"{tool} refuses its arguments ({detail})", "arguments", tool)
             if refused is not None:
                 return refused
         for monitor in self.monitors:
