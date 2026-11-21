@@ -46,7 +46,7 @@ Issues = "https://github.com/ppigazzini/valgebra-planning/issues"
 # What the suite imports beside the package. The release smoke installs this group alone
 # beside the built artifact, so a module the suite needs and no group names fails there.
 test = [
-    "hypothesis>=6.170.15",
+    "hypothesis>=6.170.17",
     # The `mcp` extra's client and server: the live-server and proxy tests run on it.
     "mcp>=2.3.0,<3",
     "pytest>=9.2.0",
@@ -54,8 +54,8 @@ test = [
 dev = [
     { include-group = "test" },
     "pre-commit>=4.7.0",
-    "ruff>=0.17.5",
-    "ty>=0.0.106",
+    "ruff>=0.17.6",
+    "ty>=0.0.107",
 ]
 # The backend `[build-system]` names, at the lock's version and hashes: the release workflow
 # builds the published artifacts with it alone, so a backend release reaches them only through

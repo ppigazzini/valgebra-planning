@@ -200,10 +200,16 @@ def test_a_field_another_keyword_requires_is_held() -> None:
     assert _reads(output, ("a", "k")) == "held"
 
 
+#: The key `k` alone, as a `const` beside another keyword, which valgebra-jsonschema reads as a
+#: predicate; a `const` alone it reads as the closed record of its key.
+KEY_K = {"const": "k", "maxLength": 1}
+
+
 def test_a_field_only_a_predicate_holds_present_is_undecided() -> None:
-    # Every member holds `k`, the one key its names may take. valgebra-jsonschema 0.0.3 reads
-    # `propertyNames` as a predicate, inside which no relation looks.
-    output = {"type": "object", "propertyNames": {"enum": ["k"]}, "minProperties": 1}
+    # Every member holds `k`, the one key its names may take. valgebra-jsonschema reads a
+    # `propertyNames` holding a keyword beside its `const` as a predicate, inside which no
+    # relation looks.
+    output = {"type": "object", "propertyNames": KEY_K, "minProperties": 1}
     assert _reads(output, ("k",)) == "undecided"
 
 
@@ -240,10 +246,10 @@ def test_a_field_is_held_only_where_every_member_carries_it_and_refuted_where_on
 
 
 def test_a_field_a_test_on_the_way_may_have_kept_is_never_refuted() -> None:
-    # The test keeps the `a` whose only key is `k`, a key set valgebra-jsonschema 0.0.3 reads
-    # as a predicate, so nothing proves it holds `k`; the root's `a` may lack it, but the test
+    # The test keeps the `a` whose only key is `k`, a key set valgebra-jsonschema reads as a
+    # predicate, so nothing proves it holds `k`; the root's `a` may lack it, but the test
     # excluded every such `a`.
-    keyed = {"type": "object", "propertyNames": {"enum": ["k"]}, "minProperties": 1}
+    keyed = {"type": "object", "propertyNames": KEY_K, "minProperties": 1}
     tools = {
         contract.name: contract
         for contract in map(
@@ -328,9 +334,9 @@ def test_a_value_no_member_carries_is_never_a_witness() -> None:
 
 def test_a_record_s_refutation_a_test_on_the_way_may_have_excluded_is_undecided() -> None:
     # The test keeps the `a` whose only key is `k`, inside the argument though nothing proves it:
-    # valgebra-jsonschema 0.0.3 reads the key set as a predicate. The record refutes the binding
-    # on an `a` without `k`, which the test excluded.
-    keyed = {"type": "object", "propertyNames": {"enum": ["k"]}, "minProperties": 1}
+    # valgebra-jsonschema reads the key set as a predicate. The record refutes the binding on an
+    # `a` without `k`, which the test excluded.
+    keyed = {"type": "object", "propertyNames": KEY_K, "minProperties": 1}
     tools = {
         contract.name: contract
         for contract in map(
