@@ -68,7 +68,7 @@ neither the cells nor the search. **[LOAD-BEARING: belief-execution]**
 
 IMPLEMENTED-BY: verify.py
 
-HELD-BY: test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole
+HELD-BY: test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole, test_a_record_no_call_makes_is_never_a_witness, test_a_record_a_call_makes_refutes_two_fields_of_one_value
 
 **A field is read where the held set proves it present.** Selection requires the selected
 field to be defined, the record's type a subtype of a record holding it (Castagna 2023,

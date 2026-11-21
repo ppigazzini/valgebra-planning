@@ -29,7 +29,11 @@ a tool: `verify`, `critique`, `plan`, `run` and `read_library` raise `ValueError
 Where the input schema relates its arguments, through `oneOf`, `dependentRequired` or any
 keyword beside `type`, `properties`, `required` and `additionalProperties`, a call is accepted
 only once the whole argument record is proven inside the input set, each argument under its
-name as written, a trailing `?` included.
+name as written, a trailing `?` included. The record is asked as the product of its arguments'
+sets, which holds every record the call can make, so a proof stands. Two arguments read from
+one value may move together, so the product refutes only where each argument is a constant or
+a whole result or input, no two the same; otherwise a record refutes only where valgebra proves
+the values the program holds carry it jointly, and the link is undecided where none does.
 
 ## The verifier
 

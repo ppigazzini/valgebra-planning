@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from valgebra_planning._valgebra import Validator
 from valgebra_planning.contracts import read_contract, read_task
+from valgebra_planning.critic import read_program
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop, render, steps
 from valgebra_planning.run import run
-from valgebra_planning.verify import verify
+from valgebra_planning.verify import Link, verify
 
 ORDER_ID = {"type": "string", "pattern": "^ord_[0-9]+$"}
 SPECS: list[dict[str, object]] = [
@@ -158,3 +160,55 @@ def test_a_program_reads_as_python() -> None:
         "    stop(c1.order.status)"
     )
     assert steps(GUARDED) == 3
+
+
+#: Arguments `x` and `y`, with `y` the same as `x` where `x` is 1 or 2.
+PAIRED = {
+    "type": "object",
+    "required": ["x", "y"],
+    "properties": {"x": {"type": "integer"}, "y": {"type": "integer"}},
+    "if": {"properties": {"x": {"const": 1}}},
+    "then": {"properties": {"y": {"const": 1}}},
+    "else": {"properties": {"y": {"const": 2}}},
+}
+
+
+def _paired(output: object) -> tuple[Link, Validator]:
+    """Return the argument record's link of `pair(x=r.a, y=r.b)`, and `get`'s output set."""
+    get = read_contract({"name": "get", "inputSchema": {"type": "object"}, "outputSchema": output})
+    pair = read_contract({"name": "pair", "inputSchema": PAIRED})
+    source = read_program("r = get()\nu = pair(x=r.a, y=r.b)\nreturn r")
+    links = verify(source, {"get": get, "pair": pair}, read_task("pair", {}, True)).links
+    assert get.returns is not None
+    return next(link for link in links if "arguments" in link.claim), get.returns
+
+
+def test_a_record_no_call_makes_is_never_a_witness() -> None:
+    # `a` and `b` are equal on every result, so every call makes a record the input set holds.
+    equal = {
+        "type": "object",
+        "required": ["a", "b"],
+        "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
+        "allOf": [
+            {
+                "oneOf": [
+                    {"properties": {"a": {"const": 1}, "b": {"const": 1}}},
+                    {"properties": {"a": {"const": 2}, "b": {"const": 2}}},
+                ]
+            }
+        ],
+    }
+    record, _ = _paired(equal)
+    assert (record.verdict, record.counterexample) == ("undecided", ())
+
+
+def test_a_record_a_call_makes_refutes_two_fields_of_one_value() -> None:
+    apart = {
+        "type": "object",
+        "required": ["a", "b"],
+        "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
+    }
+    record, returns = _paired(apart)
+    assert record.verdict == "refuted"
+    [found] = record.counterexample
+    assert returns.is_valid({"a": found["x"], "b": found["y"]})
