@@ -5,8 +5,9 @@ from typing import Any
 
 import pytest
 
+from valgebra_planning.codemode import repair
 from valgebra_planning.contracts import read_contract, read_task
-from valgebra_planning.critic import read_program
+from valgebra_planning.critic import critique, read_program
 from valgebra_planning.program import Block, Call, Ref, Return, render
 from valgebra_planning.run import blame, run
 from valgebra_planning.verify import verify
@@ -409,3 +410,35 @@ def test_a_field_link_is_proven_only_where_every_member_s_field_lies_inside(
         [(_, verdict, found)] = links
         assert verdict != "proven"
         assert set(found) <= tags - {"a", "b"}
+
+
+UNTESTED = "c1 = track(tracking=tracking)\nc2 = annotate(note=c1.parcel.note)\nreturn c2.ticket\n"
+
+
+def test_the_critique_of_an_untested_optional_field_names_its_key_test() -> None:
+    [note] = critique(UNTESTED, TOOLS, TASK).notes
+    assert note.startswith("refuted: c1.parcel.note is a value the program holds; ")
+    assert note.endswith(
+        '; test `if "note" in c1.parcel:` and read `c1.parcel.note` in that branch'
+    )
+    [unbound] = critique(UNTESTED.replace("note=c1", "note=c9"), TOOLS, TASK).notes
+    assert unbound == "refuted: c9.parcel.note is a value the program holds"
+
+
+def test_a_model_handed_the_key_test_writes_a_program_the_critic_accepts() -> None:
+    def propose(told: str | None) -> str:
+        # A model that writes what the critique names: the key test, the read in its branch.
+        if told is None or 'test `if "note" in c1.parcel:`' not in told:
+            return UNTESTED
+        return (
+            "c1 = track(tracking=tracking)\n"
+            'if "note" in c1.parcel:\n'
+            "    c2 = annotate(note=c1.parcel.note)\n"
+            "    return c2.ticket\n"
+            'c3 = annotate(note="n_none")\n'
+            "return c3.ticket\n"
+        )
+
+    repaired = repair(propose, TOOLS, TASK)
+    assert repaired.accepted
+    assert len(repaired.rounds) == 2

@@ -288,7 +288,7 @@ proven, the value refuting it where one is found, and what the author can change
 
 IMPLEMENTED-BY: critic.py
 
-HELD-BY: test_the_naive_chain_gets_its_counterexamples_and_the_guards_to_add, test_a_policy_the_program_breaks_is_refuted_with_its_remedy, test_an_error_nothing_handles_names_the_block_to_add, test_every_planned_program_reads_back_as_itself
+HELD-BY: test_the_naive_chain_gets_its_counterexamples_and_the_guards_to_add, test_a_policy_the_program_breaks_is_refuted_with_its_remedy, test_an_error_nothing_handles_names_the_block_to_add, test_every_planned_program_reads_back_as_itself, test_the_critique_of_an_untested_optional_field_names_its_key_test
 
 **The critique is the next prompt.** The critiques are pooled and handed back to the model as its
 next prompt (Kambhampati et al. 2024, §3.2), here until a program is accepted or the rounds run
@@ -297,4 +297,4 @@ package. **[LOAD-BEARING: backprompt]**
 
 IMPLEMENTED-BY: codemode.py
 
-HELD-BY: test_a_model_s_program_is_repaired_by_the_critique_it_is_handed, test_the_rounds_run_out_on_a_program_never_mended, test_a_program_the_reader_refuses_is_handed_back_as_the_reason
+HELD-BY: test_a_model_s_program_is_repaired_by_the_critique_it_is_handed, test_the_rounds_run_out_on_a_program_never_mended, test_a_program_the_reader_refuses_is_handed_back_as_the_reason, test_a_model_handed_the_key_test_writes_a_program_the_critic_accepts

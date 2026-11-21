@@ -67,8 +67,10 @@ True
 
 The first program passes a parcel's state and weight to `book_return` untested, and valgebra
 refutes both links with a value the parcel's schema admits and the argument refuses; each
-critique names the test that makes the call safe. The second tests both and covers every
-other state, and every link is proven. `codemode.repair` runs the same loop with any callable
+critique names the test that makes the call safe. A field read without the test showing its
+key, as `c1.parcel.note` where the parcel's schema leaves `note` optional, is refuted with a
+record lacking it, and its critique names the key test, `if "note" in c1.parcel:`. The second
+program tests both and covers every other state, and every link is proven. `codemode.repair` runs the same loop with any callable
 from the last critique to a program as the model.
 
 ## What makes the proof hold
