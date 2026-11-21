@@ -21,6 +21,7 @@ else is refused by line, never skipped.
 from __future__ import annotations
 
 import ast
+import json
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -31,7 +32,7 @@ from valgebra_planning.flows import Flow
 from valgebra_planning.mining import Types
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
-from valgebra_planning.verify import Verification, verify
+from valgebra_planning.verify import Link, Verification, verify
 
 __all__ = ["Critique", "ProgramError", "critique", "read_program"]
 
@@ -296,8 +297,35 @@ _UNHANDLED = (
 )
 
 
-def _remedy(claim: str) -> str | None:
-    """Return what a program's author can change to prove a rule's link, if the claim is one."""
+#: The claim of a link reading a reference the program may not hold there.
+_HELD = " is a value the program holds"
+
+
+def _keyed(link: Link) -> str | None:
+    """Return the key test that holds a field a link reads untested, if the link is one.
+
+    A record found lacking the key, or one whose key valgebra leaves undecided, holds the field
+    under a test showing the key; an unbound variable or an absent record above it does not.
+    """
+    subject = link.claim.removesuffix(_HELD)
+    if subject == link.claim or not (link.counterexample or link.verdict == "undecided"):
+        return None
+    try:
+        ref = _ref(ast.parse(subject, mode="eval").body)
+    except (SyntaxError, ProgramError):
+        return None
+    if not ref.path:
+        return None
+    record = Ref(ref.variable, ref.path[:-1])
+    return f"test `if {json.dumps(ref.path[-1])} in {record}:` and read `{ref}` in that branch"
+
+
+def _remedy(link: Link) -> str | None:
+    """Return what a program's author can change to prove a link, if the claim is one."""
+    claim = link.claim
+    keyed = _keyed(link)
+    if keyed is not None:
+        return keyed
     if claim.startswith("policy "):
         return _POLICY
     if claim.startswith("flow ") and " runs under a test on " in claim:
@@ -366,7 +394,7 @@ def critique(
         note = f"{link.verdict}: {link.claim}{where}"
         if link.counterexample:
             note += f"; {link.counterexample[0]!r} lies outside"
-        remedy = _remedy(link.claim)
+        remedy = _remedy(link)
         if remedy is not None:
             note += f"; {remedy}"
         notes.append(note)

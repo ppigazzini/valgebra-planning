@@ -6,6 +6,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The critique of a field read without the test showing its key, where the link carries a
+  record lacking the key or valgebra leaves its presence undecided, names the key test to add:
+  `if "note" in c1.parcel:`, and the read in its branch.
+
 ### Removed
 
 - `Contract.optional`. The verifier reads a field below any value a program holds where
