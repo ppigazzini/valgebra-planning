@@ -6,7 +6,19 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-11-21
+
+A security release: four ways 0.0.4 proved a wrong program are closed, each under Security. The
+verifier reads a field below any value a program holds where valgebra proves it present, at any
+depth, and asks a question on a loop's item of every item of its array. It requires valgebra
+0.0.31, and the parcels and bench studies read every count 0.0.4 recorded.
+
 ### Added
+
+- A page follows a program of tool calls from the question it rests on to its verdicts, with a
+  diagram for each step: the question each of the three packages answers, the set the verifier
+  carries for each value, the three verdicts a link takes, where a program comes from and where
+  it runs, and what it does not cover.
 
 - The critique of a field read without the test showing its key, where the link carries a
   record lacking the key or valgebra leaves its presence undecided, names the key test to add:
@@ -210,7 +222,8 @@ decides more of it; the user guide is published.
   on synthetic libraries of 8 to 256 tools the cut holds 5 predicates and 12 cells at every
   size.
 
-[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.4...HEAD
+[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.5...HEAD
+[0.0.5]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.1...v0.0.2
