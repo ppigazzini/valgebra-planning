@@ -46,6 +46,15 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- The planner finds a strong program at its depth under a flow rule or mined types. A failed state
+  was remembered by its cells, its policy states and the origins it tested, and a flow rule admits
+  a binding by the value's origin and a mined type by its origin and path: a failure reached
+  through the origin a rule refuses was taken for the state the trusted origin reaches. A two-call
+  strong program was found in three of the six orders of its tools' listing, and in the other
+  three none at its depth and a weak one at every depth past it. The memo keys each held value's
+  cells with its class under every flow rule and its mined type, and a search with neither keys
+  as before.
+
 - A tool's hints are MCP's where it sets none. A hint was read only where a tool set it true, and
   MCP reads a tool that sets no annotation as destructive and open-world: a motion setting no
   annotation was outside a policy keyed on `destructiveHint`, and under a trusted server even the

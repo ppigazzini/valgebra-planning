@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import itertools
 import random
 from typing import Any
+
+import pytest
 
 from valgebra_planning._valgebra import Sampler
 from valgebra_planning.cells import abstract
 from valgebra_planning.contracts import Contract, read_contract, read_task
+from valgebra_planning.flows import read_flow
+from valgebra_planning.mining import mine
 from valgebra_planning.planner import plan, predicates
 from valgebra_planning.program import Branch, Return, render, steps
 from valgebra_planning.verify import verify
@@ -204,3 +209,63 @@ def test_two_spellings_of_one_set_are_one_predicate() -> None:
     by_name = {name: predicate for predicate in found for name in predicate.names}
     assert by_name["argument:u.x"] is by_name["argument:v.x"]
     assert by_name["result:u.y"] is by_name["result:v.y"]
+
+
+#: Two tools returning one set, and a call whose argument a rule lets one of them fill.
+TWINS = {
+    "other": {"name": "other", "inputSchema": {"type": "object"}, "outputSchema": {}},
+    "ask": {"name": "ask", "inputSchema": {"type": "object"}, "outputSchema": {}},
+    "act": {
+        "name": "act",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"x": {"type": "string"}},
+            "required": ["x"],
+            "additionalProperties": False,
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {"id": {"type": "string", "pattern": "^id_"}},
+            "required": ["id"],
+        },
+    },
+}
+TWIN_RESULT = {
+    "type": "object",
+    "properties": {"v": {"type": "string"}},
+    "required": ["v"],
+    "additionalProperties": False,
+}
+ACTED = read_task("act", {}, {"type": "string", "pattern": "^id_"})
+
+
+def _twins(order: tuple[str, ...]) -> dict[str, Contract]:
+    specs = {name: {**TWINS[name]} for name in order}
+    for name in ("other", "ask"):
+        specs[name]["outputSchema"] = TWIN_RESULT
+    return {name: read_contract(spec) for name, spec in specs.items()}
+
+
+@pytest.mark.parametrize("order", list(itertools.permutations(TWINS)))
+def test_a_strong_program_a_flow_admits_is_found_at_its_depth_whatever_the_order(
+    order: tuple[str, ...],
+) -> None:
+    only = read_flow({"name": "the ask's", "sources": ["ask"], "sink": "act.x", "only": True})
+    found = plan(_twins(order), ACTED, depth=2, flows=(only,))
+    assert found.strong
+    assert found.program is not None
+    assert render(found.program) == "c1 = ask()\nc2 = act(x=c1.v)\nreturn c2.id"
+
+
+@pytest.mark.parametrize("order", list(itertools.permutations(TWINS)))
+def test_a_strong_program_mined_types_admit_is_found_at_its_depth_whatever_the_order(
+    order: tuple[str, ...],
+) -> None:
+    calls = [
+        {"tool": "ask", "arguments": {}, "result": {"v": "k1"}},
+        {"tool": "act", "arguments": {"x": "k1"}, "result": {"id": "id_1"}},
+        {"tool": "other", "arguments": {}, "result": {"v": "z9"}},
+    ]
+    contracts = _twins(order)
+    found = plan(contracts, ACTED, depth=2, types=mine(calls, contracts))
+    assert found.strong

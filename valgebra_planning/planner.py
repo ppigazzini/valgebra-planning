@@ -11,12 +11,13 @@ outcomes (Cimatti et al. 2003, Def. 2.11), the outcomes partitioned by the cells
 than listed, and a branch on a runtime type test as an observation (Bertoli et al. 2006,
 Def. 2.8).
 
-The search deepens on the calls and tests along a path, so the first strong program found is
-a shallowest one. Where none exists within the bound, one search at the full bound lets a
-branch stop once its sibling returns and no continuation exists within the depth its path has
-left, and each stop names the cells it leaves uncovered. Every program
-returned is checked again by `valgebra_planning.verify.verify`, which reads neither the cells
-nor the search.
+The search deepens on the calls and tests along a path, so the first strong program found is a
+shallowest one: a state that fails is remembered by what every rule reads of it, so a failure
+through one origin is never taken for a state another reaches. Where none exists within the
+bound, one search at the full bound lets a branch stop once its sibling returns and no
+continuation exists within the depth its path has left, and each stop names the cells it leaves
+uncovered. Every program returned is checked again by `valgebra_planning.verify.verify`, which
+reads neither the cells nor the search.
 """
 
 from __future__ import annotations
@@ -142,7 +143,7 @@ class _Search:
     policies: tuple[Policy, ...] = ()
     flows: tuple[Flow, ...] = ()
     types: Types | None = None
-    failed: set[tuple[object, int, bool]] = field(default_factory=set)
+    failed: set[tuple[object, object, int, bool]] = field(default_factory=set)
     expanded: int = 0
     #: The cells each stop leaves uncovered, by the stop's identity: a stop is made once
     #: and read back only from the program returned, which keeps it alive.
@@ -182,11 +183,32 @@ class _Search:
             key=lambda contract: not any(t.reads(contract.name, contract.hints) for t in leaving),
         )
 
+    def read(self, state: _State) -> object:
+        """Return what the rules read of each held value beside its cells, for the failure memo.
+
+        A flow rule admits a binding by the value's origin and a mined type by its origin and
+        path, so two states holding the same cells through origins a rule tells apart are two
+        states: a failure of one is no failure of the other. A search with neither reads nothing
+        more, and its key is the signature alone.
+        """
+        if not self.flows and self.types is None:
+            return None
+        return frozenset(
+            (
+                cells,
+                tuple(flow.holds(state.origin(ref)) for flow in self.flows),
+                None
+                if self.types is None
+                else self.types.of.get(_result_key(state.origin(ref), ref)),
+            )
+            for ref, cells in state.refs
+        )
+
     def solve(self, state: _State, depth: int, *, weak: bool) -> Block | None:
         goal = next((ref for ref, cells in state.refs if cells <= self.goal), None)
         if goal is not None and (not self.policies or self.settled(state)):
             return Block((), Return(goal))
-        key = (state.signature(), depth, weak)
+        key = (state.signature(), self.read(state), depth, weak)
         if depth == 0 or key in self.failed:
             return None
         self.expanded += 1

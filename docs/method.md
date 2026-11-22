@@ -116,7 +116,9 @@ one branch and goes on in the other; a second overlapping argument is guarded in
 program is strong when every path returns a value whose cells lie inside the goal's: strong
 planning under nondeterministic outcomes (Cimatti et al. 2003), a branch being an observation
 (Bertoli et al. 2006). The search deepens on the calls and tests along a
-path, so the first strong program is a shallowest one. Where none exists, one search at the full
+path, so the first strong program is a shallowest one. A state that fails is remembered by what
+every rule reads of it, each value's cells and, under a flow rule or mined types, its origin, so a
+failure through one origin is never taken for a state another origin reaches. Where none exists, one search at the full
 bound lets a branch stop once its sibling returns, and each stop names the values it leaves
 uncovered.
 
