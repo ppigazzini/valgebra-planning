@@ -440,12 +440,11 @@ def test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads(
     # `pair` takes any `y`; a member with `n` 2, which the test excluded, breaks all three.
     source = f"r = get()\nif r.n in (1,):\n    {bound}\n    stop(r)\n{bound}\nstop(r)"
     tools, task = _split()
-    links = {
-        link.where: link
-        for link in verify(read_program(source), tools, task).links
-        if link.claim == claim
-    }
-    assert links["then"].verdict != "refuted"
+    checked = verify(read_program(source), tools, task).links
+    links = {link.where: link for link in checked if link.claim == claim}
+    # Under the test nothing is refuted: valgebra may prove the key held there, and read the
+    # field with no link on its presence.
+    assert all(link.verdict != "refuted" for link in checked if link.where == "then")
     assert links["else"].verdict != "proven"
     for witness in links["else"].counterexample:
         # Each is what a member with `n` 2 holds there: its `f`, itself, or a record of it.

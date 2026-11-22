@@ -40,6 +40,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- valgebra is required from 0.0.32 and valgebra-jsonschema from 0.0.5, the pair the report's
+  probes ran on. Under a test on another field, valgebra 0.0.32 proves a key of a record held
+  that 0.0.31 left open, so the walk reads the field with no link on its presence; the parcels
+  and bench studies read no difference.
+
 - The program a plan returns no longer depends on the order a server lists its tools in, and a
   weak program is the one leaving the fewest cells uncovered among those each first call gives.
   The search tried tools in the listing's order and returned the first weak program it found,
