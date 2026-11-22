@@ -118,6 +118,8 @@ library defines, and, the call made, its result to the output schema
 the call never reaches the server, or its result the agent. The error names each failure's path
 and code, as `run_id: string_pattern_mismatch`, and never the value: a key the tool's schemas do
 not declare is written `*`, so no part of a refused result reaches the agent through the error.
+A result the proxy's client refuses against the output schema the server declares is refused
+naming the tool alone, since the client's own message holds the value.
 A refused call leaves every policy
 where it was, and a call the server answers with an error leaves each in the states before and
 after it, since the call may have acted or not. A flow rule reads provenance from values: an argument equal to a value a source

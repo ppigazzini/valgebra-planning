@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from mcp import Client, types
@@ -117,6 +118,21 @@ def test_a_result_outside_its_contract_is_never_passed_on() -> None:
     made, (result,) = _session([("find_parcel", {"tracking": "AB123456789IT"})], answers, bare)
     assert made == ["find_parcel"]
     assert "outside its contract" in _refused(result)
+
+
+def test_a_result_the_client_refuses_is_a_refusal_naming_the_tool_and_never_the_value(
+    capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+) -> None:
+    # The upstream declares its output schema, so the proxy's client checks the result first.
+    hidden = "HIDDEN-41"
+    answers = ANSWERS | {"find_parcel": {"parcel": {"parcel_id": hidden}}}
+    made, (result,) = _session([("find_parcel", {"tracking": "AB123456789IT"})], answers)
+    assert made == ["find_parcel"]
+    assert _refused(result) == (
+        "refused: find_parcel returned a value outside its contract, refused by the client"
+    )
+    captured = capsys.readouterr()
+    assert hidden not in str(result) + captured.out + captured.err + caplog.text
 
 
 def test_a_refused_call_leaves_the_policy_where_it_was() -> None:

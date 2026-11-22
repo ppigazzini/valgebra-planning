@@ -32,6 +32,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A result the mcp client refuses is the `result` check. The client checks a result against the
+  output schema its server declares before handing it back, and raises with the value in its
+  message: `run_on_server` raised it out of the run, and the proxy answered `Internal server
+  error` and logged the value. The runner ends the run on the `result` check, naming the tool,
+  and the proxy answers its refusal tool error, naming the tool; neither passes on the client's
+  text. `RefusedResultError` is how a caller hands such a refusal to the runner, and
+  `servers.refused_by_client` tells the client's refusal from any other error.
+
 - A result whose tool declares no output set is held to the JSON values. The runner bound any
   value such a tool returned, so a coroutine an async tool handed back unawaited was bound as the
   call's result: a policy counted a confirmation that never ran, and the call after it was made.

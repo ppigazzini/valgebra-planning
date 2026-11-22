@@ -36,6 +36,7 @@ from valgebra_planning._valgebra import json_key
 from valgebra_planning.contracts import Contract, contract_names, failures
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Monitor, Policy
+from valgebra_planning.servers import refused_by_client
 
 __all__ = ["Gate", "proxy", "serve"]
 
@@ -140,6 +141,12 @@ def proxy(
             gate.errored()
             text = types.TextContent(type="text", text=f"{params.name} did not answer: {error}")
             return types.CallToolResult(content=[text], is_error=True)
+        except RuntimeError as error:
+            if not refused_by_client(error, params.name):
+                raise
+            # The client's text holds the value, so the refusal names the tool alone.
+            refused = f"{params.name} returned a value outside its contract, refused by the client"
+            return _refusal(refused)
         if result.is_error:
             gate.errored()
             return result

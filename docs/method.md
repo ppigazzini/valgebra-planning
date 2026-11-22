@@ -202,29 +202,31 @@ as undecided.
 
 ## Running a program
 
-`valgebra_planning/run.py` calls the tools a program names and checks each step as it is made:
-the argument record against the tool's input set, each policy's step, the result against the
-output set, or against the JSON values where the tool declares none, and the returned value
-against the goal. A coroutine an async tool hands back unawaited is no JSON value: it is refused
-and closed, never run. It fails closed: the first broken check
-ends the run before the call is made, the result bound or the value returned, and `Run.refused`
-names it. A call that answers with an error may have acted or not, so each policy is held in the
-states before and after it, as the verifier reads the error's block. A proof of a program holds over the contracts, so a tool answering outside its own
-contract is the case a run must not pass on. With `enforce=False` the runner records every break
-and goes on, a diagnosis rather than a guard. `blame` names why a run broke: a proven program
-breaks only where something it rests on fails, a server returning outside the output schema it
-declares, a schema inferred from observed calls not holding, an error outlasting a retry's
-attempts; an argument record, a policy or a returned value breaking in a proven program is a
-defect to report, and in an unproven one its own unproven link. A lying annotation and a wrong
-mined type break no check a run can see. `valgebra_planning/proxy.py` holds the same checks
-as an MCP server in front of another, for an agent no program governs: each call is answered with
-a tool error naming the check it breaks, and each failure's path and code but never the value or a
-key the schemas do not declare, so a refused result reaches the agent through no error; a refused
-call steps no policy, a call the server answers with an error leaves each policy in the states
-before and after it, and a flow rule reads a
-value's source from equality with what a source tool returned, an assumption. With `only` that is
-the grounding gate of Sah et al. 2026: an argument equal to no value its sources returned is
-refused, and a value from a task input with it, since a proxy sees no task.
+`valgebra_planning/run.py` calls the tools a program names and checks each step as it is made: the
+argument record against the tool's input set, each policy's step, the result against the output set,
+or against the JSON values where the tool declares none, and the returned value against the goal. A
+coroutine an async tool hands back unawaited is no JSON value: it is refused and closed, never run.
+It fails closed: the first broken check ends the run before the call is made, the result bound or
+the value returned, and `Run.refused` names it. A call that answers with an error may have acted or
+not, so each policy is held in the states before and after it, as the verifier reads the error's
+block. A proof of a program holds over the contracts, so a tool answering outside its own contract
+is the case a run must not pass on. With `enforce=False` the runner records every break and goes on,
+a diagnosis rather than a guard. `blame` names why a run broke: a proven program breaks only where
+something it rests on fails, a server returning outside the output schema it declares, a schema
+inferred from observed calls not holding, an error outlasting a retry's attempts; an argument
+record, a policy or a returned value breaking in a proven program is a defect to report, and in an
+unproven one its own unproven link. A lying annotation and a wrong mined type break no check a run
+can see. `valgebra_planning/proxy.py` holds the same checks as an MCP server in front of another,
+for an agent no program governs: each call is answered with a tool error naming the check it breaks,
+and each failure's path and code but never the value or a key the schemas do not declare, so a
+refused result reaches the agent through no error. The mcp client checks a result against the output
+schema the server declares before the proxy does, and its refusal holds the value, so it is answered
+with a refusal naming the tool alone, as `run_on_server` ends the run on the `result` check naming
+it. A refused call steps no policy, a call the server answers with an error leaves each policy in
+the states before and after it, and a flow rule reads a value's source from equality with what a
+source tool returned, an assumption. With `only` that is the grounding gate of Sah et al. 2026: an
+argument equal to no value its sources returned is refused, and a value from a task input with it,
+since a proxy sees no task.
 
 ## Limits
 

@@ -32,7 +32,7 @@ from valgebra_planning.contracts import (
 from valgebra_planning.policy import Monitor, Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 
-__all__ = ["Refusal", "Run", "ToolError", "blame", "run"]
+__all__ = ["Refusal", "RefusedResultError", "Run", "ToolError", "blame", "run"]
 
 #: How many times a retried call is made before the run gives up on it.
 ATTEMPTS = 8
@@ -67,6 +67,13 @@ _JSON = Validator(JSON)
 
 class ToolError(Exception):
     """A tool answered with an error: an MCP result with ``isError`` set."""
+
+
+class RefusedResultError(Exception):
+    """A tool's result its caller refused before handing it back, against its output schema.
+
+    The message is the tool's name alone: the refused value reaches no reader through it.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +216,13 @@ class _Runner:
                 return (self.tools[call.tool](**arguments),)
             except ToolError:
                 continue
+            except RefusedResultError:
+                # No result is handed back, so no run goes on past the call, enforced or not.
+                message = (
+                    f"{call.tool} returned a value outside its contract, refused by its caller"
+                )
+                self.broken.append(message)
+                return Run(None, None, tuple(self.broken), message, Refusal("result", call.tool))
         # The call may not have acted: what follows starts from either set of policy states, as
         # the verifier walks it.
         for monitor in self.monitors:

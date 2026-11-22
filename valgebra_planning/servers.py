@@ -5,7 +5,9 @@
 program with `valgebra_planning.run.run`, each call a ``tools/call`` through the client: the
 result's ``structuredContent`` is the value a call returns, an ``isError`` result is a
 `valgebra_planning.run.ToolError`, and a tool returning no structured content returns the text
-of its content blocks. A call the server answers with a protocol error is a tool error too, and
+of its content blocks. A result the mcp client refuses against the output schema the server
+declares ends the run on the `result` check, naming the tool and never the value. A call the
+server answers with a protocol error is a tool error too, and
 so is one asking for input (MCP 2026-07-28's ``input_required``: a sampling, an elicitation, the
 roots, or an interaction it waits on): the client gives none, so no value a program did not hold
 reaches a call.
@@ -26,9 +28,14 @@ from mcp import Client, InputRequiredRoundsExceededError, MCPError, StdioServerP
 from valgebra_planning.contracts import Contract, Task, read_contract
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block
-from valgebra_planning.run import Run, ToolError, run
+from valgebra_planning.run import RefusedResultError, Run, ToolError, run
 
-__all__ = ["connect", "read_server", "run_on_server"]
+__all__ = ["connect", "read_server", "refused_by_client", "run_on_server"]
+
+#: How the mcp client refuses a result against the output schema the server declares, before it
+#: hands the result back (``ClientSession.validate_tool_result``): its text holds the value, so
+#: the refusal is read here and its text is never passed on.
+_CLIENT_REFUSALS = ("Invalid structured content returned by tool ", "Invalid schema for tool ")
 
 
 def connect(server: str) -> Client:
@@ -56,6 +63,13 @@ async def read_server(client: Client) -> dict[str, Contract]:
         cursor = listing.next_cursor
         if cursor is None:
             return contracts
+
+
+def refused_by_client(error: RuntimeError, tool: str) -> bool:
+    """Return whether ``error`` is the mcp client refusing ``tool``'s result against its schema."""
+    text = str(error)
+    missing = f"Tool {tool} has an output schema but did not return structured content"
+    return text.startswith(_CLIENT_REFUSALS) or text == missing
 
 
 def _value(result: Any) -> Any:
@@ -89,6 +103,11 @@ async def run_on_server(
                 # run with no record of which call broke and why.
                 message = f"{name} did not answer: {error}"
                 raise ToolError(message) from error
+            except RuntimeError as error:
+                if not refused_by_client(error, name):
+                    raise
+                # The client's text holds the value: it is dropped, chain and all.
+                raise RefusedResultError(name) from None
             return _value(result)
 
         return call

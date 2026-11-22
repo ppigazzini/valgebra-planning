@@ -16,7 +16,7 @@ from valgebra_planning._valgebra import Sampler
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.planner import plan
 from valgebra_planning.program import Block
-from valgebra_planning.run import Refusal
+from valgebra_planning.run import Refusal, blame
 from valgebra_planning.servers import read_server, run_on_server
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
@@ -185,3 +185,36 @@ def test_a_call_asking_for_input_fails_as_a_tool_error(answer: types.InputRequir
     result = asyncio.run(ran(program))
     assert result.value is None
     assert result.why == Refusal("error", "confirm")
+
+
+#: A string no schema declares and no code spells: a part of a value the client refuses.
+HIDDEN = "HIDDEN-41"
+
+
+def test_a_result_the_client_refuses_ends_the_run_naming_the_tool_and_never_the_value(
+    capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+) -> None:
+    found = plan(TOOLS, SETTLE)
+    assert found.program is not None
+    program = found.program
+
+    def answer(name: str, _: dict[str, Any]) -> Any:
+        assert name == "find_parcel"
+        return {"parcel": {"parcel_id": HIDDEN}}
+
+    async def once() -> Any:
+        async with Client(_server(answer)) as client:
+            return await run_on_server(
+                program, TOOLS, SETTLE, {"tracking": "AB123456789IT"}, client
+            )
+
+    result = asyncio.run(once())
+    assert result.refused == (
+        "find_parcel returned a value outside its contract, refused by its caller"
+    )
+    assert result.why == Refusal("result", "find_parcel")
+    assert blame(result, TOOLS, proven=True) == (
+        "find_parcel broke the output schema its server declares"
+    )
+    captured = capsys.readouterr()
+    assert HIDDEN not in repr(result) + captured.out + captured.err + caplog.text

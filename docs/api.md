@@ -71,14 +71,14 @@ extra.
 | `valgebra_planning.verify` | `Gap`, `Link`, `Verdict`, `Verification`, `verify` | |
 | `valgebra_planning.critic` | `Critique`, `ProgramError`, `critique`, `read_program` | |
 | `valgebra_planning.codemode` | `Repair`, `feedback`, `repair`, `stub`, `stubs` | |
-| `valgebra_planning.run` | `Refusal`, `Run`, `ToolError`, `blame`, `run` | |
+| `valgebra_planning.run` | `Refusal`, `RefusedResultError`, `Run`, `ToolError`, `blame`, `run` | |
 | `valgebra_planning.policy` | `Monitor`, `Policy`, `Reach`, `Transition`, `read_policy` | |
 | `valgebra_planning.flows` | `Flow`, `read_flow` | |
 | `valgebra_planning.mining` | `SlotKey`, `Types`, `infer_outputs`, `mine` | |
 | `valgebra_planning.library` | `Library`, `Problem`, `read_library` | |
 | `valgebra_planning.privilege` | `Change`, `Rule`, `Update`, `allowed`, `as_policy`, `describe`, `read_privileges`, `read_rules`, `updates` | |
 | `valgebra_planning.vacuity` | `Certainty`, `Finding`, `vacuities` | |
-| `valgebra_planning.servers` | `connect`, `read_server`, `run_on_server` | the `mcp` extra |
+| `valgebra_planning.servers` | `connect`, `read_server`, `refused_by_client`, `run_on_server` | the `mcp` extra |
 | `valgebra_planning.proxy` | `Gate`, `proxy`, `serve` | the `mcp` extra |
 
 A module's `__all__` holds what a caller calls, the types those calls take and return, and the
