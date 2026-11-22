@@ -426,3 +426,74 @@ def test_a_call_a_policy_names_and_nothing_reads_is_left_out_where_the_program_n
     assert "walk_to(" not in render(found.program)
     checked = verify(found.program, skills, task, policies=[MOTION_CONFIRMED])
     assert checked.count("proven") == len(checked.links)
+
+
+#: A motion follows a confirmation that answered yes: a transition reading the result.
+ANSWERED_YES = read_policy(
+    {
+        "name": "motion after a yes",
+        "initial": "start",
+        "bad": ["violated"],
+        "transitions": [
+            {
+                "from": "start",
+                "tool": "confirm_with_user",
+                "result": {"properties": {"confirmed": {"const": True}}},
+                "to": "ok",
+            },
+            {"from": "start", "tool": "walk_to", "to": "violated"},
+            {"from": "start", "tool": "grasp", "to": "violated"},
+        ],
+    }
+)
+
+
+def test_a_transition_reading_the_result_is_taken_when_the_result_arrives() -> None:
+    no = Monitor(ANSWERED_YES)
+    assert not no.observe("confirm_with_user", {"question": "may I walk?"})
+    assert not no.returned("confirm_with_user", {"question": "may I walk?"}, {"confirmed": False})
+    assert no.observe("walk_to", {"object_id": "obj_1"})
+    yes = Monitor(ANSWERED_YES)
+    assert not yes.observe("confirm_with_user", {"question": "may I walk?"})
+    assert not yes.returned("confirm_with_user", {"question": "may I walk?"}, {"confirmed": True})
+    assert not yes.observe("walk_to", {"object_id": "obj_1"})
+    # A call answering with an error returns nothing for the transition to read.
+    errored = Monitor(ANSWERED_YES)
+    assert not errored.observe("confirm_with_user", {"question": "may I walk?"})
+    errored.errored()
+    assert errored.observe("walk_to", {"object_id": "obj_1"})
+
+
+IGNORED = (
+    "c1 = detect_object(name=name)\n"
+    "c2 = confirm_with_user(question=name)\n"
+    "c3 = walk_to(object_id=c1.object_id)\n"
+    "return c3.arrived\n"
+)
+
+
+@pytest.mark.parametrize("answer", [False, True])
+def test_a_run_moves_only_after_the_answer_the_policy_reads(*, answer: bool) -> None:
+    walked = answer
+    skills = _skills(("detect_object", "confirm_with_user", "walk_to"))
+    task = read_task("walk", {"name": {"type": "string"}}, {"type": "boolean"})
+    made: list[str] = []
+    tools = {
+        "detect_object": lambda **_: {"status": "found", "object_id": "obj_1", "confidence": 0.9},
+        "confirm_with_user": lambda **_: {"confirmed": answer},
+        "walk_to": lambda **_: made.append("walk_to") or {"arrived": True},
+    }
+    ended = run(
+        read_program(IGNORED), skills, task, {"name": "cup"}, tools, policies=[ANSWERED_YES]
+    )
+    assert (made == ["walk_to"]) is walked
+    assert ended.ok is walked
+
+
+def test_a_transition_reading_the_result_is_possibly_taken_before_the_run() -> None:
+    # The walk reads no result: until the walk splits on it, a link through it is undecided.
+    skills = _skills(("detect_object", "confirm_with_user", "walk_to"))
+    task = read_task("walk", {"name": {"type": "string"}}, {"type": "boolean"})
+    checked = verify(read_program(IGNORED), skills, task, policies=[ANSWERED_YES])
+    verdicts = {link.claim: link.verdict for link in checked.links}
+    assert verdicts["policy motion after a yes holds"] == "undecided"

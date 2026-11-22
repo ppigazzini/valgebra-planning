@@ -228,6 +228,15 @@ class _Runner:
         if made is None or isinstance(made, Run):
             return made
         result = made[0]
+        refused = self.returned(call, contract, arguments, result)
+        if refused is not None:
+            return refused
+        return {**env, call.result: result}
+
+    def returned(
+        self, call: Call, contract: Contract, arguments: dict[str, Any], result: Any
+    ) -> Run | None:
+        """Check a call's result: its set, then each policy's step on it."""
         # Where the contract declares no output set the result is still a JSON value: the cells
         # partition the JSON values, so a proof says nothing of any other.
         values = _JSON if contract.returns is None else contract.returns
@@ -246,7 +255,12 @@ class _Runner:
             refused = self.breaks(message, "result", call.tool)
             if refused is not None:
                 return refused
-        return {**env, call.result: result}
+        for monitor in self.monitors:
+            if monitor.returned(call.tool, arguments, result, contract.hints):
+                refused = self.breaks(monitor.violations[-1], "policy", call.tool)
+                if refused is not None:
+                    return refused
+        return None
 
     def admitted(self, tool: str, contract: Contract, arguments: dict[str, Any]) -> Run | None:
         """Check a call before it is made: its argument record, then each policy's step."""

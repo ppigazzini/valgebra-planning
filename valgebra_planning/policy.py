@@ -41,6 +41,9 @@ __all__ = ["Monitor", "Policy", "Reach", "Transition", "read_policy"]
 
 Reach = Literal["never", "possibly", "surely"]
 
+#: What `Monitor.stepped` is given in place of a result for a call made and not yet returned.
+_UNRETURNED: Any = object()
+
 
 @dataclass(frozen=True, slots=True)
 class Transition:
@@ -56,6 +59,9 @@ class Transition:
     guard: Validator[Any]
     target: str
     hint: str = ""
+    #: The set the call's result must lie in, for a transition taken when the result arrives;
+    #: None for one taken when the call is made.
+    result: Validator[Any] | None = None
 
     def reads(self, tool: str, hints: frozenset[str]) -> bool:
         """Return whether a call to ``tool``, whose annotations set ``hints``, is one it reads."""
@@ -92,8 +98,21 @@ class Policy:
 
         A transition taken surely leaves its source; one taken possibly adds its target and
         keeps the source, as does a call no guard of the state surely matches. A bad state is
-        never left.
+        never left. A transition reading the result is stepped after those reading the call,
+        from the states they leave, and is taken possibly at most: no result is known here.
         """
+        made = self._stepped(states, tool, record, hints, returned=False)
+        return self._stepped(made, tool, record, hints, returned=True)
+
+    def _stepped(
+        self,
+        states: frozenset[str],
+        tool: str,
+        record: Validator[Any],
+        hints: frozenset[str],
+        *,
+        returned: bool,
+    ) -> frozenset[str]:
         after: set[str] = set()
         for state in states:
             if state in self.bad:
@@ -101,9 +120,15 @@ class Policy:
                 continue
             stays = True
             for transition in self.transitions:
-                if transition.source != state or not transition.reads(tool, hints):
+                if (
+                    transition.source != state
+                    or not transition.reads(tool, hints)
+                    or (transition.result is not None) != returned
+                ):
                     continue
                 taken = _taken(record, transition.guard)
+                if returned and taken == "surely":
+                    taken = "possibly"
                 if taken != "never":
                     after.add(transition.target)
                 if taken == "surely":
@@ -133,7 +158,7 @@ def _taken(record: Validator[Any], guard: Validator[Any]) -> Reach:
 
 #: The keys a policy and each of its transitions read.
 _POLICY_KEYS = frozenset({"name", "initial", "bad", "transitions", "pending"})
-_TRANSITION_KEYS = frozenset({"from", "to", "tool", "hint", "arguments"})
+_TRANSITION_KEYS = frozenset({"from", "to", "tool", "hint", "arguments", "result"})
 
 
 def read_policy(spec: Mapping[str, Any], *, assert_format: bool = False) -> Policy:
@@ -141,7 +166,9 @@ def read_policy(spec: Mapping[str, Any], *, assert_format: bool = False) -> Poli
 
     Each transition names its ``from`` and ``to`` states and its ``tool``, or the annotation
     ``hint`` a tool must set, and optionally the JSON Schema its ``arguments`` record must meet,
-    every record where it names none. A key neither reads is refused, naming it, and so is a
+    every record where it names none. With ``result``, the JSON Schema the call's result must
+    meet, the transition is taken when the result arrives rather than when the call is made.
+    A key neither reads is refused, naming it, and so is a
     transition naming both a tool and a hint, or neither. With ``assert_format``, ``format``
     in a guard is read as an assertion, as the library's contracts read it.
     """
@@ -157,6 +184,9 @@ def read_policy(spec: Mapping[str, Any], *, assert_format: bool = False) -> Poli
             source=t["from"],
             tool=t.get("tool", ""),
             guard=compile_schema(t.get("arguments", True), assert_format=assert_format),
+            result=None
+            if "result" not in t
+            else compile_schema(t["result"], assert_format=assert_format),
             target=t["to"],
             hint=t.get("hint", ""),
         )
@@ -197,16 +227,28 @@ class Monitor:
         return self.also | {self.state}
 
     def stepped(
-        self, state: str, tool: str, arguments: Mapping[str, Any], hints: frozenset[str]
+        self,
+        state: str,
+        tool: str,
+        arguments: Mapping[str, Any],
+        hints: frozenset[str],
+        result: Any = _UNRETURNED,
     ) -> str:
-        """Return the state one call takes ``state`` to; a bad state is never left."""
+        """Return the state one call takes ``state`` to; a bad state is never left.
+
+        Without ``result`` the transitions read are those taken when the call is made; with it,
+        those reading the result.
+        """
         if state in self.policy.bad:
             return state
+        returned = result is not _UNRETURNED
         for transition in self.policy.transitions:
             if (
                 transition.source == state
                 and transition.reads(tool, hints)
+                and (transition.result is not None) == returned
                 and transition.guard.is_valid(dict(arguments))
+                and (transition.result is None or transition.result.is_valid(result))
             ):
                 return transition.target
         return state
@@ -223,6 +265,24 @@ class Monitor:
         reached = sorted((self.held() & self.policy.bad) - held)
         if reached:
             self.violations.append(f"{self.policy.name}: {tool} reached {reached[0]}")
+            return True
+        return False
+
+    def returned(
+        self,
+        tool: str,
+        arguments: Mapping[str, Any],
+        result: Any,
+        hints: frozenset[str] = frozenset(),
+    ) -> bool:
+        """Step on a call's result; return whether it may reach a bad state, never left."""
+        held = self.held()
+        self.state = self.stepped(self.state, tool, arguments, hints, result)
+        self.also = frozenset(self.stepped(s, tool, arguments, hints, result) for s in self.also)
+        self.also -= {self.state}
+        reached = sorted((self.held() & self.policy.bad) - held)
+        if reached:
+            self.violations.append(f"{self.policy.name}: {tool} returned into {reached[0]}")
             return True
         return False
 

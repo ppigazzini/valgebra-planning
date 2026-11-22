@@ -275,3 +275,60 @@ def test_no_refusal_of_the_proxy_holds_a_part_of_the_value_it_refused(
     }[where]
     refused = [gate.before("get_run", arguments), gate.after("get_run", result)]
     assert all(text is not None and secret not in text for text in refused), refused
+
+
+#: Freight is booked only after an approval the approver granted: `apr_1` is granted, any other
+#: approval refused, and a refused one bars every call after it.
+GRANTED = read_policy(
+    {
+        "name": "freight booked after a granted approval",
+        "initial": "start",
+        "bad": ["violated", "denied"],
+        "transitions": [
+            {
+                "from": "start",
+                "tool": "approve_freight",
+                "result": {"properties": {"approval_id": {"const": "apr_1"}}},
+                "to": "approved",
+            },
+            {
+                "from": "start",
+                "tool": "approve_freight",
+                "result": {"properties": {"approval_id": {"const": "apr_9"}}},
+                "to": "denied",
+            },
+            {"from": "start", "tool": "book_freight_return", "to": "violated"},
+        ],
+    }
+)
+
+
+@pytest.mark.parametrize(
+    ("approval", "booked"),
+    [("apr_1", "booked"), ("apr_2", "refused: freight booked after a granted approval: ")],
+)
+def test_the_gate_reads_a_result_a_transition_waits_on(approval: str, booked: str) -> None:
+    answers = ANSWERS | {"approve_freight": {"approval_id": approval}}
+    calls = [("approve_freight", {"parcel_id": "pcl_1"}), BOOKING]
+    made, (_, booking) = _session(calls, answers, policies=[GRANTED])
+    if booked == "booked":
+        assert not booking.is_error
+        assert made == ["approve_freight", "book_freight_return"]
+    else:
+        assert _refused(booking).startswith(booked)
+        assert made == ["approve_freight"]
+
+
+def test_no_call_is_made_after_a_result_takes_a_policy_to_a_bad_state() -> None:
+    answers = ANSWERS | {"approve_freight": {"approval_id": "apr_9"}}
+    find = ("find_parcel", {"tracking": "AB123456789IT"})
+    made, (approval, found) = _session(
+        [("approve_freight", {"parcel_id": "pcl_1"}), find], answers, policies=[GRANTED]
+    )
+    assert _refused(approval) == (
+        "refused: freight booked after a granted approval: approve_freight returned into denied"
+    )
+    assert _refused(found) == (
+        "refused: freight booked after a granted approval holds denied: no call is made after it"
+    )
+    assert made == ["approve_freight"]

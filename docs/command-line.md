@@ -133,7 +133,9 @@ A result the proxy's client refuses against the output schema the server declare
 naming the tool alone, since the client's own message holds the value.
 A refused call leaves every policy
 where it was, and a call the server answers with an error leaves each in the states before and
-after it, since the call may have acted or not. A flow rule reads provenance from values: an argument equal to a value a source
+after it, since the call may have acted or not. A transition reading the result steps when the
+result arrives; once a result takes a policy to a bad state, the call having been made, every
+later call is refused. A flow rule reads provenance from values: an argument equal to a value a source
 tool returned is taken as that tool's, an assumption. Under `only` an argument equal to no value
 its sources returned is refused, and so is a value from a task input, since a proxy sees no
 task. A call the server answers by asking for input is answered with a tool error, and the

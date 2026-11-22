@@ -138,15 +138,18 @@ verifier, which adds a link for it.
   lists what it rests on: the tool's errors transient within the runner's 8 attempts, and the
   annotations, a hint the server gives, unless the library marks the server trusted. A multi
   round-trip request is the client's loop around one call and leaves the plan unchanged.
-- **Policies** (`valgebra_planning/policy.py`). An automaton over a program's calls whose
-  guards are valgebra sets over the argument record. Along each path a guard is taken surely,
-  possibly or never, and a path surely reaching a bad state is refuted, possibly undecided. A
-  loop's body may run any number of times, so the states a policy may be in when it starts are
-  taken to a fixpoint, the states being finite. A policy reads one program's calls in order and
-  carries no value from one call to another. A transition may read an annotation hint,
-  `destructiveHint` or another, on any tool giving it, MCP's default read where a tool sets none: a
-  tool setting no annotation is destructive and open-world, and read-only only where it says so; the policy's link then lists the hints it
-  reads as an assumption. A pending state is an obligation: a path may pass through it and must
+- **Policies** (`valgebra_planning/policy.py`). An automaton over a program's calls whose guards
+  are valgebra sets over the argument record. Along each path a guard is taken surely, possibly or
+  never, and a path surely reaching a bad state is refuted, possibly undecided. A loop's body may
+  run any number of times, so the states a policy may be in when it starts are taken to a
+  fixpoint, the states being finite. A policy reads one program's calls in order and carries no
+  value from one call to another. A transition may read an annotation hint, `destructiveHint` or
+  another, on any tool giving it, MCP's default read where a tool sets none: a tool setting no
+  annotation is destructive and open-world, and read-only only where it says so; the policy's link
+  then lists the hints it reads as an assumption. A transition may read the call's result instead,
+  a set it must lie in: the runner and the proxy step it when the result arrives, a call answering
+  with an error taking none, and here it is taken possibly at most, so a link resting on it is
+  undecided, never proven. A pending state is an obligation: a path may pass through it and must
   not end in it, as a booking owes a notice. Every path of a program ends, a loop's after any
   number of items, so a pending state is decided before the run, where a monitor reading a prefix
   cannot decide it (Bauer et al. 2011); the runner reads it when the run ends. A bad state is

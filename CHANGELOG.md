@@ -40,6 +40,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A policy's transition may read the call's result: `"result"`, a JSON Schema the result must
+  meet, makes the transition step when the result arrives rather than when the call is made, as
+  "a motion only after the user said yes" asks. The runner and the proxy step it on the result,
+  a call answering with an error taking none; once a result takes a policy to a bad state the
+  proxy refuses every later call, the call having been made. Before a run a transition reading a
+  result is taken possibly at most, so a link resting on it is undecided, never proven.
+
 - A library reads `format` as an assertion where its `tools.json` holds `"assertFormat": true`,
   as valgebra-jsonschema reads it on request: a `uuid`, `date`, `duration` or `ipv4` slot is a
   regular set, so free text reaches an identifier only under a test, and the others are

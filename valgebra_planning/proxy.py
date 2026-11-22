@@ -66,9 +66,27 @@ class Gate:
         contract = self.contracts.get(tool)
         if contract is None:
             return f"{tool} is no tool the proxy holds"
+        for monitor in self.monitors:
+            # A result took the policy to a bad state after its call was made: no call follows.
+            if held := sorted(monitor.held() & monitor.policy.bad):
+                return f"{monitor.policy.name} holds {held[0]}: no call is made after it"
         if not contract.accepts.is_valid(arguments):
             detail = failures(contract.accepts, arguments, contract_names(contract))
             return f"{tool} refuses its arguments ({detail})"
+        flowing = self.flowing(tool, arguments)
+        if flowing is not None:
+            return flowing
+        # A refused call is never made, so no policy steps on it: the session goes on as before.
+        states = [(monitor.state, monitor.also, monitor.before) for monitor in self.monitors]
+        for monitor in self.monitors:
+            if monitor.observe(tool, arguments, contract.hints):
+                for kept, (state, also, before) in zip(self.monitors, states, strict=True):
+                    kept.state, kept.also, kept.before = state, also, before
+                return monitor.violations[-1]
+        return None
+
+    def flowing(self, tool: str, arguments: dict[str, Any]) -> str | None:
+        """Return the flow rule a call breaks, or None."""
         for flow in self.flows:
             if flow.tool != tool or flow.argument not in arguments:
                 continue
@@ -85,13 +103,6 @@ class Gate:
                 return f"flow {flow.name}: {flow.sink} holds a value none of {named} returned"
             named = ", ".join(sorted(sources))
             return f"flow {flow.name}: {flow.sink} holds a value {named} returned"
-        # A refused call is never made, so no policy steps on it: the session goes on as before.
-        states = [(monitor.state, monitor.also, monitor.before) for monitor in self.monitors]
-        for monitor in self.monitors:
-            if monitor.observe(tool, arguments, contract.hints):
-                for kept, (state, also, before) in zip(self.monitors, states, strict=True):
-                    kept.state, kept.also, kept.before = state, also, before
-                return monitor.violations[-1]
         return None
 
     def errored(self) -> None:
@@ -99,12 +110,20 @@ class Gate:
         for monitor in self.monitors:
             monitor.errored()
 
-    def after(self, tool: str, value: Any) -> str | None:
-        """Return why a result may not be passed on, or None; remember untrusted tools' values."""
+    def after(
+        self, tool: str, value: Any, arguments: Mapping[str, Any] | None = None
+    ) -> str | None:
+        """Return why a result may not be passed on, or None; remember untrusted tools' values.
+
+        Each policy steps on the result with the call's ``arguments``.
+        """
         contract = self.contracts[tool]
         if contract.returns is not None and not contract.returns.is_valid(value):
             detail = failures(contract.returns, value, contract_names(contract))
             return f"{tool} returned a value outside its contract ({detail})"
+        for monitor in self.monitors:
+            if monitor.returned(tool, arguments or {}, value, contract.hints):
+                return monitor.violations[-1]
         if any(tool in flow.sources for flow in self.flows):
             for leaf in _leaves(value):
                 self.seen.setdefault(json_key(leaf), set()).add(tool)
@@ -153,7 +172,7 @@ def proxy(
         value = result.structured_content
         if value is None:
             value = "".join(getattr(block, "text", "") for block in result.content)
-        refused = gate.after(params.name, value)
+        refused = gate.after(params.name, value, arguments)
         return _refusal(refused) if refused is not None else result
 
     return Server("valgebra-planning proxy", on_list_tools=listed, on_call_tool=called)
