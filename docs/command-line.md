@@ -119,7 +119,8 @@ the call never reaches the server, or its result the agent. The error names each
 and code, as `run_id: string_pattern_mismatch`, and never the value: a key the tool's schemas do
 not declare is written `*`, so no part of a refused result reaches the agent through the error.
 A refused call leaves every policy
-where it was. A flow rule reads provenance from values: an argument equal to a value a source
+where it was, and a call the server answers with an error leaves each in the states before and
+after it, since the call may have acted or not. A flow rule reads provenance from values: an argument equal to a value a source
 tool returned is taken as that tool's, an assumption. Under `only` an argument equal to no value
 its sources returned is refused, and so is a value from a task input, since a proxy sees no
 task. A call the server answers by asking for input is answered with a tool error, and the

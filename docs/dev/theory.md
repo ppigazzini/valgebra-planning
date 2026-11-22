@@ -175,11 +175,13 @@ algebra (D'Antoni and Veanes 2017, Def. 1). It states what a domain policy says 
 (Yao et al. 2024, §3). Statically a guard is taken surely where valgebra proves the record
 inside it, never where it proves them disjoint, and possibly otherwise, so the automaton is
 stepped on sets of states; a bad state is never left. At run time the same automaton is a
-monitor stepping on concrete records. **[LOAD-BEARING: policy-automaton]**
+monitor stepping on concrete records. A call that answers with an error may have acted or not,
+so the walk reads its error block from either set of states, and the monitor holds both after
+it, refusing a call that takes any of them to a bad state. **[LOAD-BEARING: policy-automaton]**
 
 IMPLEMENTED-BY: policy.py
 
-HELD-BY: test_the_monitor_reads_a_trace_call_by_call, test_a_bad_state_is_never_left, test_a_guard_the_arguments_only_overlap_leaves_the_policy_undecided, test_a_program_planned_under_the_policy_approves_first_and_is_proven, test_a_program_planned_without_the_policy_is_refuted_on_its_freight_path_alone
+HELD-BY: test_the_monitor_reads_a_trace_call_by_call, test_a_bad_state_is_never_left, test_a_call_that_answered_with_an_error_holds_the_policy_in_either_state, test_a_run_refuses_the_call_an_approval_that_answered_with_an_error_would_allow, test_a_call_the_server_answers_with_an_error_leaves_the_policy_in_either_state, test_a_guard_the_arguments_only_overlap_leaves_the_policy_undecided, test_a_program_planned_under_the_policy_approves_first_and_is_proven, test_a_program_planned_without_the_policy_is_refuted_on_its_freight_path_alone
 
 **An obligation is decided over the whole program.** A property that no continuation of a
 run's prefix makes true or false for good, as a notice owed after every booking, is not

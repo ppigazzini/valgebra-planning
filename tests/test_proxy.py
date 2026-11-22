@@ -35,6 +35,8 @@ ANSWERS: dict[str, Any] = {
     "notify": {"notice_id": "ntc_1"},
 }
 BOOKING = ("book_freight_return", {"parcel_id": "pcl_1", "state": "delivered", "weight_g": 25000})
+#: An answer the upstream gives as a tool error.
+ERROR = object()
 
 
 def _upstream(made: list[str], answers: dict[str, Any], listing: list[Any]) -> Server[Any]:
@@ -46,6 +48,9 @@ def _upstream(made: list[str], answers: dict[str, Any], listing: list[Any]) -> S
     async def called(_: Any, params: types.CallToolRequestParams) -> types.CallToolResult:
         made.append(params.name)
         value = answers[params.name]
+        if value is ERROR:
+            text = types.TextContent(type="text", text="no answer")
+            return types.CallToolResult(content=[text], is_error=True)
         text = types.TextContent(type="text", text=json.dumps(value))
         return types.CallToolResult(content=[text], structured_content=value)
 
@@ -122,6 +127,16 @@ def test_a_refused_call_leaves_the_policy_where_it_was() -> None:
     assert not approved.is_error
     assert not booked.is_error
     assert made == ["approve_freight", "book_freight_return"]
+
+
+def test_a_call_the_server_answers_with_an_error_leaves_the_policy_in_either_state() -> None:
+    approval = ("approve_freight", {"parcel_id": "pcl_1"})
+    answers = ANSWERS | {"approve_freight": ERROR}
+    made, (errored, booked) = _session([approval, BOOKING], answers, policies=[FREIGHT])
+    assert errored.is_error
+    violated = "refused: freight approved first: book_freight_return reached violated"
+    assert _refused(booked) == violated
+    assert made == ["approve_freight"]
 
 
 def test_a_value_an_untrusted_tool_returned_does_not_reach_the_sink() -> None:

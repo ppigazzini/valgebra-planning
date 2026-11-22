@@ -157,37 +157,67 @@ def read_policy(spec: Mapping[str, Any]) -> Policy:
 
 @dataclass(slots=True)
 class Monitor:
-    """A policy stepped on concrete calls, as a run makes them."""
+    """A policy stepped on concrete calls, as a run makes them.
+
+    ``state`` is the state every call observed takes the policy to. A call that answered with
+    an error may not have acted, so after one the run may also be in a state ``also`` holds,
+    as the verifier reads the error's block from either set of states: a call is refused where
+    any state the run may be in reaches a bad one.
+    """
 
     policy: Policy
     state: str = ""
     violations: list[str] = field(default_factory=list)
+    #: The other states the run may be in, the states before a call that answered with an error.
+    also: frozenset[str] = frozenset()
+    #: The states held before the call observed last.
+    before: frozenset[str] = field(default=frozenset(), init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.state = self.state or self.policy.initial
 
-    def observe(
-        self, tool: str, arguments: Mapping[str, Any], hints: frozenset[str] = frozenset()
-    ) -> bool:
-        """Step on one call; return whether it reached a bad state, which it never leaves."""
-        if self.state in self.policy.bad:
-            return False
+    def held(self) -> frozenset[str]:
+        """Return every state the run may be in."""
+        return self.also | {self.state}
+
+    def stepped(
+        self, state: str, tool: str, arguments: Mapping[str, Any], hints: frozenset[str]
+    ) -> str:
+        """Return the state one call takes ``state`` to; a bad state is never left."""
+        if state in self.policy.bad:
+            return state
         for transition in self.policy.transitions:
             if (
-                transition.source == self.state
+                transition.source == state
                 and transition.reads(tool, hints)
                 and transition.guard.is_valid(dict(arguments))
             ):
-                self.state = transition.target
-                break
-        if self.state in self.policy.bad:
-            self.violations.append(f"{self.policy.name}: {tool} reached {self.state}")
+                return transition.target
+        return state
+
+    def observe(
+        self, tool: str, arguments: Mapping[str, Any], hints: frozenset[str] = frozenset()
+    ) -> bool:
+        """Step on one call; return whether it may reach a bad state, which is never left."""
+        held = self.held()
+        self.before = held
+        self.state = self.stepped(self.state, tool, arguments, hints)
+        self.also = frozenset(self.stepped(s, tool, arguments, hints) for s in self.also)
+        self.also -= {self.state}
+        reached = sorted((self.held() & self.policy.bad) - held)
+        if reached:
+            self.violations.append(f"{self.policy.name}: {tool} reached {reached[0]}")
             return True
         return False
 
+    def errored(self) -> None:
+        """Hold the states before the call observed last too: it answered with an error."""
+        self.also = (self.also | self.before) - {self.state}
+
     def ended(self) -> bool:
-        """Return whether the run ends in a pending state: an obligation it leaves open."""
-        if self.state not in self.policy.pending:
+        """Return whether the run may end in a pending state: an obligation it leaves open."""
+        pending = sorted(self.held() & self.policy.pending)
+        if not pending:
             return False
-        self.violations.append(f"{self.policy.name}: the run ended in {self.state}")
+        self.violations.append(f"{self.policy.name}: the run ended in {pending[0]}")
         return True

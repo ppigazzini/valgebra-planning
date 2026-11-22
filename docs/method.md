@@ -206,7 +206,8 @@ as undecided.
 the argument record against the tool's input set, each policy's step, the result against the
 output set and the returned value against the goal. It fails closed: the first broken check
 ends the run before the call is made, the result bound or the value returned, and `Run.refused`
-names it. A proof of a program holds over the contracts, so a tool answering outside its own
+names it. A call that answers with an error may have acted or not, so each policy is held in the
+states before and after it, as the verifier reads the error's block. A proof of a program holds over the contracts, so a tool answering outside its own
 contract is the case a run must not pass on. With `enforce=False` the runner records every break
 and goes on, a diagnosis rather than a guard. `blame` names why a run broke: a proven program
 breaks only where something it rests on fails, a server returning outside the output schema it
@@ -217,7 +218,8 @@ mined type break no check a run can see. `valgebra_planning/proxy.py` holds the 
 as an MCP server in front of another, for an agent no program governs: each call is answered with
 a tool error naming the check it breaks, and each failure's path and code but never the value or a
 key the schemas do not declare, so a refused result reaches the agent through no error; a refused
-call steps no policy, and a flow rule reads a
+call steps no policy, a call the server answers with an error leaves each policy in the states
+before and after it, and a flow rule reads a
 value's source from equality with what a source tool returned, an assumption. With `only` that is
 the grounding gate of Sah et al. 2026: an argument equal to no value its sources returned is
 refused, and a value from a task input with it, since a proxy sees no task.

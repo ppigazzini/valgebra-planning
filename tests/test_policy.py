@@ -11,7 +11,7 @@ from valgebra_planning.critic import read_program
 from valgebra_planning.planner import plan
 from valgebra_planning.policy import Monitor, read_policy
 from valgebra_planning.program import render
-from valgebra_planning.run import blame, run
+from valgebra_planning.run import ToolError, blame, run
 from valgebra_planning.verify import verify
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
@@ -235,3 +235,58 @@ def test_a_run_ending_with_an_obligation_open_breaks() -> None:
     assert blame(ended, TOOLS, proven=False) == "a policy no link of the program proves broke"
     settled = run(notified, TOOLS, SETTLE, inputs, TOOLS_ANSWERING, policies=[NOTIFIED])
     assert (settled.value, settled.broken) == ("lbl_1", ())
+
+
+def test_a_call_that_answered_with_an_error_holds_the_policy_in_either_state() -> None:
+    monitor = Monitor(FREIGHT)
+    assert not monitor.observe("approve_freight", {"parcel_id": "pcl_1"})
+    monitor.errored()
+    assert monitor.held() == {"start", "approved"}
+    assert monitor.observe("book_freight_return", {"parcel_id": "pcl_1"})
+    assert monitor.violations == ["freight approved first: book_freight_return reached violated"]
+    again = Monitor(FREIGHT)
+    assert not again.observe("approve_freight", {"parcel_id": "pcl_1"})
+    again.errored()
+    assert not again.observe("approve_freight", {"parcel_id": "pcl_1"})
+    assert again.held() == {"approved"}
+    assert not again.observe("book_freight_return", {"parcel_id": "pcl_1"})
+
+
+BOOK = (
+    "book_freight_return(parcel_id=c1.parcel.parcel_id, state=c1.parcel.state, "
+    "weight_g=c1.parcel.weight_g)"
+)
+ERRORED_APPROVAL = f"""\
+c1 = find_parcel(tracking=tracking)
+try:
+    c2 = approve_freight(parcel_id=c1.parcel.parcel_id)
+except ToolError:
+    c3 = {BOOK}
+    return c3.label_id
+c4 = {BOOK}
+return c4.label_id
+"""
+
+
+def test_a_run_refuses_the_call_an_approval_that_answered_with_an_error_would_allow() -> None:
+    program = read_program(ERRORED_APPROVAL)
+    verdicts = _policy_links(program)
+    assert verdicts.pop("error:approve_freight") == "undecided"
+    made: list[str] = []
+
+    def unanswered(**_: Any) -> Any:
+        made.append("approve_freight")
+        raise ToolError
+
+    def book(**_: Any) -> Any:
+        made.append("book_freight_return")
+        return {"label_id": "lbl_1"}
+
+    tools = {
+        "find_parcel": lambda **_: {"parcel": {**PARCEL, "weight_g": 25000}},
+        "approve_freight": unanswered,
+        "book_freight_return": book,
+    }
+    ended = run(program, TOOLS, SETTLE, {"tracking": "AB123456789IT"}, tools, policies=[FREIGHT])
+    assert ended.refused == "freight approved first: book_freight_return reached violated"
+    assert made == ["approve_freight"]

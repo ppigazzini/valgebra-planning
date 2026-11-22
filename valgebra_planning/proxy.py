@@ -85,13 +85,18 @@ class Gate:
             named = ", ".join(sorted(sources))
             return f"flow {flow.name}: {flow.sink} holds a value {named} returned"
         # A refused call is never made, so no policy steps on it: the session goes on as before.
-        states = [monitor.state for monitor in self.monitors]
+        states = [(monitor.state, monitor.also, monitor.before) for monitor in self.monitors]
         for monitor in self.monitors:
             if monitor.observe(tool, arguments, contract.hints):
-                for kept, state in zip(self.monitors, states, strict=True):
-                    kept.state = state
+                for kept, (state, also, before) in zip(self.monitors, states, strict=True):
+                    kept.state, kept.also, kept.before = state, also, before
                 return monitor.violations[-1]
         return None
+
+    def errored(self) -> None:
+        """Hold each policy in the states before the last call too: it answered with an error."""
+        for monitor in self.monitors:
+            monitor.errored()
 
     def after(self, tool: str, value: Any) -> str | None:
         """Return why a result may not be passed on, or None; remember untrusted tools' values."""
@@ -132,9 +137,11 @@ def proxy(
         try:
             result = await upstream.call_tool(params.name, arguments)
         except (MCPError, InputRequiredRoundsExceededError) as error:
+            gate.errored()
             text = types.TextContent(type="text", text=f"{params.name} did not answer: {error}")
             return types.CallToolResult(content=[text], is_error=True)
         if result.is_error:
+            gate.errored()
             return result
         value = result.structured_content
         if value is None:

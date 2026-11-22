@@ -196,6 +196,10 @@ class _Runner:
                 return (self.tools[call.tool](**arguments),)
             except ToolError:
                 continue
+        # The call may not have acted: what follows starts from either set of policy states, as
+        # the verifier walks it.
+        for monitor in self.monitors:
+            monitor.errored()
         if call.on_error is not None:
             return self.block(call.on_error, env)
         self.broken.append(f"{call.tool} answered with an error nothing handles")

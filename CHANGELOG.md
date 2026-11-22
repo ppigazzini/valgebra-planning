@@ -22,6 +22,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
   under, the array's source among them, so the sink is refuted as the same test written as an
   `if` is.
 
+- A call that answered with an error leaves each policy in either state. The verifier read the
+  error's block from the states before and after the call, while the runner's and the proxy's
+  monitors counted the call as made: a confirmation that answered with an error let the motion
+  it guards through, and a release that answered with one let a walk through under "no walking
+  while holding". `Monitor` holds the states before such a call in `also` beside `state`, and
+  a call that takes any state the run may be in to a bad one is refused; `Monitor.errored`
+  records the error, and `Monitor.held` returns every state held.
+
 ## [0.0.5] - 2026-11-21
 
 A security release: four ways 0.0.4 proved a wrong program are closed, each under Security. The
