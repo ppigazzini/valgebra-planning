@@ -340,6 +340,22 @@ IMPLEMENTED-BY: proxy.py
 
 HELD-BY: test_a_call_inside_every_check_passes_through, test_an_argument_record_outside_the_input_set_never_reaches_the_server, test_a_value_an_untrusted_tool_returned_does_not_reach_the_sink, test_an_identifier_no_source_returned_never_reaches_the_server, test_every_client_of_one_proxy_over_http_calls_through_its_one_gate, test_a_proxy_per_client_holds_only_the_calls_made_through_it
 
+## Effects
+
+**A reading an action may change is read again after it.** Whether an action's effect holds is
+read in the world, independently of what the action answered (Mansoor et al. 2026, §4.1). This
+package reads the same of anything else an action may have changed: a distance read before a
+walk is no reading of the distance after it. A task names the arguments it reads fresh, and a call whose annotations
+do not say it is read-only may act; the verifier refutes a binding of a value held before the
+last such call before the one it fills, and the planner gives such an argument no such value,
+and lets a read-only call made before an action be made again after it. Which calls may act is
+read off their annotations, so a link proven over them lists that assumption unless every
+server is trusted. **[LOAD-BEARING: fresh-reads]**
+
+IMPLEMENTED-BY: verify.py::_Walk.read_fresh, planner.py::_Search.after
+
+HELD-BY: test_a_value_read_before_a_call_that_may_act_is_no_fresh_reading_after_it, test_the_planner_reads_again_after_a_call_that_may_act
+
 ## The critic and code mode
 
 **A model proposes and a sound critic checks.** The soundness of a plan a language model writes

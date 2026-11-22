@@ -19,7 +19,7 @@ import itertools
 import json
 import random
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 from valgebra_planning._valgebra import (
@@ -239,17 +239,17 @@ class _Walk:
         states = path.states
         while self.policies:
             ends, _ = self.iterate(
-                end.body, inner, inside, _Path(states, tested, path.acted), silent=True
+                end.body, inner, inside, replace(path, states=states, tested=tested), silent=True
             )
             grown = tuple(s.union(*(e[i] for e in ends)) for i, s in enumerate(states))
             if grown == states:
                 break
             states = grown
         _, exits = self.iterate(
-            end.body, inner, inside, _Path(states, tested, path.acted), silent=False
+            end.body, inner, inside, replace(path, states=states, tested=tested), silent=False
         )
         after = path.tested.union(*exits)
-        self.block(end.after, env, where, _Path(states, after, path.acted))
+        self.block(end.after, env, where, replace(path, states=states, tested=after))
 
     def element(self, held: _Held) -> Slot:
         """Return the slot of an element of the array ``held``, as far as valgebra proves it.
@@ -328,7 +328,7 @@ class _Walk:
         inside = _Held(intersection(held.values, tested), held.origin, held.loop)
         outside = _Held(intersection(held.values, complement(tested)), held.origin, held.loop)
         # Which branch runs carries the tested value's influence: an implicit flow.
-        tested = _Path(path.states, path.tested | {held.origin.tool}, path.acted)
+        tested = replace(path, tested=path.tested | {held.origin.tool})
         for side, narrowed, name in (
             (test.then, inside, "then"),
             (test.otherwise, outside, "else"),
@@ -374,6 +374,7 @@ class _Walk:
             if slot.required and slot.path[0] not in dict(call.bindings):
                 self.links.append(Link(where, f"{slot.name} is bound", "refuted"))
         self.fixed(call, env, where)
+        self.read_fresh(call, where, path)
         if not contract.plain and len(bound) == len(call.bindings):
             self.record(call, contract, bound, where, env)
         after = states
@@ -385,7 +386,11 @@ class _Walk:
             )
         # A tool that answered with an error may still have acted, so its block reads both.
         either = tuple(before | then for before, then in zip(states, after, strict=True))
-        self.failure(call, contract, env, where, _Path(either, path.tested, failing))
+        stale = path.stale - {call.result}
+        if "readOnlyHint" not in contract.hints:
+            # A call that may act may change what every value held so far read.
+            stale |= {ref.variable for ref in env if ref.variable != call.result}
+        self.failure(call, contract, env, where, _Path(either, path.tested, failing, stale))
         defined = {ref: held for ref, held in env.items() if ref.variable != call.result}
         for slot in contract.results:
             defined[Ref(call.result, slot.path)] = _Held(slot.values, slot)
@@ -398,7 +403,7 @@ class _Walk:
             if transition.result is not None and transition.reads(call.tool, contract.hints)
         ]
         if whole is None or not guards:
-            return [(defined, _Path(after, path.tested, left))]
+            return [(defined, _Path(after, path.tested, left, stale))]
         cases = []
         for cell in _cells(whole.values, guards):
             stepped = tuple(
@@ -406,7 +411,7 @@ class _Walk:
                 for policy, held in zip(self.policies, states, strict=True)
             )
             narrowed = {**defined, Ref(call.result): _Held(cell, whole.origin, case=True)}
-            cases.append((narrowed, _Path(stepped, path.tested, left)))
+            cases.append((narrowed, _Path(stepped, path.tested, left, stale)))
         return cases
 
     def repeated(self, call: Call, contract: Contract, where: str, acted: _Acted) -> _Acted:
@@ -827,6 +832,27 @@ class _Walk:
             drawn = []
         return given + [v for v in drawn if held.values.is_valid(v)]
 
+    def read_fresh(self, call: Call, where: str, path: _Path) -> None:
+        """Add a link for each argument the task reads fresh: no call that may act came between.
+
+        An action changes the world a reading reports, and whether its effect holds is read in
+        the world again, not off what was read before it (Mansoor et al. 2026, §4.1). So a value
+        read before a call that may act, one whose annotations do not say it is read-only, is no
+        reading of the world after it, and a constant is no reading at all. Which calls may act
+        is read off their annotations, a hint their server gives, so a link proven over them
+        lists that assumption unless every server is trusted.
+        """
+        given = dict(call.bindings)
+        for tool, argument in self.task.fresh:
+            if tool != call.tool or argument not in given:
+                continue
+            ref = given[argument]
+            claim = f"{tool}.{argument} is read after every call before it that may act"
+            fresh = isinstance(ref, Ref) and ref.variable not in path.stale
+            hinted = fresh and not all(c.trusted for c in self.contracts.values())
+            assumed = ("the read-only annotations of the calls before it",) if hinted else ()
+            self.links.append(Link(where, claim, "proven" if fresh else "refuted", (), assumed))
+
     def fixed(self, call: Call, env: dict[Ref, _Held], where: str) -> None:
         """Add a link for each argument the task fixes: the call passes the task's constant.
 
@@ -1012,6 +1038,8 @@ class _Path:
     #: The calls that answered with an error on the way here and may have acted: each tool,
     #: and the values it was given.
     acted: _Acted = frozenset()
+    #: The values held before the last call on the way here that may act, by variable.
+    stale: frozenset[str] = frozenset()
 
 
 #: Whether a path may reach a bad state, read as a verdict on the policy holding.

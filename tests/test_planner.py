@@ -653,3 +653,97 @@ def test_the_planner_tests_the_answer_a_result_guard_reads() -> None:
 )
 def test_a_guard_a_test_writes_is_one_field_listing_its_members(schema: Any, read: Any) -> None:
     assert planner._listing(schema) == read
+
+
+REACHED = {"type": "number", "minimum": 0, "maximum": 20}
+NEAR = {"type": "number", "minimum": 0.2, "maximum": 0.6}
+
+
+def _walking() -> dict[str, Contract]:
+    """Return a pick whose grasp takes a distance a walk changes."""
+
+    def listed(
+        name: str, arguments: dict[str, Any], result: dict[str, Any], hints: Any
+    ) -> Contract:
+        spec = {
+            "name": name,
+            "inputSchema": {"type": "object", "properties": arguments, "required": [*arguments]},
+            "outputSchema": {
+                "type": "object",
+                "properties": result,
+                "required": [*result],
+                "additionalProperties": False,
+            },
+        }
+        if hints:
+            spec["annotations"] = hints
+        return read_contract(spec)
+
+    seeing = {"readOnlyHint": True}
+    return {
+        contract.name: contract
+        for contract in (
+            listed("detect_object", {"name": {"type": "string"}}, {"object_id": OBJECT}, seeing),
+            listed("estimate_pose", {"object_id": OBJECT}, {"distance": REACHED}, seeing),
+            listed("walk_to", {"object_id": OBJECT}, {"arrived": {"type": "boolean"}}, None),
+            listed("grasp", {"object_id": OBJECT, "distance": NEAR}, {"grasp_id": GRASPED}, None),
+        )
+    }
+
+
+APPROACHED = {
+    "name": "a grasp follows a walk",
+    "initial": "far",
+    "bad": ["violated"],
+    "transitions": [
+        {"from": "far", "tool": "walk_to", "to": "near"},
+        {"from": "far", "tool": "grasp", "to": "violated"},
+    ],
+}
+STALE = (
+    "c1 = detect_object(name=name)\n"
+    "c2 = estimate_pose(object_id=c1.object_id)\n"
+    "c3 = walk_to(object_id=c1.object_id)\n"
+    "if c2.distance in grasp.distance:\n"
+    "    c4 = grasp(object_id=c1.object_id, distance=c2.distance)\n"
+    "    return c4.grasp_id\n"
+    "stop(c2.distance)\n"
+)
+AGAIN = STALE.replace(
+    "c3 = walk_to(object_id=c1.object_id)\n",
+    "c3 = walk_to(object_id=c1.object_id)\nc5 = estimate_pose(object_id=c1.object_id)\n",
+).replace("c2.distance", "c5.distance")
+
+
+def test_a_value_read_before_a_call_that_may_act_is_no_fresh_reading_after_it() -> None:
+    task = read_task("pick", {"name": {"type": "string"}}, GRASPED, fresh=["grasp.distance"])
+    claim = "grasp.distance is read after every call before it that may act"
+
+    def verdicts(source: str) -> set[str]:
+        links = verify(read_program(source), _walking(), task).links
+        return {link.verdict for link in links if link.claim == claim}
+
+    assert verdicts(STALE) == {"refuted"}
+    assert verdicts(AGAIN) == {"proven"}
+    before = STALE.replace("c3 = walk_to(object_id=c1.object_id)\n", "")
+    assert verdicts(before) == {"proven"}
+    plain = read_task("pick", {"name": {"type": "string"}}, GRASPED)
+    assert all(
+        link.verdict == "proven" for link in verify(read_program(STALE), _walking(), plain).links
+    )
+
+
+def test_the_planner_reads_again_after_a_call_that_may_act() -> None:
+    walked = read_policy(APPROACHED)
+    task = read_task("pick", {"name": {"type": "string"}}, GRASPED, fresh=["grasp.distance"])
+    found = plan(_walking(), task, depth=8, policies=[walked])
+    assert found.program is not None
+    text = render(found.program)
+    assert text.index("walk_to(") < text.rindex("estimate_pose(")
+    checked = verify(found.program, _walking(), task, policies=[walked])
+    assert all(link.verdict == "proven" for link in checked.links)
+
+
+def test_a_fresh_argument_naming_no_argument_is_refused() -> None:
+    with pytest.raises(ValueError, match=r"reads grasp\.reach fresh, which is no argument"):
+        plan(_walking(), read_task("pick", {}, GRASPED, fresh=["grasp.reach"]))

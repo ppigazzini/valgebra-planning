@@ -187,6 +187,8 @@ class _State:
     origins: tuple[tuple[str, str], ...] = ()
     #: The sources of every value tested on the path so far.
     tested: frozenset[str] = frozenset()
+    #: The variables held before the last call on the path that may act.
+    stale: frozenset[str] = frozenset()
 
     def cells(self, ref: Ref) -> frozenset[int]:
         return dict(self.refs)[ref]
@@ -202,7 +204,8 @@ class _State:
         return self.but(refs=refs, tested=self.tested | {self.origin(ref)})
 
     def signature(self) -> object:
-        return frozenset(cells for _, cells in self.refs), self.policed, self.tested
+        old = frozenset(cells for ref, cells in self.refs if ref.variable in self.stale)
+        return frozenset(cells for _, cells in self.refs), self.policed, self.tested, old
 
 
 @dataclass(slots=True)
@@ -230,6 +233,9 @@ class _Search:
     literals: dict[Ref, Any] = field(default_factory=dict)
     #: The guards a policy reads off each tool's result that a test can split on (`split`).
     guards: Mapping[str, tuple[_Guard, ...]] = field(default_factory=dict)
+    #: The arguments the task reads fresh, as ``(tool, argument)``: no value held before the
+    #: last call that may act fills one.
+    fresh: frozenset[tuple[str, str]] = frozenset()
 
     def bound(self, state: _State, ref: Ref) -> Validator[Any]:
         """Return the values a binding passes: a constant's own, or its reference's cells'."""
@@ -325,10 +331,13 @@ class _Search:
                 full[slot.path[0]], partial[slot.path[0]] = [constant], []
                 continue
             arg = self.cells_of(_argument_name(slot))
+            fresh = (contract.name, slot.path[0]) in self.fresh
             refs = [
                 (r, c)
                 for r, c in state.refs
-                if r not in self.literals and self.agree(state, r, slot)
+                if r not in self.literals
+                and self.agree(state, r, slot)
+                and not (fresh and r.variable in state.stale)
             ]
             full[slot.path[0]] = [r for r, c in refs if c and c <= arg]
             partial[slot.path[0]] = [r for r, c in refs if c & arg and not c <= arg]
@@ -560,11 +569,22 @@ class _Search:
             if self.holds(_result_name(slot))
         )
         made = state.made | {(contract.name, bindings)}
+        stale = state.stale
+        if "readOnlyHint" not in contract.hints:
+            # A call that may act may change what every value held so far read, so a read-only
+            # call made before it reads something new when made again (Mansoor et al. 2026, §4.1).
+            stale |= {ref.variable for ref, _ in state.refs if ref not in self.literals}
+            made = frozenset(
+                (tool, given)
+                for tool, given in made
+                if "readOnlyHint" not in self.contracts[tool].hints
+            )
         return state.but(
             refs=state.refs + results,
             made=made,
             fresh=state.fresh + 1,
             origins=(*state.origins, (result, contract.name)),
+            stale=stale,
         )
 
     def agree(self, state: _State, ref: Ref, slot: Slot) -> bool:
@@ -1223,6 +1243,7 @@ def plan(
     literals = {fixed[tool, argument]: value for tool, argument, value in task.constants}
     for one in searches:
         one.fixed, one.literals, one.guards = fixed, literals, guards
+        one.fresh = frozenset(task.fresh)
     for one, after in itertools.pairwise(searches):
         one.fallback = after
         after.stops = searches[0].stops

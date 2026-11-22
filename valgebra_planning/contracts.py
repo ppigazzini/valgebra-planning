@@ -126,7 +126,8 @@ class Task:
     is then their union, the set every return is verified in, and ``goal_schema`` the first's.
     ``constants`` holds, for an argument of a tool, the JSON value the task's intent fixes it to,
     as ``(tool, argument, value)``: the planner writes it there, and the verifier holds every
-    call to the tool to it.
+    call to the tool to it. ``fresh`` holds the arguments, as ``(tool, argument)``, whose value
+    is read after the last call before it that may act, as a distance a walk changes.
     """
 
     name: str
@@ -136,6 +137,7 @@ class Task:
     stops: tuple[tuple[str, Validator[Any]], ...] = ()
     preferred: tuple[tuple[Validator[Any], object], ...] = ()
     constants: tuple[tuple[str, str, Any], ...] = ()
+    fresh: tuple[tuple[str, str], ...] = ()
 
 
 def _root(schema: object) -> object:
@@ -362,6 +364,13 @@ def fixes(task: Task, contracts: Mapping[str, object]) -> None:
     if missing := sorted({tool for tool, _, _ in task.constants} - set(contracts)):
         msg = f"task {task.name!r} fixes an argument of a tool not listed: {', '.join(missing)}"
         raise ValueError(msg)
+    for tool, argument in task.fresh:
+        slots = getattr(contracts.get(tool), "arguments", ())
+        if not any(slot.path == (argument,) for slot in slots):
+            msg = (
+                f"task {task.name!r} reads {tool}.{argument} fresh, which is no argument of a tool"
+            )
+            raise ValueError(msg)
     unclashed(task, contracts)
 
 
@@ -395,6 +404,7 @@ def read_task(
     stops: Mapping[str, object] | None = None,
     fallbacks: Sequence[object] = (),
     constants: Mapping[str, Any] | None = None,
+    fresh: Sequence[str] = (),
     assert_format: bool = False,
 ) -> Task:
     """Read a task: the schema of each value the agent starts with, and of the goal.
@@ -403,8 +413,9 @@ def read_task(
     there. ``fallbacks`` are goals the task accepts where ``goal`` is not reached, in the order
     it prefers them: the task's goal is then the union of all, and the planner returns in the
     first where it can. ``constants`` maps ``tool.argument`` to the JSON value the task's intent
-    fixes it to, as ``{"confirm_with_user.action": "grasp"}``. With ``assert_format``, ``format``
-    is read as an assertion, as `read_contract` reads it.
+    fixes it to, as ``{"confirm_with_user.action": "grasp"}``. ``fresh`` names each
+    ``tool.argument`` whose value is read after the last call before it that may act. With
+    ``assert_format``, ``format`` is read as an assertion, as `read_contract` reads it.
     """
     held = {}
     for var, schema in inputs.items():
@@ -419,13 +430,7 @@ def read_task(
         (origin, compile_schema(schema, assert_format=assert_format))
         for origin, schema in (stops or {}).items()
     )
-    fixed = []
-    for sink, value in (constants or {}).items():
-        tool, dot, argument = sink.rpartition(".")
-        if not dot or not tool or not argument:
-            msg = f"task {name!r}: a constant names `tool.argument`, not {sink!r}"
-            raise ValueError(msg)
-        fixed.append((tool, argument, value))
+    fixed = [(*_sink(name, sink, "a constant"), value) for sink, value in (constants or {}).items()]
     return Task(
         name=name,
         held=held,
@@ -434,7 +439,17 @@ def read_task(
         stops=tolerated,
         preferred=goals if len(goals) > 1 else (),
         constants=tuple(fixed),
+        fresh=tuple(_sink(name, sink, "a fresh argument") for sink in fresh),
     )
+
+
+def _sink(task: str, sink: str, what: str) -> tuple[str, str]:
+    """Return the tool and the argument ``tool.argument`` names, or raise `ValueError`."""
+    tool, dot, argument = sink.rpartition(".")
+    if not dot or not tool or not argument:
+        msg = f"task {task!r}: {what} names `tool.argument`, not {sink!r}"
+        raise ValueError(msg)
+    return tool, argument
 
 
 def listed(values: Sequence[Any]) -> Validator[Any]:

@@ -183,6 +183,14 @@ verifier, which adds a link for it.
   a value from a named tool or input on every path, and a literal or another tool's value only
   inside the endorsed set: an identifier the program did not retrieve, the integrity leak of
   Sah et al. 2026, is refuted before the run.
+- **Fresh reads** (a task's `fresh`). A call whose annotations do not say it is read-only may
+  act, and an action may change what a reading before it reported: a distance read before a walk
+  is no reading of the distance after it. A task names the arguments it reads fresh, as
+  `grasp.distance`; a binding of a value held before the last call that may act before the one
+  it fills is refuted, a constant is refuted as no reading, and the planner gives such an argument
+  no such value and makes a read-only call again after an action, so a pick that walks first
+  estimates the pose after the walk. The annotations are the server's word, so a link proven over
+  them lists that assumption unless every server is trusted.
 - **Mined types** (`valgebra_planning/mining.py`). Slots holding one observed value are one
   semantic type (APIphany, Guo et al. 2022), and a value fills an argument only where their
   types agree. A call a planned program made, marked `"planned": true` in the log, shares a

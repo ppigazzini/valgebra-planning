@@ -87,6 +87,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A task reads an argument fresh, `fresh` in `tasks.json` or `read_task(..., fresh=[...])`. A
+  result was a value for the whole run, so a grasp bound to a distance estimated before a walk
+  was proven, though the walk changed the distance. A call whose annotations do not say it is
+  read-only may act: the verifier refutes a binding of a value held before the last such call
+  before the one it fills, and a constant as no reading; the planner gives such an argument no
+  such value, and makes a read-only call again after an action, so a pick a policy makes walk
+  first estimates the pose after the walk. A link proven over the annotations lists them as an
+  assumption unless every server is trusted. A fresh argument naming no argument of a listed tool
+  is refused.
+
 - The planner tests the answer a policy's result guard reads. Read without its result, such a
   transition was taken possibly, so under "motion after a yes" no program the planner could
   write made the grasp: a call it alone allows came after it in none. Where the guard reads one
