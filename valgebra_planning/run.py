@@ -14,10 +14,12 @@ break it meets: a diagnosis, never a guard.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from valgebra_planning._valgebra import JSON, Validator
 from valgebra_planning.contracts import (
     Contract,
     Task,
@@ -57,6 +59,10 @@ def annotated(contract: Contract) -> tuple[str, ...]:
         if contract.trusted
         else (f"the annotations of {contract.name}, a hint its server gives",)
     )
+
+
+#: Every value a result may be where its contract declares no output set.
+_JSON = Validator(JSON)
 
 
 class ToolError(Exception):
@@ -160,13 +166,20 @@ class _Runner:
         if made is None or isinstance(made, Run):
             return made
         result = made[0]
-        if contract.returns is not None and not contract.returns.is_valid(result):
-            outside = (
-                "the output schema inferred from observed calls"
-                if contract.inferred
-                else "its contract"
-            )
-            detail = failures(contract.returns, result, contract_names(contract))
+        # Where the contract declares no output set the result is still a JSON value: the cells
+        # partition the JSON values, so a proof says nothing of any other.
+        values = _JSON if contract.returns is None else contract.returns
+        if not values.is_valid(result):
+            if inspect.iscoroutine(result):
+                # A coroutine handed back unawaited never runs: closed, it is never scheduled.
+                result.close()
+            if contract.returns is None:
+                outside = "the JSON values"
+            elif contract.inferred:
+                outside = "the output schema inferred from observed calls"
+            else:
+                outside = "its contract"
+            detail = failures(values, result, contract_names(contract))
             message = f"{call.tool} returned a value outside {outside} ({detail})"
             refused = self.breaks(message, "result", call.tool)
             if refused is not None:
@@ -295,6 +308,8 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
         return None
     check, tool = result.why.check, result.why.tool
     if check == "result" and tool is not None:
+        if contracts[tool].returns is None:
+            return f"{tool} returned a value that is no JSON value, which no contract admits"
         if contracts[tool].inferred:
             return f"the output schema of {tool} inferred from observed calls does not hold"
         return f"{tool} broke the output schema its server declares"

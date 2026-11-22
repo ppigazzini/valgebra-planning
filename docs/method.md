@@ -204,7 +204,9 @@ as undecided.
 
 `valgebra_planning/run.py` calls the tools a program names and checks each step as it is made:
 the argument record against the tool's input set, each policy's step, the result against the
-output set and the returned value against the goal. It fails closed: the first broken check
+output set, or against the JSON values where the tool declares none, and the returned value
+against the goal. A coroutine an async tool hands back unawaited is no JSON value: it is refused
+and closed, never run. It fails closed: the first broken check
 ends the run before the call is made, the result bound or the value returned, and `Run.refused`
 names it. A call that answers with an error may have acted or not, so each policy is held in the
 states before and after it, as the verifier reads the error's block. A proof of a program holds over the contracts, so a tool answering outside its own

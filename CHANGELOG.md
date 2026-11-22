@@ -30,6 +30,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
   a call that takes any state the run may be in to a bad one is refused; `Monitor.errored`
   records the error, and `Monitor.held` returns every state held.
 
+### Fixed
+
+- A result whose tool declares no output set is held to the JSON values. The runner bound any
+  value such a tool returned, so a coroutine an async tool handed back unawaited was bound as the
+  call's result: a policy counted a confirmation that never ran, and the call after it was made.
+  The cells partition the JSON values, so a proof says nothing of any other. Such a result is
+  refused on the `result` check, a coroutine closed so it never runs, and `blame` names the tool.
+
 ## [0.0.5] - 2026-11-21
 
 A security release: four ways 0.0.4 proved a wrong program are closed, each under Security. The

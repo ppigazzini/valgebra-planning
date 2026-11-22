@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -14,7 +15,7 @@ from valgebra_planning.contracts import Contract, Task, read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.planner import plan
 from valgebra_planning.program import Block, Call, Ref, Return
-from valgebra_planning.run import run
+from valgebra_planning.run import blame, run
 from valgebra_planning.verify import verify
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
@@ -243,3 +244,62 @@ def test_no_message_of_the_runner_holds_a_part_of_the_value_it_refused(secret: s
     ]
     assert [ran.why.check for ran in runs if ran.why] == ["arguments", "result", "goal"]
     assert all(secret not in message for ran in runs for message in ran.broken), runs
+
+
+#: A tool listing no output set, and one listing it.
+LOOSE = {
+    contract.name: contract
+    for contract in map(
+        read_contract,
+        [
+            {"name": "ask", "inputSchema": {"type": "object"}},
+            {
+                "name": "act",
+                "inputSchema": {"type": "object"},
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {"id": {"type": "string"}},
+                    "required": ["id"],
+                },
+            },
+        ],
+    )
+}
+ACT = read_task("act", {}, {"type": "string"})
+ASK_THEN_ACT = read_program("c1 = ask()\nc2 = act()\nreturn c2.id\n")
+
+
+@pytest.mark.parametrize("answer", [(1, 2), {"answer": (1,)}, float("nan"), object()])
+def test_a_result_no_output_set_declares_is_held_to_the_json_values(answer: Any) -> None:
+    made: list[str] = []
+    tools = {"ask": lambda: answer, "act": lambda: made.append("act") or {"id": "x"}}
+    ended = run(ASK_THEN_ACT, LOOSE, ACT, {}, tools)
+    assert ended.refused is not None
+    assert ended.refused.startswith("ask returned a value outside the JSON values (")
+    assert made == []
+    assert blame(ended, LOOSE, proven=True) == (
+        "ask returned a value that is no JSON value, which no contract admits"
+    )
+    json_value = {"ask": lambda: {"answer": [1, "x", None]}, "act": lambda: {"id": "x"}}
+    assert run(ASK_THEN_ACT, LOOSE, ACT, {}, json_value).value == "x"
+
+
+def test_a_coroutine_handed_back_unawaited_is_refused_and_never_runs() -> None:
+    ran: list[str] = []
+    handed: list[Any] = []
+
+    async def confirm() -> Any:
+        ran.append("confirm")
+        return {"confirmed": True}
+
+    def ask() -> Any:
+        handed.append(confirm())
+        return handed[-1]
+
+    made: list[str] = []
+    tools = {"ask": ask, "act": lambda: made.append("act") or {"id": "x"}}
+    ended = run(ASK_THEN_ACT, LOOSE, ACT, {}, tools)
+    assert ended.refused is not None
+    assert ended.refused.startswith("ask returned a value outside the JSON values (")
+    assert (ran, made) == ([], [])
+    assert handed[0].cr_frame is None
