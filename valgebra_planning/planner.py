@@ -679,24 +679,111 @@ def _unread(block: Block, at: _Address = ()) -> list[_Address]:
     return found
 
 
-def _without(block: Block, at: _Address) -> Block:
-    """Return ``block`` with the call ``at`` names left out; every other part is kept as it is."""
+def _changed(block: Block, at: _Address, change: Callable[[Block, int], Block]) -> Block:
+    """Return ``block`` with ``change`` applied to the block holding the call ``at`` names.
+
+    ``change`` takes that block and the call's index in it; every other part is kept as it is.
+    """
     (kind, index), *rest = at
     calls, end = list(block.calls), block.end
     if kind == "call":
-        del calls[index]
-    elif kind == "error" and (call := calls[index]).on_error is not None:
-        kept = _without(call.on_error, tuple(rest))
+        return change(block, index)
+    if kind == "error" and (call := calls[index]).on_error is not None:
+        kept = _changed(call.on_error, tuple(rest), change)
         calls[index] = Call(call.tool, call.bindings, call.result, call.retry, kept)
     elif isinstance(end, Branch):
-        then = _without(end.then, tuple(rest)) if kind == "then" else end.then
-        otherwise = _without(end.otherwise, tuple(rest)) if kind == "else" else end.otherwise
+        then = _changed(end.then, tuple(rest), change) if kind == "then" else end.then
+        otherwise = (
+            _changed(end.otherwise, tuple(rest), change) if kind == "else" else end.otherwise
+        )
         end = Branch(end.ref, end.tool, end.argument, then, otherwise, end.values, end.key)
     elif isinstance(end, For):
-        body = _without(end.body, tuple(rest)) if kind == "body" else end.body
-        after = _without(end.after, tuple(rest)) if kind == "after" else end.after
+        body = _changed(end.body, tuple(rest), change) if kind == "body" else end.body
+        after = _changed(end.after, tuple(rest), change) if kind == "after" else end.after
         end = For(end.ref, end.item, body, after)
     return Block(tuple(calls), end)
+
+
+def _without(block: Block, at: _Address) -> Block:
+    """Return ``block`` with the call ``at`` names left out; every other part is kept as it is."""
+
+    def left_out(holder: Block, index: int) -> Block:
+        return Block(holder.calls[:index] + holder.calls[index + 1 :], holder.end)
+
+    return _changed(block, at, left_out)
+
+
+def _sinkable(block: Block, at: _Address = ()) -> list[tuple[_Address, str]]:
+    """Return each call before a test that may move into one of its branches, and which.
+
+    A call may move where neither the test nor a call after it reads its result, into the one
+    branch reading it, or, where neither does, as a call a policy keeps, into either.
+    """
+    found: list[tuple[_Address, str]] = []
+    end = block.end
+    if isinstance(end, Branch):
+        for index, call in enumerate(block.calls):
+            if call.result == end.ref.variable or call.result in _reads(
+                Block(block.calls[index + 1 :], Next())
+            ):
+                continue
+            read = {
+                side: call.result in _reads(branch)
+                for side, branch in (("then", end.then), ("else", end.otherwise))
+            }
+            if all(read.values()):
+                continue
+            sides = [side for side, reads in read.items() if reads] or list(read)
+            found += [((*at, ("call", index)), side) for side in sides]
+    for index, call in enumerate(block.calls):
+        if call.on_error is not None:
+            found += _sinkable(call.on_error, (*at, ("error", index)))
+    if isinstance(end, Branch):
+        found += _sinkable(end.then, (*at, ("then", 0)))
+        found += _sinkable(end.otherwise, (*at, ("else", 0)))
+    elif isinstance(end, For):
+        found += _sinkable(end.body, (*at, ("body", 0))) + _sinkable(end.after, (*at, ("after", 0)))
+    return found
+
+
+def _sunk(side: str) -> Callable[[Block, int], Block]:
+    """Return the change moving a block's call into the ``side`` branch of its test."""
+
+    def sink(holder: Block, index: int) -> Block:
+        call, end = holder.calls[index], holder.end
+        if not isinstance(end, Branch):
+            return holder
+        then, otherwise = end.then, end.otherwise
+        if side == "then":
+            then = Block((call, *then.calls), then.end)
+        else:
+            otherwise = Block((call, *otherwise.calls), otherwise.end)
+        branch = Branch(end.ref, end.tool, end.argument, then, otherwise, end.values, end.key)
+        return Block(holder.calls[:index] + holder.calls[index + 1 :], branch)
+
+    return sink
+
+
+def _test_first(program: Block, reading: Callable[[Block], object]) -> Block:
+    """Move each call the next test does not read into the branch reading it, if nothing else moves.
+
+    The search makes a call where it first may, so a call whose result one branch alone reads
+    stands before the test, made on the path that never reads it: a confirmation asked before
+    the distance test that decides whether the grasp it confirms is made at all. Observing first
+    is the order to prefer, since an action can always be postponed to observing, while
+    information may be lost after acting (Bertoli et al. 2006, §6.2). Moving a call may move an
+    implicit flow, an obligation or an error block, so the program is verified again and the move
+    kept only where every link and every stop read as before.
+    """
+    held = reading(program)
+    while True:
+        for at, side in _sinkable(program):
+            moved = _changed(program, at, _sunk(side))
+            if reading(moved) == held:
+                program = moved
+                break
+        else:
+            return program
 
 
 def _reading(checked: Verification) -> object:
@@ -909,7 +996,8 @@ def plan(
 
     def tidied(program: Block) -> Block:
         program = _tidy(program, search.stops, kept)
-        return _tidy(_unpadded(program, reading), search.stops, kept) if kept else program
+        unpadded = _tidy(_unpadded(program, reading), search.stops, kept) if kept else program
+        return _tidy(_test_first(unpadded, reading), search.stops, kept)
 
     for bound in range(1, depth + 1):
         search.cut = 0

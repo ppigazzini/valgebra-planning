@@ -74,6 +74,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A plan tests before it makes a call only one branch needs. The search makes a call where it
+  first may, so a confirmation a policy requires before a grasp was asked before the distance
+  test deciding whether the grasp is made at all, and asked on the path that stops. After the
+  search, a call no later step before the test reads, and that the test's other branch does not,
+  moves into the branch needing it; the program is verified again and the move kept only where
+  every link and every stop read as before, so a call every path needs stays before the test.
+  The parcels and bench studies read no difference.
+
 - A task may name its goals in the order it prefers them, `goals` in `tasks.json` or
   `read_task(..., fallbacks=[...])`. Its goal is their union, every return verified in it, and
   the planner searches a strong program for the first, else a weak one whose stops a program

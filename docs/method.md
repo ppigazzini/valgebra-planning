@@ -135,7 +135,10 @@ and says where it would have stopped, where a search toward the union returns th
 `say` alone. `Plan.preferred` names where each return inside the first goal lies.
 
 A call whose result no later step reads is dropped, since a call can act on the world, and a
-branch whose two sides then read the same is collapsed.
+branch whose two sides then read the same is collapsed. A call before a test that only one of
+its branches needs, as a confirmation the grasp on one side requires, moves into that branch,
+so the test is made first and the call only where it is needed; the program is verified again
+and the move kept only where every link and every stop read as before.
 
 ## Rules a program is held to
 

@@ -13,6 +13,7 @@ from valgebra_planning.contracts import Contract, read_contract, read_task
 from valgebra_planning.flows import read_flow
 from valgebra_planning.mining import mine
 from valgebra_planning.planner import plan, predicates
+from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Branch, Return, render, steps
 from valgebra_planning.verify import verify
 
@@ -421,3 +422,63 @@ def test_where_no_program_reaches_the_preferred_goal_the_plan_returns_in_the_nex
     assert found.program is not None
     assert render(found.program) == "c1 = say(text=name)\nreturn c1.utterance_id"
     assert found.preferred == ()
+
+
+def _confirming() -> dict[str, Contract]:
+    """Return a pick's tools and a confirmation whose answer nothing reads."""
+    tools = {tool.name: tool for tool in _robot() if tool.name != "say"}
+    confirm = read_contract(
+        {
+            "name": "confirm_with_user",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"question": {"type": "string"}},
+                "required": ["question"],
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {"confirmed": {"type": "boolean"}},
+                "required": ["confirmed"],
+            },
+            "annotations": {"readOnlyHint": True},
+        }
+    )
+    return {**tools, "confirm_with_user": confirm}
+
+
+CONFIRMED_FIRST = {
+    "name": "motion confirmed first",
+    "initial": "start",
+    "bad": ["violated"],
+    "transitions": [
+        {"from": "start", "tool": "confirm_with_user", "to": "ok"},
+        {"from": "start", "tool": "grasp", "to": "violated"},
+    ],
+}
+
+
+def test_a_call_one_branch_alone_needs_is_made_after_the_test_that_decides_it() -> None:
+    found = plan(_confirming(), PICK, depth=7, policies=[read_policy(CONFIRMED_FIRST)])
+    assert found.program is not None
+    text = render(found.program)
+    assert text.index("if ") < text.index("confirm_with_user(") < text.index("grasp(")
+    checked = verify(found.program, _confirming(), PICK, policies=[read_policy(CONFIRMED_FIRST)])
+    assert all(link.verdict == "proven" for link in checked.links)
+
+
+def test_a_call_every_path_needs_stays_before_the_test() -> None:
+    # Owed from the start until the user is asked, so every path asks, the stop's included.
+    asked = {
+        "name": "the user is asked on every path",
+        "initial": "owed",
+        "bad": [],
+        "pending": ["owed"],
+        "transitions": [{"from": "owed", "tool": "confirm_with_user", "to": "asked"}],
+    }
+    rules = [read_policy(CONFIRMED_FIRST), read_policy(asked)]
+    found = plan(_confirming(), PICK, depth=7, policies=rules)
+    assert found.program is not None
+    text = render(found.program)
+    assert text.index("confirm_with_user(") < text.index("if ")
+    checked = verify(found.program, _confirming(), PICK, policies=rules)
+    assert all(link.verdict == "proven" for link in checked.links)

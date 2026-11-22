@@ -59,11 +59,14 @@ them. Any set of states is a goal (Cimatti et al. 2003, Def. 2.9), so a program 
 which returns in one of them is a strong solution for their union, as one table is strong for
 one goal and weak for a part of it (Cimatti et al. 2003, Ex. 2.12): the planner searches a
 strong program for the first, else a weak one whose stops a program toward the next fills, and
-verifies the whole against the union. **[LOAD-BEARING: strong-programs]**
+verifies the whole against the union. A call the search makes before a test that only one
+branch needs moves into that branch, since one action can always be postponed to observing
+(Bertoli et al. 2006, §6.2); the program is verified again, and the move kept only where every
+link and every stop read as before. **[LOAD-BEARING: strong-programs]**
 
-IMPLEMENTED-BY: planner.py, planner.py::_ranked, planner.py::_Search.stopping
+IMPLEMENTED-BY: planner.py, planner.py::_ranked, planner.py::_Search.stopping, planner.py::_test_first
 
-HELD-BY: test_a_strong_program_branches_on_every_status_and_verifies, test_a_weak_program_names_the_status_no_tool_settles, test_a_strong_program_breaks_no_contract_whatever_the_tools_return, test_the_depth_bounds_the_calls_and_tests_on_a_path, test_the_program_is_the_same_whatever_order_the_tools_are_listed_in, test_the_weak_program_leaving_the_fewest_cells_uncovered_is_returned, test_a_preferred_goal_is_returned_where_it_can_be_and_the_next_fills_its_stops, test_where_no_program_reaches_the_preferred_goal_the_plan_returns_in_the_next
+HELD-BY: test_a_strong_program_branches_on_every_status_and_verifies, test_a_weak_program_names_the_status_no_tool_settles, test_a_strong_program_breaks_no_contract_whatever_the_tools_return, test_the_depth_bounds_the_calls_and_tests_on_a_path, test_the_program_is_the_same_whatever_order_the_tools_are_listed_in, test_the_weak_program_leaving_the_fewest_cells_uncovered_is_returned, test_a_preferred_goal_is_returned_where_it_can_be_and_the_next_fills_its_stops, test_where_no_program_reaches_the_preferred_goal_the_plan_returns_in_the_next, test_a_call_one_branch_alone_needs_is_made_after_the_test_that_decides_it, test_a_call_every_path_needs_stays_before_the_test
 
 **The verifier reads a program as belief execution.** The set a reference lies in at a point of
 a program is its belief there: a call's result enters as its output set, replacing every belief
