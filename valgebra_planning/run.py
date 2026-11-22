@@ -78,7 +78,10 @@ class RefusedResultError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class Refusal:
-    """Which check ended a run: `arguments`, `policy`, `result`, `goal`, `error` or `read`.
+    """Which check ended a run.
+
+    One of `inputs`, `arguments`, `policy`, `given`, `result`, `goal`, `error`, `raised` or
+    `read`.
 
     ``tool`` is the tool the check was on, where it was on one.
     """
@@ -115,6 +118,22 @@ class _Runner:
         self.broken.append(message)
         if self.enforce:
             return Run(None, None, tuple(self.broken), message, Refusal(check, tool))
+        return None
+
+    def given(self, inputs: Mapping[str, Any]) -> Run | None:
+        """Check each input the task names against its set; return the run a broken one ends."""
+        for var, slots in self.task.held.items():
+            whole = next(slot for slot in slots if slot.path == ())
+            if var not in inputs:
+                message = f"the input {var} the task names is not given"
+            elif not whole.values.is_valid(inputs[var]):
+                detail = failures(whole.values, inputs[var], declared(whole.schema))
+                message = f"the input {var} lies outside the task's ({detail})"
+            else:
+                continue
+            refused = self.breaks(message, "inputs")
+            if refused is not None:
+                return refused
         return None
 
     def block(self, block: Block, env: dict[str, Any]) -> Run | None:
@@ -211,6 +230,11 @@ class _Runner:
         self, call: Call, arguments: dict[str, Any], env: dict[str, Any]
     ) -> tuple[Any] | Run | None:
         """Make the call, retried as it says; return its result, or how its error block ended."""
+        if call.tool not in self.tools:
+            # Nothing is called, so no run goes on past the call, enforced or not.
+            message = f"{call.tool} is no tool the run was given"
+            self.broken.append(message)
+            return Run(None, None, tuple(self.broken), message, Refusal("given", call.tool))
         for _ in range(ATTEMPTS if call.retry else 1):
             try:
                 return (self.tools[call.tool](**arguments),)
@@ -223,6 +247,13 @@ class _Runner:
                 )
                 self.broken.append(message)
                 return Run(None, None, tuple(self.broken), message, Refusal("result", call.tool))
+            except Exception as error:  # noqa: BLE001 - any failure of a tool ends the run, named
+                # Neither retried nor handed to an error block: an error block answers a tool's
+                # error, and an exception may be a stop asked of the tool or a defect of its
+                # driver. Its text may hold a value, so the message names its class alone.
+                message = f"{call.tool} raised {type(error).__name__}"
+                self.broken.append(message)
+                return Run(None, None, tuple(self.broken), message, Refusal("raised", call.tool))
         # The call may not have acted: what follows starts from either set of policy states, as
         # the verifier walks it.
         for monitor in self.monitors:
@@ -281,12 +312,18 @@ def run(
     Each policy is stepped on a call before it is made, and reaching a bad state is a broken
     check like a broken contract, as is a run ending, in a return or a stop, in a pending one.
     With ``enforce``, the default, the first broken check ends the run, named in `Run.refused`;
-    without it every break is recorded and the run goes on. Raises `ValueError` for a task
-    naming an input as a tool.
+    without it every break is recorded and the run goes on. Before the first call, each input
+    the task names is held to its set, a broken check like the others. A tool raising anything
+    but `ToolError` ends the run, its message naming the exception's class alone; a
+    `BaseException` that is no `Exception` propagates. A call to a tool ``tools`` does not give
+    ends the run at that call. Raises `ValueError` for a task naming an input as a tool.
     """
     unclashed(task, contracts)
     monitors = [Monitor(policy) for policy in policies]
     runner = _Runner(contracts, tools, task, monitors, enforce)
+    refused = runner.given(inputs)
+    if refused is not None:
+        return refused
     try:
         ended = runner.block(program, dict(inputs))
     except _AbsentError as absent:
@@ -327,10 +364,17 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
         if contracts[tool].inferred:
             return f"the output schema of {tool} inferred from observed calls does not hold"
         return f"{tool} broke the output schema its server declares"
-    if check == "error":
-        if result.why.retried:
-            return f"an error of {tool} outlasted {ATTEMPTS} attempts: the fairness a retry assumes"
-        return f"an error of {tool} the program does not handle"
+    retried = f"an error of {tool} outlasted {ATTEMPTS} attempts: the fairness a retry assumes"
+    named = {
+        "inputs": "an input outside the task's input set: the caller's, before any call",
+        "given": f"no tool {tool} was given to the run: the caller's",
+        "raised": f"{tool} raised an exception, which no contract admits: the tool's",
+        "error": retried
+        if result.why.retried
+        else f"an error of {tool} the program does not handle",
+    }
+    if check in named:
+        return named[check]
     broke = _CHECKED.get(check, check)
     if proven:
         return f"{broke} the verification proved broke: a defect to report"

@@ -38,6 +38,15 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A run always ends in a `Run` naming its cause. A tool raising anything but `ToolError` raised
+  out of `run`, past the program's error block and with no record of the call, and so did a call
+  to a tool the run was not given, after the calls before it were made. An exception ends the run
+  on the `raised` check, neither retried nor handed to an error block, its message naming the
+  exception's class alone; a `BaseException` that is no `Exception`, an interrupt among them,
+  propagates. A call to a tool not given ends the run on the `given` check. Each input the task
+  names is held to its set before the first call, on the `inputs` check, which `blame` names as
+  the caller's where it reported a proven program's defect.
+
 - Canceling the task that awaits `run_on_server` stops the run. The run went on in its worker
   thread, which no cancel reaches, and sent every call left in the program: two walks reached a
   robot's server after the cancel. The call in flight is canceled with the run, and the worker

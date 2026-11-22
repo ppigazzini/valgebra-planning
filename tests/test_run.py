@@ -15,7 +15,7 @@ from valgebra_planning.contracts import Contract, Task, read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.planner import plan
 from valgebra_planning.program import Block, Call, Ref, Return
-from valgebra_planning.run import blame, run
+from valgebra_planning.run import Refusal, blame, run
 from valgebra_planning.verify import verify
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
@@ -303,3 +303,99 @@ def test_a_coroutine_handed_back_unawaited_is_refused_and_never_runs() -> None:
     assert ended.refused.startswith("ask returned a value outside the JSON values (")
     assert (ran, made) == ([], [])
     assert handed[0].cr_frame is None
+
+
+FOUND = {**PARCEL, "state": "delivered"}
+GUARDED = read_program(
+    "c1 = find_parcel(tracking=tracking)\n"
+    "try:\n"
+    "    c2 = book_return(parcel_id=c1.parcel.parcel_id, state=c1.parcel.state,"
+    " weight_g=c1.parcel.weight_g)\n"
+    "except ToolError:\n"
+    "    c3 = open_claim(parcel_id=c1.parcel.parcel_id)\n"
+    "    return c3.claim_id\n"
+    "return c2.label_id\n"
+)
+INPUTS = {"tracking": "AB123456789IT"}
+
+
+def test_an_exception_a_tool_raises_ends_the_run_named_and_no_error_block_runs() -> None:
+    made: list[str] = []
+
+    def book_return(**_: Any) -> Any:
+        made.append("book_return")
+        message = "over-current at 41.7 A, joint secret-7"
+        raise RuntimeError(message)
+
+    tools = _recording(
+        {"find_parcel": {"parcel": FOUND}, "open_claim": {"claim_id": "clm_1"}}, made
+    )
+    ended = run(
+        GUARDED, TOOLS, TASKS["return a parcel"], INPUTS, {**tools, "book_return": book_return}
+    )
+    assert ended.refused == "book_return raised RuntimeError"
+    assert ended.why == Refusal("raised", "book_return")
+    assert made == ["find_parcel", "book_return"]
+    assert "secret" not in repr(ended)
+    assert blame(ended, TOOLS, proven=True) == (
+        "book_return raised an exception, which no contract admits: the tool's"
+    )
+
+
+def test_a_retried_call_raising_an_exception_is_attempted_once() -> None:
+    made: list[str] = []
+
+    def find_parcel(**_: Any) -> Any:
+        made.append("find_parcel")
+        raise ValueError
+
+    retried = read_program(
+        "c1 = retry(find_parcel(tracking=tracking))\nreturn c1.parcel.parcel_id\n"
+    )
+    ended = run(retried, TOOLS, TASKS["return a parcel"], INPUTS, {"find_parcel": find_parcel})
+    assert ended.refused == "find_parcel raised ValueError"
+    assert made == ["find_parcel"]
+
+
+def test_an_interrupt_a_tool_raises_propagates() -> None:
+    def find_parcel(**_: Any) -> Any:
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        run(GUARDED, TOOLS, TASKS["return a parcel"], INPUTS, {"find_parcel": find_parcel})
+
+
+def test_a_call_to_a_tool_the_run_was_not_given_ends_the_run_there() -> None:
+    made: list[str] = []
+    tools = _recording({"find_parcel": {"parcel": FOUND}}, made)
+    ended = run(GUARDED, TOOLS, TASKS["return a parcel"], INPUTS, tools)
+    assert ended.refused == "book_return is no tool the run was given"
+    assert ended.why == Refusal("given", "book_return")
+    assert made == ["find_parcel"]
+    assert (
+        blame(ended, TOOLS, proven=True) == "no tool book_return was given to the run: the caller's"
+    )
+
+
+@pytest.mark.parametrize(
+    ("inputs", "refused"),
+    [
+        (
+            {"tracking": "nope"},
+            "the input tracking lies outside the task's (string_pattern_mismatch)",
+        ),
+        ({}, "the input tracking the task names is not given"),
+    ],
+)
+def test_an_input_outside_the_task_ends_the_run_before_any_call(
+    inputs: dict[str, Any], refused: str
+) -> None:
+    made: list[str] = []
+    tools = _recording({"find_parcel": {"parcel": FOUND}}, made)
+    ended = run(GUARDED, TOOLS, TASKS["return a parcel"], inputs, tools)
+    assert ended.refused == refused
+    assert ended.why == Refusal("inputs")
+    assert made == []
+    assert blame(ended, TOOLS, proven=True) == (
+        "an input outside the task's input set: the caller's, before any call"
+    )
