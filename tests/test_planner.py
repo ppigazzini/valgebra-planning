@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from valgebra_planning import planner
 from valgebra_planning._valgebra import Sampler
 from valgebra_planning.cells import abstract
 from valgebra_planning.contracts import Contract, read_contract, read_task
@@ -289,3 +290,72 @@ def test_a_plan_with_no_program_says_whether_the_bound_cut_a_path() -> None:
 def test_render_takes_a_program_and_refuses_none() -> None:
     with pytest.raises(TypeError, match="render takes a program, a Block, not NoneType"):
         render(None)  # ty: ignore[invalid-argument-type]
+
+
+OBJECT = {"type": "string", "pattern": "^obj_[0-9]+$"}
+GRASPED = {"type": "string", "pattern": "^grs_[0-9]+$"}
+
+
+def _robot(pose: str = "estimate_pose") -> list[Contract]:
+    """Return a pick's tools, the pose tool under ``pose``, as a listing in that order."""
+
+    def listed(name: str, arguments: dict[str, Any], result: dict[str, Any]) -> Contract:
+        return read_contract(
+            {
+                "name": name,
+                "inputSchema": {
+                    "type": "object",
+                    "properties": arguments,
+                    "required": [*arguments],
+                },
+                "outputSchema": {"type": "object", "properties": result, "required": [*result]},
+                "annotations": {"readOnlyHint": True},
+            }
+        )
+
+    return [
+        listed(
+            "detect_object",
+            {"name": {"type": "string"}},
+            {"object_id": OBJECT, "confidence": {"type": "number", "minimum": 0, "maximum": 1}},
+        ),
+        listed(pose, {"object_id": OBJECT}, {"distance_m": {"type": "number", "minimum": 0}}),
+        listed(
+            "grasp",
+            {"object_id": OBJECT, "distance_m": {"type": "number", "minimum": 0.2, "maximum": 0.6}},
+            {"grasp_id": GRASPED},
+        ),
+        listed("say", {"text": {"type": "string"}}, {"spoken": {"type": "boolean"}}),
+    ]
+
+
+PICK = read_task("pick", {"name": {"type": "string"}}, GRASPED)
+
+
+def test_the_program_is_the_same_whatever_order_the_tools_are_listed_in() -> None:
+    programs = {
+        render(found.program)
+        for order in itertools.permutations(_robot())
+        if (found := plan({tool.name: tool for tool in order}, PICK)).program is not None
+    }
+    assert len(programs) == 1
+
+
+def test_the_weak_program_leaving_the_fewest_cells_uncovered_is_returned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Tried first by name, the pose tool's own weak program stops on more cells than the
+    # detection's, which the ranking returns.
+    tools = {tool.name: tool for tool in _robot("a_estimate_pose")}
+    ranked = plan(tools, PICK)
+    assert ranked.program is not None
+    assert render(ranked.program).startswith("c1 = detect_object(name=name)")
+    monkeypatch.setattr(planner, "RANKING", 0)
+    first = plan(tools, PICK)
+    assert first.program is not None
+    assert render(first.program).startswith("if name in a_estimate_pose.object_id:")
+
+    def cells(found: Any) -> int:
+        return sum(len(gap.examples) + gap.undecided for gap in found.uncovered)
+
+    assert (cells(ranked), cells(first)) == (2, 4)

@@ -122,8 +122,8 @@ def test_when_tools_may_fail_the_plan_retries_or_stops_and_reads_back() -> None:
     checked = verify(found.program, TOOLS, SETTLE, errors=True)
     assert checked.count("proven") == len(checked.links)
     assert sorted(gap.where for gap in checked.gaps) == [
-        "then.else.error:book_freight_return",
-        "then.then.error:book_return",
+        "then.else.error:book_return",
+        "then.then.error:book_freight_return",
     ]
     assert sorted(gap.where for gap in found.uncovered) == sorted(gap.where for gap in checked.gaps)
 

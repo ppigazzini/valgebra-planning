@@ -50,12 +50,15 @@ state, whatever outcome each action has (Cimatti et al. 2003, Def. 2.10). An out
 of a tool's result, so the outcomes are the cells of its output set rather than a list. A
 branch on a runtime type test is an observation, and the program a conditional plan, `if o
 then π1 else π2` (Bertoli et al. 2006, Def. 2.8). Where no strong program exists within the
-bound, a weak one is returned with each stop naming the cells it leaves uncovered.
-**[LOAD-BEARING: strong-programs]**
+bound, a weak one is returned with each stop naming the cells it leaves uncovered: one that
+reaches the goal on some execution (Cimatti et al. 2003, Def. 2.10). Which one is not the
+listing's: the tools are tried in their names' order, and among the weak programs each first
+call gives within an expansion budget, the one leaving the fewest cells uncovered covers the
+most of what the inputs may hold, and is returned. **[LOAD-BEARING: strong-programs]**
 
-IMPLEMENTED-BY: planner.py
+IMPLEMENTED-BY: planner.py, planner.py::_ranked
 
-HELD-BY: test_a_strong_program_branches_on_every_status_and_verifies, test_a_weak_program_names_the_status_no_tool_settles, test_a_strong_program_breaks_no_contract_whatever_the_tools_return, test_the_depth_bounds_the_calls_and_tests_on_a_path
+HELD-BY: test_a_strong_program_branches_on_every_status_and_verifies, test_a_weak_program_names_the_status_no_tool_settles, test_a_strong_program_breaks_no_contract_whatever_the_tools_return, test_the_depth_bounds_the_calls_and_tests_on_a_path, test_the_program_is_the_same_whatever_order_the_tools_are_listed_in, test_the_weak_program_leaving_the_fewest_cells_uncovered_is_returned
 
 **The verifier reads a program as belief execution.** The set a reference lies in at a point of
 a program is its belief there: a call's result enters as its output set, replacing every belief

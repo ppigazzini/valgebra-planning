@@ -57,7 +57,7 @@ def test_a_program_planned_without_the_policy_is_refuted_on_its_freight_path_alo
     found = plan(TOOLS, SETTLE)
     assert found.program is not None
     verdicts = _policy_links(found.program)
-    assert verdicts.pop("then.else") == "refuted"
+    assert verdicts.pop("then.then") == "refuted"
     assert set(verdicts.values()) == {"proven"}
 
 
@@ -90,7 +90,7 @@ def test_a_guard_the_arguments_only_overlap_leaves_the_policy_undecided() -> Non
     found = plan(TOOLS, SETTLE)
     assert found.program is not None
     verdicts = _policy_links(found.program, heavy)
-    assert verdicts.pop("then.else") == "undecided"
+    assert verdicts.pop("then.then") == "undecided"
     assert set(verdicts.values()) == {"proven"}
     assert plan(TOOLS, SETTLE, policies=[heavy], weak=False).program is None
 

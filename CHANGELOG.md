@@ -40,6 +40,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- The program a plan returns no longer depends on the order a server lists its tools in, and a
+  weak program is the one leaving the fewest cells uncovered among those each first call gives.
+  The search tried tools in the listing's order and returned the first weak program it found,
+  so the 24 orders of a robot's four tools gave 6 programs, stopping on one to four cells, and a
+  server reordering `tools/list` changed the plan. The tools are tried in their names' order,
+  and a weak program is searched for each tool the start may call first until 2,000 expansions
+  past the first found, the one stopping on the fewest cells returned. The 24 orders give one
+  program, stopping on one cell. Programs whose branches the listing ordered now branch in the
+  names' order; the parcel and bench studies read no difference.
+
 - The recipes hold "a contract a plan can mean": a closed result and `type` beside each
   `const`, a number with its unit and bounds, a pattern per entity and an enum per outcome, a
   confirmation as a token an `only` flow holds, and a hint policy read with MCP's defaults, over

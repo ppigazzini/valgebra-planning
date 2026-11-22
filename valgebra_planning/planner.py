@@ -59,6 +59,9 @@ DEPTH = 6
 MAX_BINDINGS = 16
 
 _GOAL = "goal"
+#: The expansions spent trying the other first calls once a weak program is found, so the weak
+#: program leaving the fewest cells uncovered among them is the one returned.
+RANKING = 2_000
 
 #: A guarded call takes a test and a call on its path.
 _GUARD = 2
@@ -723,6 +726,48 @@ def _tidy(block: Block, stops: dict[int, frozenset[int]], kept: frozenset[str]) 
         block = tidied
 
 
+def _stopped(block: Block, stops: dict[int, frozenset[int]]) -> int:
+    """Return how many cells the stops of ``block`` leave uncovered, its error blocks included."""
+    count = sum(_stopped(call.on_error, stops) for call in block.calls if call.on_error)
+    end = block.end
+    if isinstance(end, Stop):
+        count += len(stops.get(id(end), frozenset()))
+    elif isinstance(end, Branch):
+        count += _stopped(end.then, stops) + _stopped(end.otherwise, stops)
+    return count
+
+
+def _ranked(
+    search: _Search, start: _State, depth: int, tidied: Callable[[Block], Block]
+) -> Block | None:
+    """Return the weak program leaving the fewest cells uncovered among the first calls tried.
+
+    The search returns the first weak program it finds, which the tools' order decides, so each
+    tool the start may call first is tried for its own; once one is found, the others are tried
+    until `RANKING` more expansions are spent. A weak plan for a goal is one some execution
+    reaches it on (Cimatti et al. 2003, Def. 2.10), and of two such, the one stopping on fewer
+    cells covers more of what the inputs may hold. A tie goes to the earlier tool by name.
+    """
+    goal = next((ref for ref, cells in start.refs if cells <= search.goal), None)
+    if goal is not None:
+        found = search.solve(start, depth, weak=True)
+        return None if found is None else tidied(found)
+    search.expanded += 1
+    ranked: list[tuple[int, int, Block]] = []
+    budget: int | None = None
+    for order, contract in enumerate(search.contracts.values()):
+        if budget is not None and search.expanded >= budget:
+            break
+        found = search.call(start, contract, depth, weak=True)
+        if found is None:
+            continue
+        program = tidied(found)
+        ranked.append((_stopped(program, search.stops), order, program))
+        if budget is None:
+            budget = search.expanded + RANKING
+    return min(ranked, key=lambda row: row[:2])[2] if ranked else None
+
+
 def _uncovered(block: Block, search: _Search, where: str = "") -> list[Uncovered]:
     """Return every stop of a program with the values it leaves uncovered."""
     found = [
@@ -777,6 +822,9 @@ def plan(
     a tool.
     """
     unclashed(task, contracts)
+    # The tools are tried in their names' order, so a server listing them in another order
+    # gets the same program.
+    contracts = dict(sorted(contracts.items()))
     kept = frozenset(tool for policy in policies for tool in policy.tools()) | frozenset(
         name
         for name, contract in contracts.items()
@@ -832,9 +880,8 @@ def plan(
         # within the depth its path has left, not where a shallower bound ran out.
         search.failed.clear()
         search.cut = 0
-        program = search.solve(start, depth, weak=True)
+        program = _ranked(search, start, depth, tidied)
         if program is not None:
-            program = tidied(program)
             gaps = tuple(_uncovered(program, search))
             return Plan(
                 program,

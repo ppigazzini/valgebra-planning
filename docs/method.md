@@ -124,7 +124,10 @@ path, so the first strong program is a shallowest one. A state that fails is rem
 every rule reads of it, each value's cells and, under a flow rule or mined types, its origin, so a
 failure through one origin is never taken for a state another origin reaches. Where none exists, one search at the full
 bound lets a branch stop once its sibling returns, and each stop names the values it leaves
-uncovered.
+uncovered. The tools are tried in their names' order, so a server listing them in another order
+gets the same program; a weak program is searched for each tool the start may call first, until
+2,000 expansions past the first found, and the one whose stops leave the fewest cells uncovered
+is returned, a tie going to the earlier name.
 
 A call whose result no later step reads is dropped, since a call can act on the world, and a
 branch whose two sides then read the same is collapsed.
