@@ -317,3 +317,112 @@ def _transitions(*transitions: dict[str, Any]) -> dict[str, Any]:
 def test_a_policy_means_what_its_keys_say_or_is_refused(spec: dict[str, Any], match: str) -> None:
     with pytest.raises(ValueError, match=match):
         read_policy(spec)
+
+
+#: Robot skills: a policy names a confirmation and two motions, and the task needs one motion.
+OBJECT_ID = {"type": "string", "pattern": "^obj_[0-9]+$"}
+DISTANCE = {"unit": {"const": "m"}, "value": {"type": "number", "minimum": 0, "maximum": 20}}
+SKILLS = {
+    "detect_object": (
+        {"name": {"type": "string"}},
+        {
+            "status": {"enum": ["found", "not_found"]},
+            "object_id": OBJECT_ID,
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        },
+        {"readOnlyHint": True},
+    ),
+    "estimate_pose": (
+        {"object_id": OBJECT_ID},
+        {
+            "pose_status": {"enum": ["ok", "lost"]},
+            "distance": {
+                "type": "object",
+                "properties": DISTANCE,
+                "required": ["unit", "value"],
+                "additionalProperties": False,
+            },
+        },
+        {"readOnlyHint": True},
+    ),
+    "grasp": (
+        {
+            "object_id": OBJECT_ID,
+            "distance": {
+                "type": "object",
+                "properties": {
+                    **DISTANCE,
+                    "value": {"type": "number", "minimum": 0.2, "maximum": 0.6},
+                },
+                "required": ["unit", "value"],
+            },
+        },
+        {"grasp_id": {"type": "string", "pattern": "^grs_[0-9]+$"}},
+        {"destructiveHint": True},
+    ),
+    "confirm_with_user": ({"question": {"type": "string"}}, {"confirmed": {"type": "boolean"}}, {}),
+    "walk_to": (
+        {"object_id": OBJECT_ID},
+        {"arrived": {"type": "boolean"}},
+        {"destructiveHint": True},
+    ),
+}
+MOTION_CONFIRMED = read_policy(
+    {
+        "name": "motion confirmed first",
+        "initial": "start",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "start", "tool": "confirm_with_user", "to": "ok"},
+            {"from": "start", "tool": "grasp", "to": "violated"},
+            {"from": "start", "tool": "walk_to", "to": "violated"},
+        ],
+    }
+)
+
+
+def _skills(order: tuple[str, ...]) -> dict[str, Any]:
+    def spec(name: str) -> dict[str, Any]:
+        inputs, outputs, annotations = SKILLS[name]
+        return {
+            "name": name,
+            "inputSchema": {"type": "object", "properties": inputs, "required": sorted(inputs)},
+            # Closed results: an open one is any record, and the whole of it fills an argument.
+            "outputSchema": {
+                "type": "object",
+                "properties": outputs,
+                "required": sorted(outputs),
+                "additionalProperties": False,
+            },
+            "annotations": annotations,
+        }
+
+    return {name: read_contract(spec(name)) for name in order}
+
+
+def _most_on_a_path(block: Any, tool: str) -> int:
+    here = sum(call.tool == tool for call in block.calls)
+    end = block.end
+    if hasattr(end, "then"):
+        return here + max(_most_on_a_path(end.then, tool), _most_on_a_path(end.otherwise, tool))
+    return here
+
+
+@pytest.mark.parametrize(
+    "order",
+    [
+        ("estimate_pose", "confirm_with_user", "detect_object", "grasp", "walk_to"),
+        ("grasp", "walk_to", "confirm_with_user", "detect_object", "estimate_pose"),
+    ],
+)
+def test_a_call_a_policy_names_and_nothing_reads_is_left_out_where_the_program_needs_none(
+    order: tuple[str, ...],
+) -> None:
+    skills = _skills(order)
+    task = read_task("pick", {"name": {"type": "string"}}, {"type": "string", "pattern": "^grs_"})
+    found = plan(skills, task, depth=7, policies=[MOTION_CONFIRMED])
+    assert found.program is not None
+    assert _most_on_a_path(found.program, "confirm_with_user") == 1
+    assert "walk_to(" not in render(found.program)
+    checked = verify(found.program, skills, task, policies=[MOTION_CONFIRMED])
+    assert checked.count("proven") == len(checked.links)

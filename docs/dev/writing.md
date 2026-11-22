@@ -34,7 +34,7 @@ that makes the odd thing sound intended, stop and check whether it is.
 
 **Name the owner and the invariant, not just the mechanism.** "The planner drops a call whose
 result no later step reads" is accurate; what a reader needs is that a call can act on the
-world, so a call a policy reads is kept even where nothing reads its result. Write the
+world, so a call a policy needs is kept even where nothing reads its result. Write the
 sentence a reader needs before they delete your line.
 
 **Verify the claim against the tree; run it when it is behavioral.** `git grep -n` for the

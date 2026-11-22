@@ -16,14 +16,15 @@ shallowest one: a state that fails is remembered by what every rule reads of it,
 through one origin is never taken for a state another reaches. Where none exists within the
 bound, one search at the full bound lets a branch stop once its sibling returns and no
 continuation exists within the depth its path has left, and each stop names the cells it leaves
-uncovered. Every program returned is checked again by `valgebra_planning.verify.verify`, which
-reads neither the cells nor the search.
+uncovered. Where a policy names a tool, a call to it that nothing reads is left out wherever
+`valgebra_planning.verify.verify`, which reads neither the cells nor the search, reads the
+program the same without it; the command line verifies every program it prints.
 """
 
 from __future__ import annotations
 
 import itertools
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -46,6 +47,7 @@ from valgebra_planning.program import (
     renumber,
 )
 from valgebra_planning.run import retry_assumptions
+from valgebra_planning.verify import Verification, verify
 
 __all__ = ["DEPTH", "Plan", "Uncovered", "plan", "predicates"]
 
@@ -595,6 +597,74 @@ def _prune(block: Block, stops: dict[int, frozenset[int]], kept: frozenset[str])
     return Block(tuple(calls), block.end)
 
 
+#: Where a call stands in a program: each step a block index, a branch side, an error block or a
+#: loop's body or what follows it.
+_Address = tuple[tuple[str, int], ...]
+
+
+def _unread(block: Block, at: _Address = ()) -> list[_Address]:
+    """Return where each call whose result nothing after it reads stands, below ``block``."""
+    found: list[_Address] = []
+    for index, call in enumerate(block.calls):
+        if call.result not in _reads(Block(block.calls[index + 1 :], block.end)):
+            found.append((*at, ("call", index)))
+        if call.on_error is not None:
+            found += _unread(call.on_error, (*at, ("error", index)))
+    end = block.end
+    if isinstance(end, Branch):
+        found += _unread(end.then, (*at, ("then", 0))) + _unread(end.otherwise, (*at, ("else", 0)))
+    elif isinstance(end, For):
+        found += _unread(end.body, (*at, ("body", 0))) + _unread(end.after, (*at, ("after", 0)))
+    return found
+
+
+def _without(block: Block, at: _Address) -> Block:
+    """Return ``block`` with the call ``at`` names left out; every other part is kept as it is."""
+    (kind, index), *rest = at
+    calls, end = list(block.calls), block.end
+    if kind == "call":
+        del calls[index]
+    elif kind == "error" and (call := calls[index]).on_error is not None:
+        kept = _without(call.on_error, tuple(rest))
+        calls[index] = Call(call.tool, call.bindings, call.result, call.retry, kept)
+    elif isinstance(end, Branch):
+        then = _without(end.then, tuple(rest)) if kind == "then" else end.then
+        otherwise = _without(end.otherwise, tuple(rest)) if kind == "else" else end.otherwise
+        end = Branch(end.ref, end.tool, end.argument, then, otherwise, end.values, end.key)
+    elif isinstance(end, For):
+        body = _without(end.body, tuple(rest)) if kind == "body" else end.body
+        after = _without(end.after, tuple(rest)) if kind == "after" else end.after
+        end = For(end.ref, end.item, body, after)
+    return Block(tuple(calls), end)
+
+
+def _reading(checked: Verification) -> object:
+    """Return what a verification says of a program: its links not proven, and where it stops."""
+    unproven = sorted(
+        (link.claim, link.verdict) for link in checked.links if link.verdict != "proven"
+    )
+    return unproven, sorted(gap.ref for gap in checked.gaps)
+
+
+def _unpadded(program: Block, reading: Callable[[Block], object]) -> Block:
+    """Leave out each call nothing reads wherever the program reads the same without it.
+
+    A call a policy names is kept by the search even where nothing reads its result, since it
+    may move the policy, and the search holds no policy state to tell. The verifier does: a
+    call the program needs leaves a policy's link refuted, undecided or pending without it, and
+    one it does not need leaves every link and every stop as they were.
+    """
+    held = reading(program)
+    while True:
+        for at in _unread(program):
+            smaller = _without(program, at)
+            if reading(smaller) == held:
+                program = smaller
+                break
+        else:
+            return program
+
+
 def _carry(old: Block, new: Block, stops: dict[int, frozenset[int]]) -> None:
     """Move each stop's uncovered cells to the stop beside it in a renumbered copy."""
     for one, other in zip(old.calls, new.calls, strict=True):
@@ -668,8 +738,9 @@ def plan(
     With ``errors``, any tool may answer with an error, and every call is retried or given
     a block for it, as `valgebra_planning.verify.verify` holds with the same flag. A call is
     made only where valgebra proves it keeps every policy away from its bad states, and a
-    call a policy reads is kept even where no result of it is read; a path ends, in a return or
-    a stop, only where no policy holds a pending state. A value reaches a flow
+    call a policy needs is kept even where no result of it is read, a call it names and does
+    not need is left out; a path ends, in a return or a stop, only where no policy holds a
+    pending state. A value reaches a flow
     rule's sink only as `valgebra_planning.verify.verify` holds it with the same rules. With
     mined ``types``, a value fills an argument only where their types agree, and the plan
     names every binding that rests on one. Raises `ValueError` for a task naming an input as
@@ -704,10 +775,19 @@ def plan(
         1,
         tuple(frozenset({policy.initial}) for policy in policies),
     )
+
+    def reading(program: Block) -> object:
+        checked = verify(program, contracts, task, errors=errors, policies=policies, flows=flows)
+        return _reading(checked)
+
+    def tidied(program: Block) -> Block:
+        program = _tidy(program, search.stops, kept)
+        return _tidy(_unpadded(program, reading), search.stops, kept) if kept else program
+
     for bound in range(1, depth + 1):
         program = search.solve(start, bound, weak=False)
         if program is not None:
-            program = _tidy(program, search.stops, kept)
+            program = tidied(program)
             return Plan(
                 program,
                 strong=True,
@@ -722,7 +802,7 @@ def plan(
         search.failed.clear()
         program = search.solve(start, depth, weak=True)
         if program is not None:
-            program = _tidy(program, search.stops, kept)
+            program = tidied(program)
             gaps = tuple(_uncovered(program, search))
             return Plan(
                 program,

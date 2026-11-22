@@ -46,6 +46,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A planned program makes no call a policy names and the program does not need. The search keeps
+  a call to a tool a policy names even where nothing reads its result, since the call may move
+  the policy, and it holds no policy state to tell: with a policy confirming every motion, a
+  planned pick asked for confirmation up to three times on one path and walked where nothing
+  needed it. After the search, a call nothing reads is left out wherever the verifier reads the
+  program the same without it, every link and every stop as they were; a call the policy needs
+  leaves its link refuted, undecided or pending without it, and stays.
+
 - The planner finds a strong program at its depth under a flow rule or mined types. A failed state
   was remembered by its cells, its policy states and the origins it tested, and a flow rule admits
   a binding by the value's origin and a mined type by its origin and path: a failure reached
