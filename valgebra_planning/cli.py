@@ -191,6 +191,8 @@ def _run(
                 policies=problem.policies,
             )
             return row | {
+                "outcome": result.outcome,
+                "ok": result.ok,
                 "value": result.value,
                 "stopped": result.stopped,
                 "refused": result.refused,
@@ -199,7 +201,6 @@ def _run(
             }
 
     row = asyncio.run(ran())
-    returned = row["program"] is not None and row["stopped"] is None and row["refused"] is None
     if as_json:
         print(json.dumps(row, indent=2))
     elif row["program"] is None:
@@ -214,7 +215,7 @@ def _run(
         )
         cause = [f"cause: {row['blame']}"] if row["blame"] else []
         print("\n".join([_text(row), "", ended, *row["broken"], *cause]))
-    return 0 if returned and not row["broken"] else 1
+    return 0 if row.get("ok", False) else 1
 
 
 def _check(library: Library, *, as_json: bool) -> int:

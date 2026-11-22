@@ -17,7 +17,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from valgebra_planning._valgebra import JSON, Validator
 from valgebra_planning.contracts import (
@@ -32,7 +32,7 @@ from valgebra_planning.contracts import (
 from valgebra_planning.policy import Monitor, Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 
-__all__ = ["Refusal", "RefusedResultError", "Run", "ToolError", "blame", "run"]
+__all__ = ["Outcome", "Refusal", "RefusedResultError", "Run", "ToolError", "blame", "run"]
 
 #: How many times a retried call is made before the run gives up on it.
 ATTEMPTS = 8
@@ -80,8 +80,8 @@ class RefusedResultError(Exception):
 class Refusal:
     """Which check ended a run.
 
-    One of `inputs`, `arguments`, `policy`, `given`, `result`, `goal`, `error`, `raised` or
-    `read`.
+    One of `inputs`, `arguments`, `policy`, `given`, `result`, `goal`, `error`, `raised`,
+    `read` or `ended`.
 
     ``tool`` is the tool the check was on, where it was on one.
     """
@@ -91,9 +91,29 @@ class Refusal:
     retried: bool = False
 
 
+#: How a run ends, as `Run.outcome` reads it.
+Outcome = Literal["returned", "stopped", "refused", "error", "ended"]
+
+
 @dataclass(frozen=True, slots=True)
 class Run:
-    """What a run returned or where it stopped, and every contract it broke on the way."""
+    """What a run returned or where it stopped, and every contract it broke on the way.
+
+    `outcome` reads how it ended, and `ok` whether it returned with nothing broken; read either
+    before ``value``, which holds a different thing for each outcome:
+
+    - ``returned``: ``value`` is the value returned, ``stopped`` and ``refused`` are None;
+    - ``stopped``: ``value`` is the value the program stopped on, the one its plan leaves
+      uncovered, and ``stopped`` the reference holding it;
+    - ``refused``: a check broke with contracts enforced, ``refused`` names it, ``why`` says
+      which, and ``value`` is None;
+    - ``error``: a tool answered with an error no block handles, ``stopped`` names the call,
+      and ``value`` is None;
+    - ``ended``: the program ended an iteration outside a loop, and ``value`` is None.
+
+    With ``enforce=False`` a run may return with ``broken`` holding every check it broke:
+    its outcome is ``returned`` and it is not ``ok``.
+    """
 
     value: Any
     stopped: str | None
@@ -102,6 +122,22 @@ class Run:
     refused: str | None = None
     #: Which check ended the run, for `blame`; one field, so a run nothing ends pays for one.
     why: Refusal | None = None
+
+    @property
+    def outcome(self) -> Outcome:
+        """Return how the run ended."""
+        if self.refused is not None:
+            return "refused"
+        if self.why is not None and self.why.check == "error":
+            return "error"
+        if self.why is not None and self.why.check == "ended":
+            return "ended"
+        return "returned" if self.stopped is None else "stopped"
+
+    @property
+    def ok(self) -> bool:
+        """Return whether the run returned a value and broke no check on the way."""
+        return self.outcome == "returned" and not self.broken
 
 
 @dataclass(slots=True)
@@ -332,7 +368,7 @@ def run(
         return Run(None, None, tuple(runner.broken), message, Refusal("read"))
     if ended is None:
         runner.broken.append("the program ends an iteration outside a loop")
-        return Run(None, "the end of an iteration", tuple(runner.broken))
+        return Run(None, "the end of an iteration", tuple(runner.broken), None, Refusal("ended"))
     return ended
 
 
@@ -372,6 +408,7 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
         "error": retried
         if result.why.retried
         else f"an error of {tool} the program does not handle",
+        "ended": "the program ends an iteration outside a loop: the program's",
     }
     if check in named:
         return named[check]

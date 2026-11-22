@@ -14,8 +14,8 @@ from valgebra_planning._valgebra import Sampler
 from valgebra_planning.contracts import Contract, Task, read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.planner import plan
-from valgebra_planning.program import Block, Call, Ref, Return
-from valgebra_planning.run import Refusal, blame, run
+from valgebra_planning.program import Block, Call, Next, Ref, Return
+from valgebra_planning.run import Refusal, ToolError, blame, run
 from valgebra_planning.verify import verify
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
@@ -398,4 +398,50 @@ def test_an_input_outside_the_task_ends_the_run_before_any_call(
     assert made == []
     assert blame(ended, TOOLS, proven=True) == (
         "an input outside the task's input set: the caller's, before any call"
+    )
+
+
+def _ending(answers: dict[str, Any], program: Any = GUARDED, **options: Any) -> Any:
+    tools = _recording(answers, [])
+    return run(program, TOOLS, TASKS["return a parcel"], INPUTS, tools, **options)
+
+
+def test_how_a_run_ends_is_its_outcome_and_only_a_clean_return_is_ok() -> None:
+    booked = {"find_parcel": {"parcel": FOUND}, "book_return": {"label_id": "lbl_1"}}
+    returned = _ending(booked)
+    assert (returned.outcome, returned.ok, returned.value) == ("returned", True, "lbl_1")
+
+    stopping = read_program(
+        'c1 = find_parcel(tracking=tracking)\nif c1.parcel.state in ("delivered",):\n'
+        "    return c1.parcel.parcel_id\nstop(c1.parcel.state)\n"
+    )
+    stopped = _ending({"find_parcel": {"parcel": PARCEL}}, stopping)
+    # A stop holds the value it stopped on: a caller reading `value` alone reads a stop as a return.
+    assert (stopped.outcome, stopped.ok, stopped.value) == ("stopped", False, "lost")
+
+    refused = _ending({"find_parcel": {"parcel": FOUND}, "book_return": {"label_id": "no"}})
+    assert (refused.outcome, refused.ok, refused.value) == ("refused", False, None)
+
+    def unanswered(**_: Any) -> Any:
+        raise ToolError
+
+    errored = run(
+        read_program("c1 = find_parcel(tracking=tracking)\nreturn c1.parcel.parcel_id\n"),
+        TOOLS,
+        TASKS["return a parcel"],
+        INPUTS,
+        {"find_parcel": unanswered},
+    )
+    assert (errored.outcome, errored.ok, errored.value) == ("error", False, None)
+
+    broken = _ending(
+        {"find_parcel": {"parcel": FOUND}, "book_return": {"label_id": "no"}}, enforce=False
+    )
+    assert (broken.outcome, broken.ok) == ("returned", False)
+    assert broken.broken
+
+    looping = run(Block((), Next()), TOOLS, TASKS["return a parcel"], INPUTS, {})
+    assert (looping.outcome, looping.ok) == ("ended", False)
+    assert blame(looping, TOOLS, proven=True) == (
+        "the program ends an iteration outside a loop: the program's"
     )

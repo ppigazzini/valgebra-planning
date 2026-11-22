@@ -40,6 +40,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- `Run.outcome` reads how a run ended, `returned`, `stopped`, `refused`, `error` or `ended`, and
+  `Run.ok` whether it returned with no check broken; `Run` documents what each field holds for
+  each outcome. A stop holds in `value` the value it stopped on, so a caller reading `value`
+  alone read a stop as a return. The command `run` exits by `ok`, and its JSON carries `outcome`
+  and `ok`. A program ending an iteration outside a loop ends the run on the `ended` check.
+
 - `connect` takes `read_timeout_seconds`, and the commands `run` and `proxy` take `--timeout`:
   a call the server has not answered by then fails as a tool error. With none, a call waits for
   its answer, as before.
