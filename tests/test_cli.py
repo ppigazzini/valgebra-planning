@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -120,6 +121,32 @@ def test_check_finds_no_vacuous_specification_in_the_parcels(
 ) -> None:
     assert main(["check", PARCELS]) == 0
     assert capsys.readouterr().out == "no specification holds vacuously\n"
+
+
+def test_check_notes_a_contract_wider_than_its_keywords_and_exits_on_vacuity_alone(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    library = tmp_path / "library"
+    shutil.copytree(PARCELS, library)
+    listing = json.loads((library / "tools.json").read_text())
+    for tool in listing["tools"]:
+        if tool["name"] == "book_return":
+            tool["inputSchema"]["properties"]["weight_g"].pop("maximum")
+    (library / "tools.json").write_text(json.dumps(listing), encoding="utf-8")
+    assert main(["check", str(library)]) == 0
+    assert capsys.readouterr().out == (
+        "no specification holds vacuously\n"
+        "note: tool book_return: book_return.weight_g has no upper bound\n"
+    )
+    assert main(["check", str(library), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out) == [
+        {
+            "where": "tool book_return",
+            "finding": "book_return.weight_g has no upper bound",
+            "certainty": "proven",
+            "kind": "wide",
+        }
+    ]
 
 
 def test_privileges_exits_1_on_an_expansion(

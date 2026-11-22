@@ -210,6 +210,14 @@ no task is held to. Values drawn from a schema are tried first, a member found p
 inhabited; valgebra is asked only where none is, and a question it leaves undecided is reported
 as undecided.
 
+A contract may also be wider than its keywords suggest, and `valgebra_planning/meaning.py`
+notes four such readings: an argument a `format` alone types, which takes every string where the
+library does not assert `format`; a numeric argument a side of which no bound closes, read by
+the companion's `interval`; a `const` with no `type` beside it in an input schema; and a tool
+marked destructive, or left unmarked, whose results meet only arguments taking one value or a
+boolean and no task's goal, which a plan calls only to fill a gate. A note decides nothing: the
+plan, the proof and the run read the contracts as written.
+
 ## Running a program
 
 `valgebra_planning/run.py` calls the tools a program names and checks each step as it is made: the

@@ -39,6 +39,7 @@ from valgebra_planning.codemode import stubs
 from valgebra_planning.contracts import Contract
 from valgebra_planning.critic import ProgramError, critique
 from valgebra_planning.library import Library, Problem, asserts_format, read_library
+from valgebra_planning.meaning import findings
 from valgebra_planning.planner import DEPTH, Plan, plan
 from valgebra_planning.privilege import describe, read_privileges, updates
 from valgebra_planning.program import render
@@ -228,11 +229,20 @@ def _run(
 
 
 def _check(library: Library, *, as_json: bool) -> int:
+    """Print the vacuous specifications, then the contracts wider than their keywords.
+
+    The exit status reads the first alone: a wide contract is a note, the author's to keep.
+    """
     found = vacuities(library)
+    wide = findings(library)
     if as_json:
         print(
             json.dumps(
-                [{"where": f.where, "finding": f.finding, "certainty": f.certainty} for f in found],
+                [
+                    {"where": f.where, "finding": f.finding, "certainty": f.certainty, "kind": kind}
+                    for kind, listed in (("vacuous", found), ("wide", wide))
+                    for f in listed
+                ],
                 indent=2,
             )
         )
@@ -242,6 +252,11 @@ def _check(library: Library, *, as_json: bool) -> int:
             for f in found
         ]
         print("\n".join(lines) if lines else "no specification holds vacuously")
+        for f in wide:
+            print(
+                f"note: {f.where}: {f.finding}"
+                + ("" if f.certainty == "proven" else " (undecided)")
+            )
     return 1 if found else 0
 
 

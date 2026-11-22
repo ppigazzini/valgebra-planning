@@ -64,6 +64,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- `check` notes a contract wider than its keywords suggest, from `meaning.findings`: an argument
+  a `format` alone types, which takes every string where the library does not assert `format`;
+  a numeric argument a side of which no bound closes; a `const` with no `type` beside it in an
+  input schema; and a tool marked destructive, or left unmarked, whose results meet only
+  arguments taking one value or a boolean and no task's goal, which a plan calls only to fill a
+  gate. Each line starts `note:`, the exit status reads the vacuous specifications alone, and a
+  `--json` entry carries its `kind`. The parcel library holds none.
+
 - A task names the stops it accepts as ends, and `repair` may accept a program stopping only
   there. `Critique.accepted` asks every link proven and no path stopping, so a task no program
   covers on every path, as an object a detector may not find, had no program accepted, and the

@@ -78,6 +78,7 @@ extra.
 | `valgebra_planning.library` | `Library`, `Problem`, `asserts_format`, `read_library` | |
 | `valgebra_planning.privilege` | `Change`, `Rule`, `Update`, `allowed`, `as_policy`, `describe`, `read_privileges`, `read_rules`, `updates` | |
 | `valgebra_planning.vacuity` | `Certainty`, `Finding`, `vacuities` | |
+| `valgebra_planning.meaning` | `findings` | |
 | `valgebra_planning.servers` | `connect`, `read_server`, `refused_by_client`, `run_on_server` | the `mcp` extra |
 | `valgebra_planning.proxy` | `Gate`, `proxy`, `serve` | the `mcp` extra |
 
@@ -131,6 +132,8 @@ Each public module's names, read from their docstrings.
 ::: valgebra_planning.privilege
 
 ::: valgebra_planning.vacuity
+
+::: valgebra_planning.meaning
 
 ::: valgebra_planning.servers
 

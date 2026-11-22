@@ -77,7 +77,10 @@ lists every specification in the library that holds vacuously, as
 [the method](method.md#specifications-that-hold-vacuously) defines them: a goal no value or
 every value meets, a policy transition that never fires, a policy that can never be violated, a
 flow rule that lets nothing or everything through, a rule no task is held to. A finding valgebra
-leaves undecided is marked so. The exit status is 1 when it finds one.
+leaves undecided is marked so. The exit status is 1 when it finds one. After them, each line
+starting `note:` names a contract wider than its keywords suggest
+([the method](method.md#specifications-that-hold-vacuously)), which the exit status does not
+read; with `--json` each entry carries its `kind`, `vacuous` or `wide`.
 
 ## Compare two privilege policies
 
