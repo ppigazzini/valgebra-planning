@@ -75,8 +75,12 @@ are walked either way. A value refutes a link on an item
 only where valgebra proves an item carrying it in an array of a value the program may hold,
 proven on a value drawn or given for that value with such an array in place of its own.
 Nothing crosses iterations, since what the
-body calls is scoped to its iteration and a body never returns, so the one walk holds for every
-item.
+body calls is scoped to its iteration, so the one walk holds for every item. A `return` in the
+body ends the program at the first item reaching it: the array is finite, so the iterations are
+acyclic, and each return is a terminal state its link proves in the goal, a strong solution's
+structure (Cimatti et al. 2003) with no fairness assumed. The block after the loop runs where no
+iteration returned or stopped, so it runs under every test such a path made, and a policy's
+obligation at a return in the body is read in the states any number of iterations may leave.
 
 ## The cells
 

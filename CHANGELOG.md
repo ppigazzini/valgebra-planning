@@ -58,11 +58,19 @@ All notable changes to valgebra-planning are recorded here. The format follows
   the statement it refuses as allowed, and a model resubmitted it unchanged: it is answered with
   the assignment to write, `c2 = notify(...)`. An import, a function or a class, the stubs handed
   back, is answered that the tools are given; a `stop` before a block's end that it ends its
-  path; a return in a loop's body and an item read by its index with the form to write instead.
+  path; an item read by its index with the loop to write instead.
   The stubs' preamble holds one worked program, for a task unlike any library's, which the
   critic reads and proves.
 
 ### Added
+
+- A `return` in a loop's body is read: it ends the program at the first item reaching it, so a
+  first-success loop, "grasp the first object in reach", is a program the critic reads, the
+  verifier proves and the runner runs. The reader refused it, though the verifier and the runner
+  read the same program built as the IR. Over a finite array the program's structure stays
+  acyclic, a strong solution's (Cimatti et al. 2003, Def. 2.10); the block after the loop runs
+  where no iteration returned, under every test such a path made, and a policy's obligation at a
+  return in the body is read in the states any number of iterations may leave.
 
 - `check` notes a contract wider than its keywords suggest, from `meaning.findings`: an argument
   a `format` alone types, which takes every string where the library does not assert `format`;

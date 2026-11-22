@@ -349,3 +349,17 @@ path returns on none, and is never accepted so. **[LOAD-BEARING: weak-acceptance
 IMPLEMENTED-BY: verify.py::Verification.weak
 
 HELD-BY: test_a_weak_program_stops_only_where_its_task_tolerates, test_repair_accepts_a_weak_program_where_asked_and_stays_strict_by_default
+
+**A return in a loop's body ends the program at the first item reaching it.** A strong
+solution's execution structure is acyclic, and all its terminal states are in the goal (Cimatti
+et al. 2003, Def. 2.10). Over a finite array each iteration takes the next item, so a loop whose
+body may return keeps the structure acyclic, and its terminal states are the returns in the body
+and after the loop and the stops, each return in the goal where its link is proven; no fairness
+is assumed, where a retry's loop rests on it. The block after the loop runs only where no
+iteration ended the run, and a policy's obligation at a return in the body is read in the
+states the loop's fixpoint holds, any number of iterations coming before it.
+**[LOAD-BEARING: first-success]**
+
+IMPLEMENTED-BY: critic.py::_ending
+
+HELD-BY: test_a_return_in_a_body_ends_the_program_at_the_first_item_reaching_it, test_an_obligation_at_a_return_in_a_body_is_read_after_any_number_of_iterations, test_an_early_return_from_a_loop_is_a_test_on_its_array

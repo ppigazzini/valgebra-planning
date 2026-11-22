@@ -201,14 +201,82 @@ def test_a_run_calls_the_body_once_for_each_item() -> None:
 @pytest.mark.parametrize(
     "source",
     [
-        "c1 = search(query=query)\nfor e in c1.entities:\n    return c1.count\nreturn c1.count\n",
         "c1 = search(query=query)\nfor e in c1.entities:\n    pass\nelse:\n    pass\nreturn 1\n",
         "c1 = search(query=query)\nfor a, b in c1.entities:\n    pass\nreturn c1.count\n",
     ],
 )
-def test_a_return_in_a_body_a_loop_else_and_two_items_are_refused(source: str) -> None:
+def test_a_loop_else_and_two_items_are_refused(source: str) -> None:
     with pytest.raises(ProgramError):
         read_program(source)
+
+
+FIRST = """\
+c1 = search(query=query)
+for entity in c1.entities:
+    if "id" in entity:
+        c2 = notify(name=entity.name)
+        return c1.count
+return c1.count"""
+
+
+def test_a_return_in_a_body_ends_the_program_at_the_first_item_reaching_it() -> None:
+    program = read_program(FIRST)
+    checked = verify(program, TOOLS, TASK)
+    assert checked.proven
+    assert [link.where for link in checked.links if link.claim == "return c1.count <= goal"] == [
+        "for:entity.then",
+        "",
+    ]
+    made: list[str] = []
+
+    def notify(name: str) -> dict[str, Any]:
+        made.append(name)
+        return {"sent": True}
+
+    entities = [{"name": "a"}, {"name": "b", "id": "x"}, {"name": "c", "id": "y"}]
+    tools = {"search": lambda **_: {"count": 3, "entities": entities}, "notify": notify}
+    assert run(program, TOOLS, TASK, {"query": "q"}, tools).value == 3
+    assert made == ["b"]
+
+
+def test_an_obligation_at_a_return_in_a_body_is_read_after_any_number_of_iterations() -> None:
+    answered = read_policy(
+        {
+            "name": "every notice is followed by an alert",
+            "initial": "clear",
+            "bad": [],
+            "pending": ["owed"],
+            "transitions": [
+                {"from": "clear", "tool": "notify", "to": "owed"},
+                {"from": "owed", "tool": "alert", "to": "clear"},
+            ],
+        }
+    )
+    claim = "policy every notice is followed by an alert holds"
+    owing = (
+        "c1 = search(query=query)\n"
+        "for entity in c1.entities:\n"
+        '    if "id" in entity:\n'
+        "        return c1.count\n"
+        "    c2 = notify(name=entity.name)\n"
+        "return c1.count\n"
+    )
+
+    def at_the_return(source: str) -> str:
+        checked = verify(read_program(source), TOOLS, TASK, policies=[answered])
+        return next(
+            link.verdict
+            for link in checked.links
+            if link.claim == claim and link.where == "for:entity.then"
+        )
+
+    # The first item reaches the return with no notice owed; a later one, after a notice.
+    assert at_the_return(owing) == "undecided"
+    settled = owing.replace(
+        "    c2 = notify(name=entity.name)\n",
+        "    c2 = notify(name=entity.name)\n    c3 = alert(message=query)\n",
+    )
+    assert at_the_return(settled) == "proven"
 
 
 TAG = {"enum": ["a", "b"]}

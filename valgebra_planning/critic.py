@@ -196,11 +196,14 @@ def _loop(statement: ast.For, rest: Block) -> For:
 
 
 def _ending(last: ast.stmt, *, looping: bool) -> Return | Stop | Branch:
+    """Read a block's last statement: a return, a stop, or a test with a block on each side.
+
+    A `return` in a loop's body ends the program at the first item reaching it. Over a finite
+    array each iteration takes the next item, so the program's structure stays acyclic and its
+    terminal states are its returns and stops, each return in the goal where its link is
+    proven: a strong solution's structure (Cimatti et al. 2003, Def. 2.10), no fairness assumed.
+    """
     if isinstance(last, ast.Return) and last.value is not None:
-        if looping:
-            raise _fail(
-                last, "a `return` in a loop's body is not read: end the loop, then return after it"
-            )
         return Return(_ref(last.value))
     if isinstance(last, ast.If):
         return _branch(last, looping=looping)
