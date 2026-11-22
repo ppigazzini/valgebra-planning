@@ -336,8 +336,24 @@ ASKED = {"name": "posing", "inputs": {"id": {"type": "string"}}, "goal": {}}
         ({"tasks.json": {"tasks": [{**ASKED, "errors": "yes"}]}}, TypeError, "'errors' is true"),
         ({"tools.json": {"tools": [LOOKUP], "trusted": "true"}}, TypeError, "'trusted' is true"),
         ({"policies.json": {"policy": []}}, ValueError, "policies.json: 'policy' is no key"),
+        ({"tasks.json": {"tasks": [{**ASKED, "goals": [{}]}]}}, ValueError, "one of the two"),
+        (
+            {"tasks.json": {"tasks": [{"name": "p", "inputs": {}, "goals": []}]}},
+            TypeError,
+            "`goals` is a list",
+        ),
     ],
-    ids=["task-key", "depth-0", "depth-str", "file-key", "errors", "trusted", "policies-file-key"],
+    ids=[
+        "task-key",
+        "depth-0",
+        "depth-str",
+        "file-key",
+        "errors",
+        "trusted",
+        "policies-file-key",
+        "goal-and-goals",
+        "no-goals",
+    ],
 )
 def test_a_library_file_holding_a_key_no_reader_reads_is_refused_by_name(
     tmp_path: Path, files: dict[str, object], refused: type[Exception], match: str
@@ -347,6 +363,18 @@ def test_a_library_file_holding_a_key_no_reader_reads_is_refused_by_name(
         (tmp_path / name).write_text(json.dumps(document))
     with pytest.raises(refused, match=match):
         read_library(tmp_path)
+
+
+def test_a_task_s_goals_are_read_in_the_order_it_prefers_them(tmp_path: Path) -> None:
+    first, second = {"type": "integer"}, {"type": "string"}
+    ordered = {"name": "p", "inputs": {}, "goals": [first, second]}
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [LOOKUP]}))
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [ordered]}))
+    (problem,) = read_library(tmp_path).problems
+    assert [schema for _, schema in problem.task.preferred] == [first, second]
+    assert problem.task.goal.is_valid(1)
+    assert problem.task.goal.is_valid("a")
+    assert not problem.task.goal.is_valid(None)
 
 
 def test_a_task_s_depth_is_read_with_the_task(tmp_path: Path) -> None:

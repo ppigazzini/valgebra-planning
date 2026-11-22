@@ -74,6 +74,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A task may name its goals in the order it prefers them, `goals` in `tasks.json` or
+  `read_task(..., fallbacks=[...])`. Its goal is their union, every return verified in it, and
+  the planner searches a strong program for the first, else a weak one whose stops a program
+  toward the next fills. A search toward the union returned the shallowest program, so "grasp,
+  else say" said and never grasped; it grasps where the object is in reach and says where it
+  would have stopped, a program strong for the union with no stop. `Plan.preferred` names where
+  each return inside the first goal lies, and the plan's JSON row carries it.
+
 - A `return` in a loop's body is read: it ends the program at the first item reaching it, so a
   first-success loop, "grasp the first object in reach", is a program the critic reads, the
   verifier proves and the runner runs. The reader refused it, though the verifier and the runner

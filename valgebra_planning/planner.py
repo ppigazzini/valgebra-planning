@@ -111,6 +111,9 @@ class Plan:
     #: Why no program was found, where none was: whether the depth bound cut a path, so a
     #: deeper search may find one, or none reached it.
     reason: str | None = None
+    #: For a task naming goals in an order, where each return the verifier proves inside the
+    #: first lies: the rest return in a goal the task accepts after it.
+    preferred: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,6 +161,9 @@ class _Search:
     #: The cells each stop leaves uncovered, by the stop's identity: a stop is made once
     #: and read back only from the program returned, which keeps it alive.
     stops: dict[int, frozenset[int]] = field(default_factory=dict)
+    #: The search toward the goal the task accepts after this one's, which a weak program's
+    #: stop is filled from where it finds a program.
+    fallback: _Search | None = None
 
     def cells_of(self, name: str) -> frozenset[int]:
         return self.abstraction.cells_of(self.abstraction.index(name))
@@ -315,12 +321,32 @@ class _Search:
         without = state.but(made=state.made | {(contract.name, bindings)})
         fallback = self.solve(without, depth - 1, weak=weak)
         if fallback is None and weak and bindings and self.settled(state):
-            stop = Stop(bindings[0][1])
-            self.stops[id(stop)] = state.cells(bindings[0][1])
-            fallback = Block((), stop)
+            fallback = self.stopping(without, bindings[0][1], depth - 1)
         if fallback is None:
             return None
         return Call(contract.name, bindings, result, on_error=fallback)
+
+    def stopping(self, state: _State, ref: Ref, depth: int) -> Block:
+        """Return what a weak program does where it would stop on ``ref``.
+
+        Where the task accepts a goal after this search's, a program toward it from here takes
+        the stop's place, a strong one first; otherwise the path stops, naming its cells. Any set
+        of states is a goal (Cimatti et al. 2003, Def. 2.9), so a program each path of which
+        returns in one of the task's goals is a strong solution for their union (Cimatti et al.
+        2003, Def. 2.10), as one table is strong for one goal and weak for a part of it (Cimatti
+        et al. 2003, Ex. 2.12).
+        """
+        if self.fallback is not None:
+            filled = self.fallback.toward(state, depth)
+            if filled is not None:
+                return filled
+        stop = Stop(ref)
+        self.stops[id(stop)] = state.cells(ref)
+        return Block((), stop)
+
+    def toward(self, state: _State, depth: int) -> Block | None:
+        """Return a program from ``state`` toward this search's goal: strong, else weak."""
+        return self.solve(state, depth, weak=False) or self.solve(state, depth, weak=True)
 
     def guarded(
         self,
@@ -342,9 +368,7 @@ class _Search:
             return None
         otherwise = self.solve(outside, depth - 1, weak=weak)
         if otherwise is None and weak and self.settled(outside):
-            stop = Stop(ref)
-            self.stops[id(stop)] = outside.cells(ref)
-            otherwise = Block((), stop)
+            otherwise = self.stopping(outside, ref, depth - 1)
         if otherwise is None:
             return None
         return Block((), Branch(ref, contract.name, name, then, otherwise))
@@ -565,6 +589,10 @@ def predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate]
         if _readable(slot.values, consumers)
     ]
     entries.append((_GOAL, task.goal, task.goal_schema, task.goal_schema))
+    entries += [
+        (f"{_GOAL}:{index}", values, schema, schema)
+        for index, (values, schema) in enumerate(task.preferred)
+    ]
     return gather(sorted(entries, key=lambda entry: entry[0]))
 
 
@@ -726,6 +754,18 @@ def _tidy(block: Block, stops: dict[int, frozenset[int]], kept: frozenset[str]) 
         block = tidied
 
 
+def _preferred(program: Block, contracts: Mapping[str, Contract], task: Task) -> tuple[str, ...]:
+    """Return where each return the verifier proves inside a task's first goal lies."""
+    if not task.preferred:
+        return ()
+    first = replace(task, goal=task.preferred[0][0], preferred=())
+    return tuple(
+        link.where
+        for link in verify(program, contracts, first).links
+        if link.claim.startswith("return ") and link.verdict == "proven"
+    )
+
+
 def _stopped(block: Block, stops: dict[int, frozenset[int]]) -> int:
     """Return how many cells the stops of ``block`` leave uncovered, its error blocks included."""
     count = sum(_stopped(call.on_error, stops) for call in block.calls if call.on_error)
@@ -832,16 +872,25 @@ def plan(
     )
     contracts = _reachable(contracts, task, kept)
     abstraction = abstract(predicates(contracts, task), seed=seed)
-    goal = abstraction.cells_of(abstraction.index(_GOAL))
-    search = _Search(
-        contracts,
-        abstraction,
-        goal,
-        errors=errors,
-        policies=tuple(policies),
-        flows=tuple(flows),
-        types=types,
-    )
+    # A task naming goals in an order gets a search toward each, the first's stops filled from
+    # the next's: one toward their union would return in whichever is shallowest.
+    names = [f"{_GOAL}:{index}" for index in range(len(task.preferred))] or [_GOAL]
+    searches = [
+        _Search(
+            contracts,
+            abstraction,
+            abstraction.cells_of(abstraction.index(name)),
+            errors=errors,
+            policies=tuple(policies),
+            flows=tuple(flows),
+            types=types,
+        )
+        for name in names
+    ]
+    for one, after in itertools.pairwise(searches):
+        one.fallback = after
+        after.stops = searches[0].stops
+    search = searches[0]
     start = _State(
         tuple(
             (Ref(var, slot.path), search.cells_of(_held_name(slot)))
@@ -874,6 +923,7 @@ def plan(
                 abstraction=abstraction,
                 expanded=search.expanded,
                 assumed=tuple(_assumed(program, types, contracts)),
+                preferred=_preferred(program, contracts, task),
             )
     if weak:
         # One search at the full bound: a branch stops only where no continuation exists
@@ -881,15 +931,19 @@ def plan(
         search.failed.clear()
         search.cut = 0
         program = _ranked(search, start, depth, tidied)
+        if program is None and search.fallback is not None:
+            found = search.fallback.toward(start, depth)
+            program = None if found is None else tidied(found)
         if program is not None:
             gaps = tuple(_uncovered(program, search))
             return Plan(
                 program,
-                strong=False,
+                strong=bool(task.preferred) and not gaps,
                 uncovered=gaps,
                 abstraction=abstraction,
-                expanded=search.expanded,
+                expanded=sum(one.expanded for one in searches),
                 assumed=tuple(_assumed(program, types, contracts)),
+                preferred=_preferred(program, contracts, task),
             )
     if search.cut:
         reason = (

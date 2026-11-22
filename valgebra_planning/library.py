@@ -69,7 +69,7 @@ class Library:
 
 #: The keys a task reads.
 _TASK_KEYS = frozenset(
-    {"name", "inputs", "goal", "errors", "policies", "flows", "types", "depth", "stops"}
+    {"name", "inputs", "goal", "goals", "errors", "policies", "flows", "types", "depth", "stops"}
 )
 
 
@@ -98,6 +98,21 @@ def asserts_format(directory: Path) -> bool:
     alike.
     """
     return flag(_document(directory / "tools.json", _TOOLS_KEYS), "assertFormat", "tools.json")
+
+
+def _goals(spec: Mapping[str, Any]) -> list[Any]:
+    """Return a task's goals in the order it prefers them: its `goal`, or its `goals`."""
+    where = f"task {spec.get('name')!r}"
+    if ("goal" in spec) == ("goals" in spec):
+        msg = f"{where} names a `goal` or its `goals` in order, one of the two"
+        raise ValueError(msg)
+    if "goal" in spec:
+        return [spec["goal"]]
+    goals = spec["goals"]
+    if not isinstance(goals, list) or not goals:
+        msg = f"{where}: `goals` is a list of JSON Schemas, the first preferred"
+        raise TypeError(msg)
+    return goals
 
 
 def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -> Library:
@@ -155,11 +170,13 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
     problems = []
     for spec in specs:
         log = spec.get("types")
+        goals = _goals(spec)
         task = read_task(
             spec["name"],
             spec["inputs"],
-            spec["goal"],
+            goals[0],
             stops=spec.get("stops"),
+            fallbacks=goals[1:],
             assert_format=asserted,
         )
         unclashed(task, tools)

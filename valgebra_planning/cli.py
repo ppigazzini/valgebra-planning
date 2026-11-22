@@ -97,7 +97,7 @@ def _planned(
             {"where": u.where, "ref": u.ref, "examples": list(u.examples)} for u in found.uncovered
         ],
         "assumed": list(found.assumed),
-    }, found
+    } | ({"preferred": list(found.preferred)} if problem.task.preferred else {}), found
 
 
 def _text(row: dict[str, Any]) -> str:

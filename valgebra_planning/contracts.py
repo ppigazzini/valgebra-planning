@@ -27,6 +27,7 @@ from valgebra_planning._valgebra import (
     intersection,
     older,
     read_tool,
+    union,
     upgrade,
 )
 
@@ -120,7 +121,9 @@ class Task:
     the whole value and each field it guarantees. ``goal`` is the set the returned value must
     lie in, and ``goal_schema`` the schema it compiles from. ``stops`` names, for a tool or an
     input, the set its whole value may lie in where a path stops on it: an outcome the task
-    accepts as an end, as an object not found.
+    accepts as an end, as an object not found. ``preferred`` holds the goals a task names in
+    the order it prefers them, each set with its schema, where it names more than one: ``goal``
+    is then their union, the set every return is verified in, and ``goal_schema`` the first's.
     """
 
     name: str
@@ -128,6 +131,7 @@ class Task:
     goal: Validator[Any]
     goal_schema: object
     stops: tuple[tuple[str, Validator[Any]], ...] = ()
+    preferred: tuple[tuple[Validator[Any], object], ...] = ()
 
 
 def _root(schema: object) -> object:
@@ -362,25 +366,38 @@ def read_task(
     goal: object,
     *,
     stops: Mapping[str, object] | None = None,
+    fallbacks: Sequence[object] = (),
     assert_format: bool = False,
 ) -> Task:
     """Read a task: the schema of each value the agent starts with, and of the goal.
 
     ``stops`` maps a tool or an input to the JSON Schema of the whole value a path may stop on
-    there. With ``assert_format``, ``format`` is read as an assertion, as `read_contract` reads
-    it.
+    there. ``fallbacks`` are goals the task accepts where ``goal`` is not reached, in the order
+    it prefers them: the task's goal is then the union of all, and the planner returns in the
+    first where it can. With ``assert_format``, ``format`` is read as an assertion, as
+    `read_contract` reads it.
     """
     held = {}
     for var, schema in inputs.items():
         root = _root(schema)
         compiler = Compiler(root, assert_format=assert_format)
         held[var] = tuple(_result_slots(var, compiler, root, ()))
-    goal_set = compile_schema(goal, assert_format=assert_format)
+    goals = tuple(
+        (compile_schema(schema, assert_format=assert_format), schema)
+        for schema in (goal, *fallbacks)
+    )
     tolerated = tuple(
         (origin, compile_schema(schema, assert_format=assert_format))
         for origin, schema in (stops or {}).items()
     )
-    return Task(name=name, held=held, goal=goal_set, goal_schema=goal, stops=tolerated)
+    return Task(
+        name=name,
+        held=held,
+        goal=goals[0][0] if len(goals) == 1 else union(*(values for values, _ in goals)),
+        goal_schema=goal,
+        stops=tolerated,
+        preferred=goals if len(goals) > 1 else (),
+    )
 
 
 def listed(values: Sequence[Any]) -> Validator[Any]:

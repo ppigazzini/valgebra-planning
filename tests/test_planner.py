@@ -359,3 +359,65 @@ def test_the_weak_program_leaving_the_fewest_cells_uncovered_is_returned(
         return sum(len(gap.examples) + gap.undecided for gap in found.uncovered)
 
     assert (cells(ranked), cells(first)) == (2, 4)
+
+
+UTTERED = {"type": "string", "pattern": "^utt_[0-9]+$"}
+
+
+def _speaking() -> dict[str, Contract]:
+    """Return a pick's tools with one that speaks, its result closed."""
+    tools = {tool.name: tool for tool in _robot() if tool.name != "say"}
+    say = read_contract(
+        {
+            "name": "say",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {"utterance_id": UTTERED},
+                "required": ["utterance_id"],
+                "additionalProperties": False,
+            },
+        }
+    )
+    return {**tools, "say": say}
+
+
+def test_a_preferred_goal_is_returned_where_it_can_be_and_the_next_fills_its_stops() -> None:
+    tools = _speaking()
+    either = read_task("pick or say", {"name": {"type": "string"}}, {"anyOf": [GRASPED, UTTERED]})
+    shallowest = plan(tools, either, depth=8)
+    assert shallowest.program is not None
+    assert render(shallowest.program) == "c1 = say(text=name)\nreturn c1.utterance_id"
+    ordered = read_task(
+        "pick, else say", {"name": {"type": "string"}}, GRASPED, fallbacks=[UTTERED]
+    )
+    found = plan(tools, ordered, depth=8)
+    assert found.program is not None
+    assert render(found.program) == (
+        "c1 = detect_object(name=name)\n"
+        "if c1.confidence in grasp.distance_m:\n"
+        "    c2 = grasp(object_id=c1.object_id, distance_m=c1.confidence)\n"
+        "    return c2.grasp_id\n"
+        "else:\n"
+        "    c2 = say(text=name)\n"
+        "    return c2.utterance_id"
+    )
+    assert found.strong
+    assert found.uncovered == ()
+    assert found.preferred == ("then",)
+    assert verify(found.program, tools, ordered).proven
+
+
+def test_where_no_program_reaches_the_preferred_goal_the_plan_returns_in_the_next() -> None:
+    tools = {name: tool for name, tool in _speaking().items() if name != "grasp"}
+    ordered = read_task(
+        "pick, else say", {"name": {"type": "string"}}, GRASPED, fallbacks=[UTTERED]
+    )
+    found = plan(tools, ordered)
+    assert found.program is not None
+    assert render(found.program) == "c1 = say(text=name)\nreturn c1.utterance_id"
+    assert found.preferred == ()

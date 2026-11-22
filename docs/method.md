@@ -127,7 +127,12 @@ bound lets a branch stop once its sibling returns, and each stop names the value
 uncovered. The tools are tried in their names' order, so a server listing them in another order
 gets the same program; a weak program is searched for each tool the start may call first, until
 2,000 expansions past the first found, and the one whose stops leave the fewest cells uncovered
-is returned, a tie going to the earlier name.
+is returned, a tie going to the earlier name. A task may name its `goals` in the order it
+prefers them, as "grasp, else say why not": its goal is their union, which every return is
+verified in, and the planner searches a strong program for the first, else a weak one whose
+stops a program toward the next fills, so "grasp or say" grasps where the object is in reach
+and says where it would have stopped, where a search toward the union returns the shallowest,
+`say` alone. `Plan.preferred` names where each return inside the first goal lies.
 
 A call whose result no later step reads is dropped, since a call can act on the world, and a
 branch whose two sides then read the same is collapsed.
