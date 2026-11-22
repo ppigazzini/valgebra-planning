@@ -1,5 +1,7 @@
 # valgebra-planning
 
+MIT OR Apache-2.0, at your option.
+
 Plans of tool calls for agents, proven well-typed for every output the tool contracts admit.
 A plan here is a program of calls and type tests on values, in the sense of strong planning
 under nondeterministic outcomes: it is accepted only where each value it passes to a tool is
@@ -26,6 +28,12 @@ Status: pre-alpha.
 pip install valgebra-planning            # Python 3.11 or later
 pip install "valgebra-planning[mcp]"     # with a live MCP server's tools, and the proxy
 ```
+
+Every `0.0.x` release of the ecosystem may change what an earlier one answered, so a deployment
+pins the set a release was tested with: the
+[`constraints.txt`](https://github.com/ppigazzini/valgebra-planning/blob/main/constraints.txt) at
+its tag holds valgebra, valgebra-jsonschema and every other dependency at the versions the
+suite and the studies ran on, `pip install "valgebra-planning[mcp]==0.0.6" -c constraints.txt`.
 
 ## What it does
 

@@ -111,7 +111,10 @@ and repository, `release.yml` and the environment.
 
 1. **Move the floors where the release needs them**, each to a release on PyPI: the floors in
    `pyproject.toml`, the lock and every study move in a commit of their own, with [the gate](../../AGENTS.md#the-gate)
-   green, before the bump.
+   green, before the bump. `constraints.txt` moves with the lock, exported again by the command
+   its header names, and `test_the_tested_set_is_the_lock_s` holds its pins to the lock's: at a
+   release's tag it is the set the release was tested with, which the README tells a deployment
+   to pin.
 2. **Bump, in one commit.** `version` in `pyproject.toml`, `uv lock`, and the changelog: the
    `Unreleased` entries roll into a section for the version, dated the day of the commit, with its
    compare and tag links. It lands on `main`, and the push runs `ci.yml` on the tree about to

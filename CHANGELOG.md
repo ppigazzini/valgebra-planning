@@ -79,6 +79,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- `constraints.txt` holds the tested set: every dependency, the `mcp` extra's among them, at the
+  lock's version, as `uv export --locked --no-dev --all-extras --no-emit-project --no-hashes`
+  writes it, and a test holds its pins to the lock's. The README says to pin the file at a
+  release's tag, since every `0.0.x` release of the ecosystem may change what an earlier one
+  answered, and carries the license under its title; `pyproject.toml` says why the `mcp` extra
+  alone has a ceiling.
+
 - `arun` runs a program over async tools. The runner was synchronous, and a coroutine a tool
   handed back was refused unawaited; an async caller had no runner, and a cancel had no end to
   name. One interpreter walks the program and asks for each call, doing no I/O of its own: `run`

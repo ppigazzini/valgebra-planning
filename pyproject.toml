@@ -31,6 +31,9 @@ dependencies = [
 
 [project.optional-dependencies]
 # A live MCP server, read and called through the protocol's own client: `valgebra_planning.servers`.
+# The one ceiling: this package calls the SDK's client and server API, which its next major
+# version may change, where valgebra's sets and the companion's readings move only with a
+# release read against them.
 mcp = ["mcp>=2.3.0,<3"]
 
 [project.scripts]
