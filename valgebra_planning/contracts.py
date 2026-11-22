@@ -60,6 +60,9 @@ class Slot:
     values: Validator[Any]
     required: bool
     root: object
+    #: Whether ``format`` in the schema is read as an assertion, as the library asks: every set
+    #: read from the slot's schema later is read alike, so a proof and a run hold one set.
+    asserted: bool = False
 
     @property
     def name(self) -> str:
@@ -162,7 +165,17 @@ def _result_slots(
     A field an object declares and does not guarantee is no slot: the planner holds every slot
     after a call, and the verifier reads such a field where valgebra proves it present.
     """
-    slots = [Slot(tool, path, schema, compiler.compile(schema), required=True, root=compiler.root)]
+    slots = [
+        Slot(
+            tool,
+            path,
+            schema,
+            compiler.compile(schema),
+            required=True,
+            root=compiler.root,
+            asserted=compiler.assert_format,
+        )
+    ]
     if len(path) >= RESULT_DEPTH:
         return slots
     node = _object_node(compiler, schema)
@@ -187,7 +200,7 @@ def item_slots(slot: Slot) -> tuple[Slot, ...]:
     The item is read from ``items`` against the slot's own root, its path the array's and
     ``[]``; an array naming no single ``items`` schema, or ``prefixItems``, has none.
     """
-    compiler = Compiler(slot.root)
+    compiler = Compiler(slot.root, assert_format=slot.asserted)
     node = _object_node(compiler, slot.schema)
     if node is None or "prefixItems" in node or not isinstance(node.get("items"), (dict, bool)):
         return ()
@@ -203,7 +216,7 @@ def field_slot(slot: Slot, key: str) -> Slot:
     al. 2006, Def. 3.4) that other keywords of the record may narrow further. A key no property
     declares takes any JSON value. Whether the field is present is not the slot's to say.
     """
-    compiler = Compiler(slot.root)
+    compiler = Compiler(slot.root, assert_format=slot.asserted)
     node = _object_node(compiler, slot.schema)
     properties, _ = _properties(node) if node is not None else ({}, frozenset())
     schema = properties.get(key, True)
@@ -214,6 +227,7 @@ def field_slot(slot: Slot, key: str) -> Slot:
         compiler.compile(schema),
         required=True,
         root=slot.root,
+        asserted=slot.asserted,
     )
 
 
@@ -250,15 +264,17 @@ def _idempotent(annotations: object) -> bool:
     return annotations.get("readOnlyHint") is True or annotations.get("idempotentHint") is True
 
 
-def read_contract(spec: Mapping[str, Any]) -> Contract:
+def read_contract(spec: Mapping[str, Any], *, assert_format: bool = False) -> Contract:
     """Read one entry of a server's tool list into its contract.
 
+    With ``assert_format``, ``format`` is read as an assertion, as valgebra-jsonschema reads it
+    on request, in every set the contract holds and every set read from its slots later.
     Raises `Unsupported` for what valgebra-jsonschema refuses to read, and for an input
     schema whose properties it cannot list.
     """
-    tool = read_tool(spec)
+    tool = read_tool(spec, assert_format=assert_format)
     root = _root(spec["inputSchema"])
-    compiler = Compiler(root)
+    compiler = Compiler(root, assert_format=assert_format)
     node = _object_node(compiler, root)
     if node is None:
         msg = f"tool {tool.name!r} has an inputSchema whose properties cannot be listed"
@@ -274,6 +290,7 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
             compiler.compile(subschema),
             required=name in required,
             root=root,
+            asserted=assert_format,
         )
         for name, subschema in declared.items()
     )
@@ -284,7 +301,9 @@ def read_contract(spec: Mapping[str, Any]) -> Contract:
         whole = tool.result
         results = tuple(
             slot
-            for slot in _result_slots(tool.name, Compiler(out_root), out_root, ())
+            for slot in _result_slots(
+                tool.name, Compiler(out_root, assert_format=assert_format), out_root, ()
+            )
             if not slot.path or whole.relation_to(selecting(slot.path, slot.values)) == "subset"
         )
     return Contract(
@@ -334,13 +353,20 @@ def flag(spec: Mapping[str, Any], key: str, what: str) -> bool:
     return value
 
 
-def read_task(name: str, inputs: Mapping[str, object], goal: object) -> Task:
-    """Read a task: the schema of each value the agent starts with, and of the goal."""
+def read_task(
+    name: str, inputs: Mapping[str, object], goal: object, *, assert_format: bool = False
+) -> Task:
+    """Read a task: the schema of each value the agent starts with, and of the goal.
+
+    With ``assert_format``, ``format`` is read as an assertion, as `read_contract` reads it.
+    """
     held = {}
     for var, schema in inputs.items():
         root = _root(schema)
-        held[var] = tuple(_result_slots(var, Compiler(root), root, ()))
-    return Task(name=name, held=held, goal=compile_schema(goal), goal_schema=goal)
+        compiler = Compiler(root, assert_format=assert_format)
+        held[var] = tuple(_result_slots(var, compiler, root, ()))
+    goal_set = compile_schema(goal, assert_format=assert_format)
+    return Task(name=name, held=held, goal=goal_set, goal_schema=goal)
 
 
 def listed(values: Sequence[Any]) -> Validator[Any]:
@@ -396,7 +422,13 @@ def within(path: tuple[str, ...], values: Validator[Any]) -> Validator[Any]:
 def unread(slot: Slot) -> Slot:
     """Return ``slot`` taking any JSON value: what a reading valgebra did not prove leaves."""
     return Slot(
-        slot.tool, slot.path, schema=True, values=anything, required=slot.required, root=slot.root
+        slot.tool,
+        slot.path,
+        schema=True,
+        values=anything,
+        required=slot.required,
+        root=slot.root,
+        asserted=slot.asserted,
     )
 
 

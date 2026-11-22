@@ -75,7 +75,7 @@ extra.
 | `valgebra_planning.policy` | `Monitor`, `Policy`, `Reach`, `Transition`, `read_policy` | |
 | `valgebra_planning.flows` | `Flow`, `read_flow` | |
 | `valgebra_planning.mining` | `SlotKey`, `Types`, `infer_outputs`, `mine` | |
-| `valgebra_planning.library` | `Library`, `Problem`, `read_library` | |
+| `valgebra_planning.library` | `Library`, `Problem`, `asserts_format`, `read_library` | |
 | `valgebra_planning.privilege` | `Change`, `Rule`, `Update`, `allowed`, `as_policy`, `describe`, `read_privileges`, `read_rules`, `updates` | |
 | `valgebra_planning.vacuity` | `Certainty`, `Finding`, `vacuities` | |
 | `valgebra_planning.servers` | `connect`, `read_server`, `refused_by_client`, `run_on_server` | the `mcp` extra |

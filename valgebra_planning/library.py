@@ -33,7 +33,7 @@ from valgebra_planning.flows import Flow, read_flow
 from valgebra_planning.mining import Types, infer_outputs, mine
 from valgebra_planning.policy import Policy, read_policy
 
-__all__ = ["Library", "Problem", "read_library"]
+__all__ = ["Library", "Problem", "asserts_format", "read_library"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,10 +84,27 @@ def _listed(path: Path, key: str) -> list[Any]:
     return _document(path, frozenset({key})).get(key, [])
 
 
+#: The keys of ``tools.json``: the listing, and how the library reads its server's tools.
+_TOOLS_KEYS = frozenset({"tools", "trusted", "assertFormat"})
+
+
+def asserts_format(directory: Path) -> bool:
+    """Return whether a library reads ``format`` as an assertion: ``"assertFormat": true``.
+
+    A caller reading a live server's tools for the library reads them with it, as
+    `valgebra_planning.servers.read_server` takes it, so every set the library holds is read
+    alike.
+    """
+    return flag(_document(directory / "tools.json", _TOOLS_KEYS), "assertFormat", "tools.json")
+
+
 def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -> Library:
     """Read a library directory; a rule a task names and the directory lacks is a `KeyError`.
 
-    ``tools``, read from a live server, replaces the directory's ``tools.json``. A task naming
+    ``tools``, read from a live server, replaces the listing of the directory's ``tools.json``,
+    whose ``trusted`` still marks them trusted; read them with `asserts_format`. With
+    ``"assertFormat": true`` there, ``format`` is read as an assertion in every contract, task,
+    policy guard and endorsed set the library reads. A task naming
     an input as a tool is a `ValueError`, and so is a key a reader does not read, in a file, a
     task, a policy, a transition or a flow rule; a flag that is no boolean is a `TypeError`.
     """
@@ -100,29 +117,43 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
             raise ValueError(message)
     logs = sorted({spec["types"] for spec in specs if "types" in spec})
     observed = [call for log in logs for call in _listed(directory / log, "calls")]
+    document = _document(directory / "tools.json", _TOOLS_KEYS)
+    trusted = flag(document, "trusted", "tools.json")
+    asserted = flag(document, "assertFormat", "tools.json")
     if tools is None:
-        document = _document(directory / "tools.json", frozenset({"tools", "trusted"}))
         listing = document.get("tools", [])
         shaped = infer_outputs(observed, listing)
-        trusted = flag(document, "trusted", "tools.json")
         tools = {
             spec["name"]: replace(
-                read_contract({**spec, "outputSchema": shaped[spec["name"]]})
-                if spec["name"] in shaped
-                else read_contract(spec),
+                read_contract(
+                    {**spec, "outputSchema": shaped[spec["name"]]}
+                    if spec["name"] in shaped
+                    else spec,
+                    assert_format=asserted,
+                ),
                 inferred=spec["name"] in shaped,
-                trusted=trusted,
             )
             for spec in listing
         }
+    tools = {name: replace(contract, trusted=trusted) for name, contract in tools.items()}
     policies = {
-        p.name: p for p in map(read_policy, _listed(directory / "policies.json", "policies"))
+        p.name: p
+        for p in (
+            read_policy(spec, assert_format=asserted)
+            for spec in _listed(directory / "policies.json", "policies")
+        )
     }
-    flows = {f.name: f for f in map(read_flow, _listed(directory / "flows.json", "flows"))}
+    flows = {
+        f.name: f
+        for f in (
+            read_flow(spec, assert_format=asserted)
+            for spec in _listed(directory / "flows.json", "flows")
+        )
+    }
     problems = []
     for spec in specs:
         log = spec.get("types")
-        task = read_task(spec["name"], spec["inputs"], spec["goal"])
+        task = read_task(spec["name"], spec["inputs"], spec["goal"], assert_format=asserted)
         unclashed(task, tools)
         problems.append(
             Problem(

@@ -136,13 +136,14 @@ _POLICY_KEYS = frozenset({"name", "initial", "bad", "transitions", "pending"})
 _TRANSITION_KEYS = frozenset({"from", "to", "tool", "hint", "arguments"})
 
 
-def read_policy(spec: Mapping[str, Any]) -> Policy:
+def read_policy(spec: Mapping[str, Any], *, assert_format: bool = False) -> Policy:
     """Read a policy: ``name``, ``initial``, ``bad`` states, ``transitions`` and ``pending``.
 
     Each transition names its ``from`` and ``to`` states and its ``tool``, or the annotation
     ``hint`` a tool must set, and optionally the JSON Schema its ``arguments`` record must meet,
     every record where it names none. A key neither reads is refused, naming it, and so is a
-    transition naming both a tool and a hint, or neither.
+    transition naming both a tool and a hint, or neither. With ``assert_format``, ``format``
+    in a guard is read as an assertion, as the library's contracts read it.
     """
     keys_read(spec, _POLICY_KEYS, f"policy {spec.get('name')!r}")
     for t in spec["transitions"]:
@@ -155,7 +156,7 @@ def read_policy(spec: Mapping[str, Any]) -> Policy:
         Transition(
             source=t["from"],
             tool=t.get("tool", ""),
-            guard=compile_schema(t.get("arguments", True)),
+            guard=compile_schema(t.get("arguments", True), assert_format=assert_format),
             target=t["to"],
             hint=t.get("hint", ""),
         )

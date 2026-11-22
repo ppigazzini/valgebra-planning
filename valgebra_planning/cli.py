@@ -38,7 +38,7 @@ from typing import Any
 from valgebra_planning.codemode import stubs
 from valgebra_planning.contracts import Contract
 from valgebra_planning.critic import ProgramError, critique
-from valgebra_planning.library import Library, Problem, read_library
+from valgebra_planning.library import Library, Problem, asserts_format, read_library
 from valgebra_planning.planner import DEPTH, Plan, plan
 from valgebra_planning.privilege import describe, read_privileges, updates
 from valgebra_planning.program import render
@@ -159,13 +159,13 @@ def _critique(library: Library, name: str, source: Path, *, as_json: bool) -> in
     return 0 if checked.accepted else 1
 
 
-def _served(server: str) -> Mapping[str, Contract]:
-    """Return the contracts of a live server's tools."""
+def _served(server: str, directory: Path) -> Mapping[str, Contract]:
+    """Return the contracts of a live server's tools, read as the library reads its own."""
     from valgebra_planning.servers import connect, read_server  # noqa: PLC0415 - the mcp extra
 
     async def listed() -> dict[str, Contract]:
         async with connect(server) as client:
-            return await read_server(client)
+            return await read_server(client, assert_format=asserts_format(directory))
 
     return asyncio.run(listed())
 
@@ -185,7 +185,8 @@ def _run(
 
     async def ran() -> dict[str, Any]:
         async with connect(server, read_timeout_seconds=timeout) as client:
-            library = read_library(directory, await read_server(client))
+            served = await read_server(client, assert_format=asserts_format(directory))
+            library = read_library(directory, served)
             problem = library.problem(name)
             row, found = _planned(library, problem, depth)
             if found.program is None:
@@ -342,7 +343,7 @@ def _on_library(args: argparse.Namespace) -> int:
             timeout=args.timeout,
             as_json=args.json,
         )
-    tools = None if args.server is None else _served(args.server)
+    tools = None if args.server is None else _served(args.server, args.library)
     library = read_library(args.library, tools)
     if args.command == "plan":
         return _plan(library, args.task, args.depth, as_json=args.json)

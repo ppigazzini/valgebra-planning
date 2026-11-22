@@ -228,7 +228,13 @@ class _Walk:
         origin = held.origin
         path = (*origin.path, "[]")
         return Slot(
-            origin.tool, path, schema=True, values=anything, required=True, root=origin.root
+            origin.tool,
+            path,
+            schema=True,
+            values=anything,
+            required=True,
+            root=origin.root,
+            asserted=origin.asserted,
         )
 
     def iterate(
@@ -529,6 +535,7 @@ class _Walk:
                 values=anything,
                 required=True,
                 root=held.origin.root,
+                asserted=held.origin.asserted,
             )
         if held.values.relation_to(within((key,), slot.values)) != "subset":
             return unread(slot)

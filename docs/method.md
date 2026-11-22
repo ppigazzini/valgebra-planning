@@ -237,7 +237,8 @@ and a value from a task input with it, since a proxy sees no task.
 ## Limits
 
 - **Types are the specification.** A slot whose schema admits any string, as an unasserted
-  `format` does, takes any string; distinct schemas, patterns, enums and ranges are what make a
+  `format` does, takes any string, and a library with `"assertFormat": true` reads `format` as an
+  assertion, so a `uuid` slot takes a UUID and free text reaches it only under a test; distinct schemas, patterns, enums and ranges are what make a
   plan mean what it should, and mined types narrow what observations support.
 - **What is not modeled.** Side effects beyond the calls a policy reads; a field or an item inside a resource with an `$id` of its own that refers into that resource,
   which the walk resolves from the document's root and so reads as any value, a gap the

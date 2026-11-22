@@ -40,6 +40,15 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A library reads `format` as an assertion where its `tools.json` holds `"assertFormat": true`,
+  as valgebra-jsonschema reads it on request: a `uuid`, `date`, `duration` or `ipv4` slot is a
+  regular set, so free text reaches an identifier only under a test, and the others are
+  predicates. Every set the library holds is read alike, the contracts, the tasks, the policies'
+  guards and the flow rules' endorsed sets, and every set read from a slot later, which
+  `Slot.asserted` carries. `read_contract`, `read_task`, `read_policy`, `read_flow` and
+  `read_server` take `assert_format`, and `library.asserts_format` reads the library's choice
+  for a caller reading a live server.
+
 - A plan with no program says why. `Plan.reason` reads whether the depth bound cut a path, so a
   deeper search may find one, or no path reached it, so none does from the bindings the search
   tries; the command `plan` prints it and its JSON carries it. `plan` and `run` take `--depth`,
@@ -57,6 +66,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
   its answer, as before.
 
 ### Fixed
+
+- A library's `"trusted": true` holds for a live server's tools. With `--server` the server's
+  listing replaced `tools.json` and its trust with it, so the command line could not trust a
+  live server's annotations; a `tools.json` holding `trusted` alone marks them.
 
 - A planned program makes no call a policy names and the program does not need. The search keeps
   a call to a tool a policy names even where nothing reads its result, since the call may move

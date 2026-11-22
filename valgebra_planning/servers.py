@@ -57,15 +57,18 @@ def connect(server: str, *, read_timeout_seconds: float | None = None) -> Client
     return Client(parameters, read_timeout_seconds=read_timeout_seconds)
 
 
-async def read_server(client: Client) -> dict[str, Contract]:
-    """Return the contract of every tool the server lists, by name, every page read."""
+async def read_server(client: Client, *, assert_format: bool = False) -> dict[str, Contract]:
+    """Return the contract of every tool the server lists, by name, every page read.
+
+    With ``assert_format``, ``format`` is read as an assertion, as `read_contract` reads it.
+    """
     contracts: dict[str, Contract] = {}
     cursor: str | None = None
     while True:
         listing = await client.list_tools(cursor=cursor)
         for tool in listing.tools:
             spec = tool.model_dump(by_alias=True, exclude_none=True, mode="json")
-            contracts[tool.name] = read_contract(spec)
+            contracts[tool.name] = read_contract(spec, assert_format=assert_format)
         cursor = listing.next_cursor
         if cursor is None:
             return contracts

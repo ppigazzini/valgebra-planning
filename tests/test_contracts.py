@@ -10,10 +10,17 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from valgebra_planning._valgebra import Unsupported, anything, compile_schema
-from valgebra_planning.contracts import RESULT_DEPTH, read_contract, read_task, record_of
+from valgebra_planning.contracts import (
+    RESULT_DEPTH,
+    field_slot,
+    read_contract,
+    read_task,
+    record_of,
+)
 from valgebra_planning.critic import critique, read_program
-from valgebra_planning.library import read_library
+from valgebra_planning.library import asserts_format, read_library
 from valgebra_planning.planner import plan
+from valgebra_planning.program import render
 from valgebra_planning.run import run
 from valgebra_planning.verify import verify
 
@@ -347,3 +354,64 @@ def test_a_task_s_depth_is_read_with_the_task(tmp_path: Path) -> None:
     (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [{**ASKED, "depth": 9}, ASKED]}))
     first, second = read_library(tmp_path).problems
     assert (first.depth, second.depth) == (9, None)
+
+
+UUID = {"type": "string", "format": "uuid"}
+GRASP_BY_ID = {
+    "name": "grasp",
+    "inputSchema": {"type": "object", "properties": {"object_id": UUID}, "required": ["object_id"]},
+    "outputSchema": {
+        "type": "object",
+        "properties": {
+            "ok": {"type": "boolean"},
+            "held": {"type": "object", "properties": {"id": UUID}},
+        },
+        "required": ["ok", "held"],
+    },
+}
+HEARD = {
+    "name": "grasp what was heard",
+    "inputs": {"heard": {"type": "string"}},
+    "goal": {"type": "boolean"},
+}
+
+
+def test_a_format_is_read_as_an_assertion_in_every_set_a_contract_holds_where_asked() -> None:
+    annotated, asserted = read_contract(GRASP_BY_ID), read_contract(GRASP_BY_ID, assert_format=True)
+    spoken = {"object_id": "the red cup please"}
+    assert annotated.accepts.is_valid(spoken)
+    assert not asserted.accepts.is_valid(spoken)
+    assert not asserted.argument("object_id").values.is_valid("the red cup please")
+    # A field read from a result's slot later is read alike.
+    held = next(slot for slot in asserted.results if slot.path == ("held",))
+    assert held.asserted
+    assert not field_slot(held, "id").values.is_valid("the red cup please")
+    assert field_slot(
+        next(s for s in annotated.results if s.path == ("held",)), "id"
+    ).values.is_valid("the red cup please")
+
+
+def test_a_library_asserting_format_tests_free_text_before_it_fills_an_id(tmp_path: Path) -> None:
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [HEARD]}))
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [GRASP_BY_ID]}))
+    assert not asserts_format(tmp_path)
+    loose = read_library(tmp_path)
+    unguarded = plan(loose.tools, loose.problems[0].task)
+    assert unguarded.strong
+    assert unguarded.program is not None
+    assert render(unguarded.program) == "c1 = grasp(object_id=heard)\nreturn c1.ok"
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [GRASP_BY_ID], "assertFormat": True}))
+    assert asserts_format(tmp_path)
+    strict = read_library(tmp_path)
+    guarded = plan(strict.tools, strict.problems[0].task)
+    assert not guarded.strong
+    assert guarded.program is not None
+    assert render(guarded.program).startswith("if heard in grasp.object_id:\n")
+
+
+def test_a_live_server_s_tools_are_trusted_where_the_library_says_so(tmp_path: Path) -> None:
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [ASKED]}))
+    live = {"find_order": read_contract(LOOKUP)}
+    assert not read_library(tmp_path, live).tools["find_order"].trusted
+    (tmp_path / "tools.json").write_text(json.dumps({"trusted": True}))
+    assert read_library(tmp_path, live).tools["find_order"].trusted

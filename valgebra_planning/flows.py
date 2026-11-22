@@ -62,13 +62,14 @@ class Flow:
 _FLOW_KEYS = frozenset({"name", "sources", "sink", "endorsed", "implicit", "only"})
 
 
-def read_flow(spec: Mapping[str, Any]) -> Flow:
+def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
     """Read a flow rule from its JSON form.
 
     It holds ``name``, ``sources``, ``sink`` as ``tool.argument``, and optionally the
     ``endorsed`` JSON Schema, ``implicit`` and ``only``. A source is a tool's name or a task
     input's. A key it does not read is a `ValueError` naming it, and so is a sink that names
-    no argument; a flag that is no boolean is a `TypeError`.
+    no argument; a flag that is no boolean is a `TypeError`. With ``assert_format``, ``format``
+    in the endorsed set is read as an assertion, as the library's contracts read it.
     """
     where = f"flow {spec.get('name')!r}"
     keys_read(spec, _FLOW_KEYS, where)
@@ -83,7 +84,9 @@ def read_flow(spec: Mapping[str, Any]) -> Flow:
         sources=frozenset(spec["sources"]),
         tool=tool,
         argument=argument,
-        endorsed=None if endorsed is None else compile_schema(endorsed),
+        endorsed=None
+        if endorsed is None
+        else compile_schema(endorsed, assert_format=assert_format),
         implicit=implicit,
         only=only,
     )
