@@ -90,7 +90,9 @@ REFUND = {"type": "string", "pattern": "^rfd_[0-9]+$"}
 tools = {
     "find_order": tool("find_order", {"order_id": ORDER}, {"status": {"enum": ["open", "paid"]}}),
     "refund": tool(
-        "refund", {"order_id": ORDER, "status": {"const": "paid"}}, {"refund_id": REFUND}
+        "refund",
+        {"order_id": ORDER, "status": {"type": "string", "const": "paid"}},
+        {"refund_id": REFUND},
     ),
 }
 task = read_task("refund an order", {"order_id": ORDER}, REFUND)

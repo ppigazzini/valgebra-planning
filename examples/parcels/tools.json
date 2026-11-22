@@ -79,7 +79,8 @@
             "pattern": "^pcl_[0-9]+$"
           },
           "state": {
-            "const": "delivered"
+            "const": "delivered",
+            "type": "string"
           },
           "weight_g": {
             "type": "integer",
@@ -120,7 +121,8 @@
             "pattern": "^pcl_[0-9]+$"
           },
           "state": {
-            "const": "delivered"
+            "const": "delivered",
+            "type": "string"
           },
           "weight_g": {
             "type": "integer",
@@ -161,7 +163,8 @@
             "pattern": "^pcl_[0-9]+$"
           },
           "state": {
-            "const": "lost"
+            "const": "lost",
+            "type": "string"
           }
         },
         "required": [
@@ -196,7 +199,8 @@
             "pattern": "^pcl_[0-9]+$"
           },
           "state": {
-            "const": "in_transit"
+            "const": "in_transit",
+            "type": "string"
           }
         },
         "required": [
@@ -231,7 +235,8 @@
             "pattern": "^pcl_[0-9]+$"
           },
           "state": {
-            "const": "returned"
+            "const": "returned",
+            "type": "string"
           }
         },
         "required": [

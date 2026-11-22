@@ -287,12 +287,14 @@ and a value from a task input with it, since a proxy sees no task.
   error block takes or which ends the run. A value a user or a model supplied there would reach
   the call held to no contract the program was proven against, the leak a stop answered by a
   user would be.
-- **One client, over stdio.** The proxy serves the agent that starts it, and its flow rules read
-  the values of that one process. A client reaching servers over Streamable HTTP alone cannot
-  put it in front of one, and a proxy served over HTTP has no session to key provenance by:
-  MCP 2026-07-28 leaves state across calls to handles a server mints as tool arguments, which
-  would change the signatures the proxy lists. Refused until a client reaching servers over HTTP
-  alone, with tools that write and text it does not trust, needs it.
+- **The command line serves one client, over stdio.** `valgebra-planning proxy` serves the agent
+  that starts it. The library's `proxy()` returns a server the mcp package serves over
+  Streamable HTTP as it is, and every client of it calls through one gate: policies read the
+  calls of all of them, and flow rules pool what each was returned
+  ([one gate](code-mode.md#the-proxy-for-an-agent-whose-program-is-not-seen)). No session keys
+  either: MCP 2026-07-28 leaves state across calls to handles a server mints as tool arguments,
+  which would change the signatures the proxy lists. A gate served to any client is moved by any
+  client, so serving HTTP is left to a deployment that authenticates who reaches it.
 - **Search bounds.** Six calls and tests a path by default, and the first 16 bindings of a call.
   `plan` takes another depth, and so do a task's `depth` and the command line's `--depth`. A plan
   with no program says why in `Plan.reason`: the bound cut a path, so a deeper search may find

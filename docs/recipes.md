@@ -1,5 +1,5 @@
 ---
-description: Tasks done end to end over tool listings in hand -- a model's program checked before it runs, a server answering outside its contract, an approval a policy requires, a notice held to the address on file, a privilege update, and a policy that cannot fire.
+description: Tasks done end to end over tool listings in hand -- a model's program checked before it runs, a server answering outside its contract, an approval a policy requires, a notice held to the address on file, a privilege update, a policy that cannot fire, and a contract a plan can mean.
 ---
 
 # Recipes
@@ -50,7 +50,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "order_id": ORDER_ID,
-                "status": {"const": "paid"},
+                "status": {"type": "string", "const": "paid"},
                 "amount_cents": {"type": "integer", "minimum": 1},
             },
             "required": ["order_id", "status", "amount_cents"],
@@ -490,3 +490,179 @@ where none is.
 meant, a bound written in euros over an argument in cents, is not vacuous and is not flagged. A
 guard over an argument the tool does not name is flagged only where the input schema sets
 `additionalProperties: false`: an open record may carry any other key, so the guard meets one.
+
+## A contract a plan can mean
+
+The planner and the critic pass a value to an argument wherever valgebra proves it inside the
+argument's set, so a plan means what its contracts let it mean: an argument taking any string
+takes any string a program holds. A listing written to be planned over states, of each value,
+the set it lies in:
+
+- **A closed result, and `type` beside each `const`.** A result record with
+  `additionalProperties: false` holds the fields it names and no other. `{"type": "string",
+  "const": "m"}` holds the one value `{"const": "m"}` does, and a template showing a model the
+  schema that drops `const` still shows it a string.
+- **A number with its unit, bounded.** A distance is a record, `{"unit": "m", "value": ...}`,
+  whose value has bounds, and an argument in reach is a narrower set: a distance reaches it only
+  under a test, `if c2.distance in grasp.distance:`, and a server answering in centimeters
+  breaks its contract at the run, before any grasp.
+- **A pattern per entity, an enum per outcome.** `^obj_[0-9]+$` and `^grs_[0-9]+$` are disjoint,
+  so a grasp's id never fills an object's argument. An answer is `"yes"` or `"no"`, and an
+  argument taking only `"yes"` is filled under a test that the answer is one. A `format` reads as
+  an annotation, taking any string, unless the library sets `"assertFormat": true`; a pattern
+  reads the same either way.
+- **A confirmation is a token an `only` flow holds.** `grasp` takes the answer it acts on, and
+  the flow admits to `grasp.answer` only a value `confirm` returned. A token alone is forged from
+  any value whose set meets its own: the task's `name`, tested into `grasp.answer`, fills it.
+  `confirm` takes the action and the object, so the question a user answers is worded from them
+  rather than by the model.
+- **A hint policy, read with MCP's defaults.** A tool setting no annotation is read as MCP
+  defaults it, destructive and open-world, so `grasp` falls under "a destructive call follows a
+  confirmation", as would a tool listed later setting none. The hints are the server's word: the
+  link lists them as assumed unless the library marks the server trusted, `"trusted": true`.
+
+```python
+from valgebra_planning.contracts import read_contract, read_task
+from valgebra_planning.critic import critique
+from valgebra_planning.flows import read_flow
+from valgebra_planning.policy import read_policy
+from valgebra_planning.run import run
+
+
+def closed(properties):
+    """Return the schema of a record holding exactly these properties."""
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": [*properties],
+        "additionalProperties": False,
+    }
+
+
+def tool(name, arguments, result, annotations=None):
+    """Return the contract of a tool whose arguments and result are closed records."""
+    listed = {"name": name, "inputSchema": closed(arguments), "outputSchema": closed(result)}
+    if annotations is not None:
+        listed["annotations"] = annotations
+    return read_contract(listed)
+
+
+OBJECT_ID = {"type": "string", "pattern": "^obj_[0-9]+$"}
+GRASP_ID = {"type": "string", "pattern": "^grs_[0-9]+$"}
+METERS = {"type": "string", "const": "m"}
+DISTANCE = closed({"unit": METERS, "value": {"type": "number", "minimum": 0, "maximum": 20}})
+IN_REACH = closed({"unit": METERS, "value": {"type": "number", "minimum": 0.2, "maximum": 0.6}})
+ANSWER = {"type": "string", "enum": ["yes", "no"]}
+READ_ONLY = {"readOnlyHint": True}
+contracts = {
+    "detect": tool("detect", {"name": {"type": "string"}}, {"object_id": OBJECT_ID}, READ_ONLY),
+    "estimate_pose": tool(
+        "estimate_pose", {"object_id": OBJECT_ID}, {"distance": DISTANCE}, READ_ONLY
+    ),
+    "confirm": tool(
+        "confirm",
+        {"action": {"type": "string", "enum": ["grasp", "walk"]}, "object_id": OBJECT_ID},
+        {"answer": ANSWER},
+        READ_ONLY,
+    ),
+    "grasp": tool(
+        "grasp",
+        {
+            "object_id": OBJECT_ID,
+            "distance": IN_REACH,
+            "answer": {"type": "string", "const": "yes"},
+        },
+        {"grasp_id": GRASP_ID},
+    ),
+}
+ends = {
+    "estimate_pose": {"properties": {"distance": {"not": IN_REACH}}},
+    "confirm": {"properties": {"answer": {"const": "no"}}},
+}
+task = read_task("pick", {"name": {"type": "string"}}, GRASP_ID, stops=ends)
+the_users_yes = read_flow(
+    {"name": "the user's yes", "sources": ["confirm"], "sink": "grasp.answer", "only": True}
+)
+confirmed_first = read_policy(
+    {
+        "name": "a destructive call follows a confirmation",
+        "initial": "asking",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "asking", "tool": "confirm", "to": "confirmed"},
+            {"from": "asking", "hint": "destructiveHint", "to": "violated"},
+            {"from": "confirmed", "hint": "destructiveHint", "to": "asking"},
+        ],
+    }
+)
+rules = {"flows": [the_users_yes], "policies": [confirmed_first]}
+print(sorted(contracts["grasp"].hints))
+
+FORGED = """
+c1 = detect(name=name)
+c2 = estimate_pose(object_id=c1.object_id)
+if c2.distance in grasp.distance:
+    if name in grasp.answer:
+        c3 = grasp(object_id=c1.object_id, distance=c2.distance, answer=name)
+        return c3.grasp_id
+    stop(name)
+stop(c2.distance)
+"""
+print(critique(FORGED, contracts, task).verified)
+for note in critique(FORGED, contracts, task, **rules).notes:
+    print(note)
+
+ASKED = """
+c1 = detect(name=name)
+c2 = estimate_pose(object_id=c1.object_id)
+if c2.distance in grasp.distance:
+    c3 = confirm(action="grasp", object_id=c1.object_id)
+    if c3.answer in grasp.answer:
+        c4 = grasp(object_id=c1.object_id, distance=c2.distance, answer=c3.answer)
+        return c4.grasp_id
+    stop(c3.answer)
+stop(c2.distance)
+"""
+asked = critique(ASKED, contracts, task, **rules)
+print(asked.weak)
+for note in asked.notes:
+    print(note)
+
+server = {
+    "detect": lambda name: {"object_id": "obj_1"},
+    "estimate_pose": lambda object_id: {"distance": {"unit": "cm", "value": 40}},
+    "confirm": lambda action, object_id: {"answer": "yes"},
+    "grasp": lambda object_id, distance, answer: {"grasp_id": "grs_1"},
+}
+ran = run(asked.program, contracts, task, {"name": "cup"}, server, policies=[confirmed_first])
+print(ran.refused)
+```
+
+```text
+['destructiveHint', 'openWorldHint']
+True
+refuted: flow the user's yes: name from name reaches grasp.answer (at then.then); pass a value from a source the rule trusts, or test it into the rule's endorsed set first
+refuted: policy a destructive call follows a confirmation holds (at then.then); this path reaches a bad state of the policy or ends in a pending one: make the call it requires where it requires it, or leave out the call it forbids
+uncovered: name (at then.else)
+uncovered: c2.distance (at else); the task tolerates it
+assumed: the annotation hints policy a destructive call follows a confirmation reads
+True
+uncovered: c3.answer (at then.else); the task tolerates it
+uncovered: c2.distance (at else); the task tolerates it
+assumed: the annotation hints policy a destructive call follows a confirmation reads
+estimate_pose returned a value outside its contract (distance.unit: literal_error; distance.value: union_error)
+```
+
+Over the contracts alone, the program filling the answer with the task's `name` is verified:
+its contracts are met, and it never asks. The flow refutes it, and so does the policy, since it
+grasps with no confirmation before. The program asking first is verified under both, and stops
+where the object is out of reach or the user says no, the two ends the task's `stops` name, so
+it is weak (`Critique.weak`) and `repair(..., accept="weak")` ends on it. Run against a server
+answering in centimeters, it stops at the pose, whose result breaks its contract.
+
+**The flow reads where the answer came from, not what it was asked of.** A program confirming
+one object and grasping another passes it, as a policy passes an approval of another order. The
+server, which takes both calls with the object, can check that the grasp's object is the one
+the answer was given for. A proxy in front of one robot holds a policy across every agent only
+where every agent calls through it
+([the proxy](code-mode.md#the-proxy-for-an-agent-whose-program-is-not-seen)).

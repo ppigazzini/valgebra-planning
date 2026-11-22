@@ -40,6 +40,19 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- The recipes hold "a contract a plan can mean": a closed result and `type` beside each
+  `const`, a number with its unit and bounds, a pattern per entity and an enum per outcome, a
+  confirmation as a token an `only` flow holds, and a hint policy read with MCP's defaults, over
+  a robot's pick whose blocks run in the doc lane. A token alone is forged: the task's `name`,
+  tested into it, fills it, and the contracts alone verify the program that never asks. The
+  parcel example and the pages write `type` beside each `const`, which no study reads
+  differently.
+- The proxy's page states its two deployments in front of one actuator. Every client of one
+  proxy, the mcp package serving it over Streamable HTTP as it is, calls through its one gate,
+  so a policy reads every client's calls and a flow rule pools what each was returned; one proxy
+  per agent holds only the calls made through it, and a policy about the actuator for no agent.
+  A test holds both, two clients reaching one proxy over HTTP in process. The method page's
+  limit on HTTP is the command line's alone.
 - A program the reader does not read is refused naming the form it reads there. A call left
   unbound was answered "only calls and loops come before a block's last statement", which names
   the statement it refuses as allowed, and a model resubmitted it unchanged: it is answered with

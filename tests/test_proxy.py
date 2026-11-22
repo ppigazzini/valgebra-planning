@@ -5,10 +5,12 @@ import json
 from pathlib import Path
 from typing import Any
 
+import httpx2
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from mcp import Client, types
+from mcp.client.streamable_http import streamable_http_client
 from mcp.server.lowlevel import Server
 
 from valgebra_planning.contracts import read_contract
@@ -331,4 +333,75 @@ def test_no_call_is_made_after_a_result_takes_a_policy_to_a_bad_state() -> None:
     assert _refused(found) == (
         "refused: freight booked after a granted approval holds denied: no call is made after it"
     )
+    assert made == ["approve_freight"]
+
+
+FOUND = read_flow(
+    {
+        "name": "approvals are for the parcel found",
+        "sources": ["find_parcel"],
+        "sink": "approve_freight.parcel_id",
+        "only": True,
+    }
+)
+APPROVAL = ("approve_freight", {"parcel_id": "pcl_1"})
+FINDING = ("find_parcel", {"tracking": "AB123456789IT"})
+
+
+def _over_http(front: Server[Any]) -> Any:
+    """Return a factory of clients reaching ``front`` over Streamable HTTP, in this process.
+
+    The transport is mcp's own client, `httpx2` under it as the mcp package installs it, on an
+    ASGI transport into the app mcp serves: the requests are HTTP, and no socket is opened.
+    """
+    app = front.streamable_http_app(host="127.0.0.1")
+    base = "http://127.0.0.1:8000"
+
+    def client() -> Client:
+        http = httpx2.AsyncClient(transport=httpx2.ASGITransport(app), base_url=base)
+        return Client(streamable_http_client(f"{base}/mcp", http_client=http))
+
+    return app, client
+
+
+def test_every_client_of_one_proxy_over_http_calls_through_its_one_gate() -> None:
+    made: list[str] = []
+
+    async def session() -> list[Any]:
+        async with Client(_upstream(made, ANSWERS, LISTING)) as upstream:
+            listing = (await upstream.list_tools()).tools
+            front = proxy(upstream, listing, TOOLS, policies=[FREIGHT], flows=[FOUND])
+            app, client = _over_http(front)
+            async with app.router.lifespan_context(app), client() as one, client() as two:
+                return [
+                    await two.call_tool(*APPROVAL),
+                    await one.call_tool(*FINDING),
+                    await two.call_tool(*BOOKING),
+                    await two.call_tool(*APPROVAL),
+                    await one.call_tool(*BOOKING),
+                ]
+
+    ungrounded, found, unapproved, approved, booked = asyncio.run(session())
+    assert "approve_freight.parcel_id holds a value none of find_parcel returned" in _refused(
+        ungrounded
+    )
+    assert _refused(unapproved).startswith(f"refused: {FREIGHT.name}")
+    assert not any(result.is_error for result in (found, approved, booked))
+    assert made == ["find_parcel", "approve_freight", "book_freight_return"]
+
+
+def test_a_proxy_per_client_holds_only_the_calls_made_through_it() -> None:
+    made: list[str] = []
+
+    async def session() -> list[Any]:
+        async with Client(_upstream(made, ANSWERS, LISTING)) as upstream:
+            listing = (await upstream.list_tools()).tools
+            first = proxy(upstream, listing, TOOLS, policies=[FREIGHT])
+            second = proxy(upstream, listing, TOOLS, policies=[FREIGHT])
+            async with Client(first) as one, Client(second) as two:
+                return [await one.call_tool(*APPROVAL), await two.call_tool(*BOOKING)]
+
+    approved, unapproved = asyncio.run(session())
+    assert not approved.is_error
+    assert _refused(unapproved).startswith(f"refused: {FREIGHT.name}")
     assert made == ["approve_freight"]

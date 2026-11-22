@@ -302,11 +302,12 @@ argument equal to a value an untrusted tool returned is taken as coming from it,
 `only` an argument equal to no value its sources returned is refused, the strict grounding gate
 (Sah et al. 2026, §4.8). A value the agent transforms equals none it was returned, so a flow
 rule here holds against no attacker who adapts, where the contract and policy checks hold
-against any. **[DEVIATION: provenance-by-value]**
+against any. Every client of one proxy calls through its one gate, so policy state and
+provenance are the proxy's, not a client's. **[DEVIATION: provenance-by-value]**
 
 IMPLEMENTED-BY: proxy.py
 
-HELD-BY: test_a_call_inside_every_check_passes_through, test_an_argument_record_outside_the_input_set_never_reaches_the_server, test_a_value_an_untrusted_tool_returned_does_not_reach_the_sink, test_an_identifier_no_source_returned_never_reaches_the_server
+HELD-BY: test_a_call_inside_every_check_passes_through, test_an_argument_record_outside_the_input_set_never_reaches_the_server, test_a_value_an_untrusted_tool_returned_does_not_reach_the_sink, test_an_identifier_no_source_returned_never_reaches_the_server, test_every_client_of_one_proxy_over_http_calls_through_its_one_gate, test_a_proxy_per_client_holds_only_the_calls_made_through_it
 
 ## The critic and code mode
 
