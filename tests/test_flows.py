@@ -272,3 +272,25 @@ def test_a_made_up_identifier_is_repaired_in_code_mode() -> None:
     assert len(repaired.rounds) == 2
     assert told[1] is not None
     assert "the literal 'AB123456789IT' reaches find_parcel.tracking" in told[1]
+
+
+SPELLED = {"name": "grounded", "sources": ["find_parcel"], "sink": "book_return.parcel_id"}
+
+
+@pytest.mark.parametrize(
+    ("spec", "refused", "match"),
+    [
+        ({**SPELLED, "Only": True}, ValueError, "'Only' is no key it reads"),
+        ({**SPELLED, "onlyy": True}, ValueError, "'onlyy' is no key it reads"),
+        ({**SPELLED, "only": "false"}, TypeError, "'only' is true or false, not str"),
+        ({**SPELLED, "implicit": 1}, TypeError, "'implicit' is true or false, not int"),
+        ({**SPELLED, "sink": "book_return"}, ValueError, "is no tool.argument"),
+    ],
+    ids=["Only", "onlyy", "only-string", "implicit-int", "sink"],
+)
+def test_a_flow_rule_means_what_its_keys_say_or_is_refused(
+    spec: dict[str, object], refused: type[Exception], match: str
+) -> None:
+    with pytest.raises(refused, match=match):
+        read_flow(spec)
+    assert read_flow({**SPELLED, "only": True}).only

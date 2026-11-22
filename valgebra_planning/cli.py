@@ -308,25 +308,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "proxy":
         return _proxy(args.server, args.library, args.timeout)
     try:
-        if args.command == "run":
-            return _run(
-                args.library,
-                args.task,
-                args.inputs,
-                args.server,
-                timeout=args.timeout,
-                as_json=args.json,
-            )
-        tools = None if args.server is None else _served(args.server)
-        library = read_library(args.library, tools)
-        if args.command == "plan":
-            return _plan(library, args.task, as_json=args.json)
-        if args.command == "check":
-            return _check(library, as_json=args.json)
-        if args.command == "stubs":
-            print(stubs(library.tools))
-            return 0
-        return _critique(library, args.task, args.program, as_json=args.json)
+        return _on_library(args)
     except KeyError as missing:
         print(f"{args.library}: no task named {missing}", file=sys.stderr)
         return 2
+    except (TypeError, ValueError) as refused:
+        print(f"{args.library}: {refused}", file=sys.stderr)
+        return 2
+
+
+def _on_library(args: argparse.Namespace) -> int:
+    """Run a command that reads a library, and return its exit status."""
+    if args.command == "run":
+        return _run(
+            args.library,
+            args.task,
+            args.inputs,
+            args.server,
+            timeout=args.timeout,
+            as_json=args.json,
+        )
+    tools = None if args.server is None else _served(args.server)
+    library = read_library(args.library, tools)
+    if args.command == "plan":
+        return _plan(library, args.task, as_json=args.json)
+    if args.command == "check":
+        return _check(library, as_json=args.json)
+    if args.command == "stubs":
+        print(stubs(library.tools))
+        return 0
+    return _critique(library, args.task, args.program, as_json=args.json)

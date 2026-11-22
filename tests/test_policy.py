@@ -5,6 +5,8 @@ import random
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from valgebra_planning._valgebra import Sampler
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import read_program
@@ -290,3 +292,28 @@ def test_a_run_refuses_the_call_an_approval_that_answered_with_an_error_would_al
     ended = run(program, TOOLS, SETTLE, {"tracking": "AB123456789IT"}, tools, policies=[FREIGHT])
     assert ended.refused == "freight approved first: book_freight_return reached violated"
     assert made == ["approve_freight"]
+
+
+def _transitions(*transitions: dict[str, Any]) -> dict[str, Any]:
+    return {"name": "approved", "initial": "start", "bad": ["violated"], "transitions": transitions}
+
+
+@pytest.mark.parametrize(
+    ("spec", "match"),
+    [
+        (
+            _transitions({"from": "start", "tool": "book", "argument": {}, "to": "violated"}),
+            "'argument' is no key it reads",
+        ),
+        ({**_transitions(), "pending_states": ["owed"]}, "'pending_states' is no key it reads"),
+        (
+            _transitions({"from": "start", "tool": "book", "hint": "destructiveHint", "to": "ok"}),
+            "names a tool or a hint, one of the two",
+        ),
+        (_transitions({"from": "start", "to": "ok"}), "names a tool or a hint, one of the two"),
+    ],
+    ids=["argument", "pending_states", "tool-and-hint", "neither"],
+)
+def test_a_policy_means_what_its_keys_say_or_is_refused(spec: dict[str, Any], match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        read_policy(spec)

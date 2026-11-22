@@ -314,3 +314,27 @@ def test_a_loop_over_items_the_walk_misreads_is_asked_of_the_array() -> None:
     assert verdict == "refuted"
     assert all(isinstance(value, int) for value in found)
     assert links["return r <= goal"] == ("proven", ())
+
+
+ASKED = {"name": "posing", "inputs": {"id": {"type": "string"}}, "goal": {}}
+
+
+@pytest.mark.parametrize(
+    ("files", "refused", "match"),
+    [
+        ({"tasks.json": {"tasks": [{**ASKED, "depth": 9}]}}, ValueError, "'depth' is no key"),
+        ({"tasks.json": {"task": [ASKED]}}, ValueError, "tasks.json: 'task' is no key"),
+        ({"tasks.json": {"tasks": [{**ASKED, "errors": "yes"}]}}, TypeError, "'errors' is true"),
+        ({"tools.json": {"tools": [LOOKUP], "trusted": "true"}}, TypeError, "'trusted' is true"),
+        ({"policies.json": {"policy": []}}, ValueError, "policies.json: 'policy' is no key"),
+    ],
+    ids=["task-key", "file-key", "errors", "trusted", "policies-file-key"],
+)
+def test_a_library_file_holding_a_key_no_reader_reads_is_refused_by_name(
+    tmp_path: Path, files: dict[str, object], refused: type[Exception], match: str
+) -> None:
+    written = {"tools.json": {"tools": [LOOKUP]}, "tasks.json": {"tasks": [ASKED]}} | files
+    for name, document in written.items():
+        (tmp_path / name).write_text(json.dumps(document))
+    with pytest.raises(refused, match=match):
+        read_library(tmp_path)

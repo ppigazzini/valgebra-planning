@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from valgebra_planning._valgebra import Validator, compile_schema
+from valgebra_planning.contracts import flag, keys_read
 
 __all__ = ["Flow", "read_flow"]
 
@@ -57,14 +58,25 @@ class Flow:
         return f"{self.tool}.{self.argument}"
 
 
+#: The keys a flow rule reads.
+_FLOW_KEYS = frozenset({"name", "sources", "sink", "endorsed", "implicit", "only"})
+
+
 def read_flow(spec: Mapping[str, Any]) -> Flow:
     """Read a flow rule from its JSON form.
 
     It holds ``name``, ``sources``, ``sink`` as ``tool.argument``, and optionally the
     ``endorsed`` JSON Schema, ``implicit`` and ``only``. A source is a tool's name or a task
-    input's.
+    input's. A key it does not read is a `ValueError` naming it, and so is a sink that names
+    no argument; a flag that is no boolean is a `TypeError`.
     """
+    where = f"flow {spec.get('name')!r}"
+    keys_read(spec, _FLOW_KEYS, where)
     tool, _, argument = spec["sink"].partition(".")
+    if not tool or not argument:
+        message = f"{where}: the sink {spec['sink']!r} is no tool.argument"
+        raise ValueError(message)
+    implicit, only = flag(spec, "implicit", where), flag(spec, "only", where)
     endorsed = spec.get("endorsed")
     return Flow(
         name=spec["name"],
@@ -72,6 +84,6 @@ def read_flow(spec: Mapping[str, Any]) -> Flow:
         tool=tool,
         argument=argument,
         endorsed=None if endorsed is None else compile_schema(endorsed),
-        implicit=bool(spec.get("implicit", False)),
-        only=bool(spec.get("only", False)),
+        implicit=implicit,
+        only=only,
     )

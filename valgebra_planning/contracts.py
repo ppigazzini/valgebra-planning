@@ -290,6 +290,28 @@ def unclashed(task: Task, contracts: Mapping[str, object]) -> None:
         raise ValueError(msg)
 
 
+def keys_read(spec: Mapping[str, Any], keys: frozenset[str], what: str) -> None:
+    """Refuse a key ``spec`` holds and its reader does not read, naming it.
+
+    A rule means what its keys say: a key read past in silence, a misspelled ``only`` or
+    ``arguments``, would leave a rule weaker than the one its author wrote.
+    """
+    unknown = sorted(set(spec) - keys)
+    if unknown:
+        named = ", ".join(map(repr, unknown))
+        message = f"{what}: {named} is no key it reads; it reads {', '.join(sorted(keys))}"
+        raise ValueError(message)
+
+
+def flag(spec: Mapping[str, Any], key: str, what: str) -> bool:
+    """Return the boolean ``spec`` holds at ``key``, false where absent; refuse any other value."""
+    value = spec.get(key, False)
+    if not isinstance(value, bool):
+        message = f"{what}: {key!r} is true or false, not {type(value).__name__}"
+        raise TypeError(message)
+    return value
+
+
 def read_task(name: str, inputs: Mapping[str, object], goal: object) -> Task:
     """Read a task: the schema of each value the agent starts with, and of the goal."""
     held = {}

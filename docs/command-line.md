@@ -23,6 +23,12 @@ A tool without an `outputSchema` can be called, and nothing it returns can fill 
 argument: its result is a set no argument is proven to hold. `examples/parcels` is a library
 holding every file.
 
+A rule means what its keys say. A key no reader reads, in a file, a task, a policy, a transition or
+a flow rule, is refused by name, as a misspelled `only` or `arguments` would leave a rule weaker
+than the one written; `errors`, `trusted`, `only` and `implicit` are `true` or `false`, and a
+transition names a `tool` or a `hint`, one of the two. A command reading such a library exits 2
+naming the key.
+
 ## Plan
 
 ```bash

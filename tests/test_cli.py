@@ -41,6 +41,17 @@ def test_an_unknown_task_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
     assert "no task named 'no such task'" in capsys.readouterr().err
 
 
+def test_a_library_holding_a_key_no_reader_reads_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name in ("tools.json", "tasks.json"):
+        (tmp_path / name).write_text((Path(PARCELS) / name).read_text())
+    task = {"name": "t", "inputs": {}, "goal": {}, "depth": 9}
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}))
+    assert main(["plan", str(tmp_path)]) == 2
+    assert "task 't': 'depth' is no key it reads" in capsys.readouterr().err
+
+
 def test_critique_refuses_the_naive_chain_and_accepts_the_planned_program(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

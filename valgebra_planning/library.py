@@ -19,7 +19,15 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from valgebra_planning.contracts import Contract, Task, read_contract, read_task, unclashed
+from valgebra_planning.contracts import (
+    Contract,
+    Task,
+    flag,
+    keys_read,
+    read_contract,
+    read_task,
+    unclashed,
+)
 from valgebra_planning.flows import Flow, read_flow
 from valgebra_planning.mining import Types, infer_outputs, mine
 from valgebra_planning.policy import Policy, read_policy
@@ -56,25 +64,40 @@ class Library:
         raise KeyError(name)
 
 
+#: The keys a task reads.
+_TASK_KEYS = frozenset({"name", "inputs", "goal", "errors", "policies", "flows", "types"})
+
+
+def _document(path: Path, keys: frozenset[str]) -> dict[str, Any]:
+    """Return the JSON object a library file holds, its keys held to ``keys``; empty if absent."""
+    if not path.exists():
+        return {}
+    document = json.loads(path.read_text(encoding="utf-8"))
+    keys_read(document, keys, path.name)
+    return document
+
+
 def _listed(path: Path, key: str) -> list[Any]:
-    return json.loads(path.read_text(encoding="utf-8"))[key] if path.exists() else []
+    return _document(path, frozenset({key})).get(key, [])
 
 
 def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -> Library:
     """Read a library directory; a rule a task names and the directory lacks is a `KeyError`.
 
     ``tools``, read from a live server, replaces the directory's ``tools.json``. A task naming
-    an input as a tool is a `ValueError`.
+    an input as a tool is a `ValueError`, and so is a key a reader does not read, in a file, a
+    task, a policy, a transition or a flow rule; a flag that is no boolean is a `TypeError`.
     """
     specs = _listed(directory / "tasks.json", "tasks")
+    for spec in specs:
+        keys_read(spec, _TASK_KEYS, f"task {spec.get('name')!r}")
     logs = sorted({spec["types"] for spec in specs if "types" in spec})
     observed = [call for log in logs for call in _listed(directory / log, "calls")]
     if tools is None:
-        listed = directory / "tools.json"
-        document = json.loads(listed.read_text(encoding="utf-8")) if listed.exists() else {}
+        document = _document(directory / "tools.json", frozenset({"tools", "trusted"}))
         listing = document.get("tools", [])
         shaped = infer_outputs(observed, listing)
-        trusted = document.get("trusted") is True
+        trusted = flag(document, "trusted", "tools.json")
         tools = {
             spec["name"]: replace(
                 read_contract({**spec, "outputSchema": shaped[spec["name"]]})
@@ -97,7 +120,7 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
         problems.append(
             Problem(
                 task=task,
-                errors=bool(spec.get("errors", False)),
+                errors=flag(spec, "errors", f"task {spec['name']!r}"),
                 policies=tuple(policies[name] for name in spec.get("policies", [])),
                 flows=tuple(flows[name] for name in spec.get("flows", [])),
                 types=None if log is None else mine(_listed(directory / log, "calls"), tools),

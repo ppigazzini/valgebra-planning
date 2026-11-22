@@ -22,6 +22,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
   under, the array's source among them, so the sink is refuted as the same test written as an
   `if` is.
 
+- A rule file means what its keys say. A key no reader read was read past in silence: a
+  misspelled `only` dropped a flow rule's grounding, so the literal `True` reached a gate it was
+  written to keep out, and a misspelled `arguments` widened a transition's guard to every record;
+  `"only": "false"` read as true. A key no reader reads, in a library file, a task, a policy, a
+  transition or a flow rule, is a `ValueError` naming it, a flag that is no boolean a
+  `TypeError`, and a transition naming both a tool and a hint, or neither, and a sink naming no
+  argument are refused. A command reading such a library exits 2 naming the key.
+
 - A call that answered with an error leaves each policy in either state. The verifier read the
   error's block from the states before and after the call, while the runner's and the proxy's
   monitors counted the call as made: a confirmation that answered with an error let the motion

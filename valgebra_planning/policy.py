@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from valgebra_planning._valgebra import Validator, compile_schema, intersection, nothing
+from valgebra_planning.contracts import keys_read
 
 __all__ = ["Monitor", "Policy", "Reach", "Transition", "read_policy"]
 
@@ -129,13 +130,26 @@ def _taken(record: Validator[Any], guard: Validator[Any]) -> Reach:
     return "possibly"
 
 
+#: The keys a policy and each of its transitions read.
+_POLICY_KEYS = frozenset({"name", "initial", "bad", "transitions", "pending"})
+_TRANSITION_KEYS = frozenset({"from", "to", "tool", "hint", "arguments"})
+
+
 def read_policy(spec: Mapping[str, Any]) -> Policy:
     """Read a policy: ``name``, ``initial``, ``bad`` states, ``transitions`` and ``pending``.
 
     Each transition names its ``from`` and ``to`` states and its ``tool``, or the annotation
     ``hint`` a tool must set, and optionally the JSON Schema its ``arguments`` record must meet,
-    every record where it names none.
+    every record where it names none. A key neither reads is refused, naming it, and so is a
+    transition naming both a tool and a hint, or neither.
     """
+    keys_read(spec, _POLICY_KEYS, f"policy {spec.get('name')!r}")
+    for t in spec["transitions"]:
+        where = f"policy {spec.get('name')!r}, a transition from {t.get('from')!r}"
+        keys_read(t, _TRANSITION_KEYS, where)
+        if ("tool" in t) == ("hint" in t):
+            message = f"{where}: a transition names a tool or a hint, one of the two"
+            raise ValueError(message)
     transitions = tuple(
         Transition(
             source=t["from"],
