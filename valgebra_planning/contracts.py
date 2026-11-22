@@ -216,7 +216,7 @@ def field_slot(slot: Slot, key: str) -> Slot:
     A field selected lies in the projection of its record's type on the key (Castagna 2023,
     §4.2), which valgebra does not compute: the field is read from the ``properties`` of the
     record's schema against its root, a belief holding every value the field takes (Bertoli et
-    al. 2006, Def. 3.4) that other keywords of the record may narrow further. A key no property
+    al. 2006, §3) that other keywords of the record may narrow further. A key no property
     declares takes any JSON value. Whether the field is present is not the slot's to say.
     """
     compiler = Compiler(slot.root, assert_format=slot.asserted)

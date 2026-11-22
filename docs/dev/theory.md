@@ -7,7 +7,7 @@ what in `valgebra_planning` each one supports, and of the tests that fail when t
 false. valgebra's own theory, the sets, the decision procedure and its bounds, is valgebra's
 page; this one starts where a set is a predicate a plan reads.
 
-A citation is a key and a place, `(Cimatti et al. 2003, Def. 2.11)`, as
+A citation is a key and a place, `(Cimatti et al. 2003, Def. 2.10)`, as
 [the rule for citing a paper](writing.md#citing-a-paper) says, and the place is the number the copy on the
 references page prints. A work cited only by a user page, for what an agent faces or for a
 pattern this package follows, is on the references page alone: no code rests on it.
@@ -46,7 +46,7 @@ HELD-BY: test_a_predicate_is_exactly_the_union_of_its_cells, test_the_kinds_part
 
 **A program is strong when every path returns inside the goal.** The planner searches for a
 strong solution under nondeterministic outcomes: one whose every execution ends in a goal
-state, whatever outcome each action has (Cimatti et al. 2003, Def. 2.11). An outcome is a cell
+state, whatever outcome each action has (Cimatti et al. 2003, Def. 2.10). An outcome is a cell
 of a tool's result, so the outcomes are the cells of its output set rather than a list. A
 branch on a runtime type test is an observation, and the program a conditional plan, `if o
 then π1 else π2` (Bertoli et al. 2006, Def. 2.8). Where no strong program exists within the
@@ -58,10 +58,11 @@ IMPLEMENTED-BY: planner.py
 HELD-BY: test_a_strong_program_branches_on_every_status_and_verifies, test_a_weak_program_names_the_status_no_tool_settles, test_a_strong_program_breaks_no_contract_whatever_the_tools_return, test_the_depth_bounds_the_calls_and_tests_on_a_path
 
 **The verifier reads a program as belief execution.** The set a reference lies in at a point of
-a program is its belief there: a call's result enters as its output set, a loop's item as its
-array's item set, each replacing every belief held under its name, and a test narrows the
-tested reference to the set on its `then` branch and to the complement on its `else` branch
-(Bertoli et al. 2006, Def. 3.4). A plan applicable at every call is a strong solution exactly
+a program is its belief there: a call's result enters as its output set, replacing every belief
+held under its name, and a test narrows the tested reference to the set on its `then` branch and
+to the complement on its `else` branch (Bertoli et al. 2006, Def. 3.4). A loop's item enters as
+its array's item set the same way, a step of this package's own, since a conditional plan holds
+no loop. A plan applicable at every call is a strong solution exactly
 when every final belief lies inside the goal (Bertoli et al. 2006, Thm. 3.5), so a program whose
 every link is proven and on which no path stops is strong. Each reference's set is read apart
 from the others', a belief containing the real one, so a proof stands. A question asked of a
@@ -91,7 +92,7 @@ HELD-BY: test_a_key_test_on_an_item_makes_its_field_a_value_the_program_holds, t
 **The field read lies in its declared schema, not in its projection.** The type selected is
 the projection of the record's type on the label (Castagna 2023, §4.2), which valgebra does not
 compute. A field read lies in the subschema its record's schema declares for the key, a belief
-holding every value the field takes (Bertoli et al. 2006, Def. 3.4) that another keyword of the
+holding every value the field takes (Bertoli et al. 2006, §3) that another keyword of the
 record, as an `allOf`, may narrow further; valgebra proves each subschema the walk reads holds
 the values it stands for, or the field takes any value. A proof over it stands. The cost is a value the
 declared set admits that no member carries, so a witness drawn from it refutes only once valgebra
@@ -137,7 +138,7 @@ HELD-BY: test_an_item_its_array_narrows_is_proven_by_the_narrowing, test_an_item
 **A retry is a strong cyclic solution.** A call made again in its own error block is a loop that
 can always reach the goal (Daniele et al. 2000, Def. 7), and it ends under fairness: an
 execution looping forever is one where the outcome reaching the goal never occurs, which a
-strong cyclic solution assumes away (Cimatti et al. 2003, Def. 2.10). A retry is accepted only
+strong cyclic solution assumes away (Cimatti et al. 2003, §2.3). A retry is accepted only
 for a tool that is read-only or idempotent, since calling twice must act as calling once.
 **[LOAD-BEARING: retry-is-strong-cyclic]**
 
@@ -146,7 +147,7 @@ IMPLEMENTED-BY: run.py::retry_assumptions, verify.py::verify
 HELD-BY: test_a_retry_is_accepted_only_for_an_idempotent_tool, test_a_call_made_again_in_its_own_error_block_is_a_retry, test_when_tools_may_fail_the_plan_retries_or_stops_and_reads_back, test_a_run_against_failing_tools_breaks_no_contract
 
 **Fairness is assumed within a bound.** Under fairness a strong cyclic solution ends after
-finitely many failures, with no bound on how many (Cimatti et al. 2003, Def. 2.10); the runner
+finitely many failures, with no bound on how many (Cimatti et al. 2003, §2.3); the runner
 makes a retried call at most `ATTEMPTS` times. So a retry rests on the assumption that an error is transient within that many
 attempts, the plan names it, and a run whose error outlasts the attempts is charged to the
 assumption rather than to the program. **[DEVIATION: fairness-within-attempts]**
@@ -272,12 +273,13 @@ HELD-BY: test_only_refutes_an_identifier_written_into_the_program, test_only_ref
 **A privilege policy is a set of argument records.** A policy maps each tool to rules with an
 effect, a condition on the arguments and a fallback (Shi et al. 2025, §4.1), applied with the
 forbidding rules first, the first whose condition holds deciding, and a call no rule matches
-blocked (Shi et al. 2025, §4.2, Alg. 2). The rules a tool allows are then one set: each
-allowing rule's condition, less the conditions tried before it, joined, and the policy an
-automaton the verifier, the planner and the runner read. The rules are sorted by the format's
-priority first and put forbidding first within one priority, where Algorithm 2 sorts by effect
-alone, so an allowing rule of an earlier priority comes before a forbidding one; a rule asking
-the user is read as denied. **[DEVIATION: privilege-order]**
+blocked (Shi et al. 2025, §4.2, Alg. 2). The rules a tool allows are then one set (Shi et al.
+2025, §4.3): each allowing rule's condition, less the conditions tried before it, joined, and
+the policy an automaton the verifier, the planner and the runner read. The rules are sorted by
+the priority each carries in the format (Shi et al. 2025, Fig. 9) first and put forbidding
+first within one priority, where Algorithm 2 sorts by effect alone, so an allowing rule of an
+earlier priority comes before a forbidding one; a rule asking the user is read as denied.
+**[DEVIATION: privilege-order]**
 
 IMPLEMENTED-BY: privilege.py
 
@@ -285,7 +287,7 @@ HELD-BY: test_the_first_rule_that_matches_decides, test_a_string_restriction_mat
 
 **An update that narrows a policy needs no approval.** An update is a narrowing where the calls
 the new policy allows lie inside those the old one allows, and an expansion otherwise, which
-needs approval (Shi et al. 2025, §4.3). Progent asks an SMT solver; here a drawn call the new
+needs approval (Shi et al. 2025, §4.3, §5). Progent asks an SMT solver; here a drawn call the new
 policy allows and the old refuses shows an expansion, valgebra decides the inclusion where no
 such call is found, and an inclusion it leaves undecided is reported as undecided.
 **[LOAD-BEARING: privilege-updates]**

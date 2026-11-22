@@ -1,6 +1,7 @@
 """Privilege policies in Progent's format, read as valgebra sets (Shi et al. 2025, §4.1).
 
-A policy maps each tool to its rules, ``[priority, effect, condition, fallback]``: effect 0
+A policy maps each tool to its rules, each a priority, an effect, a condition and a fallback
+(Shi et al. 2025, Fig. 9), read here as ``[priority, effect, condition, fallback]``: effect 0
 allows and 1 forbids, and the condition maps an argument to the JSON Schema its value must meet
 or to a regular expression a string value must match from its start. A condition checks only the
 arguments a call passes. Rules are tried by priority, a forbidding rule before an allowing one
@@ -10,11 +11,11 @@ Progent applies a policy in (Shi et al. 2025, §4.2, Alg. 2), which reads no pri
 asking the user (fallback 2) is read as denied, the reading that admits no call the user did not
 approve.
 
-The calls a policy allows to a tool are then a set: each allowing rule's condition, minus the
-conditions of every rule tried before it, joined. Progent asks Z3 whether an update narrows a
-policy, one argument and one rule a tool at a time; here the question is an inclusion between
-two such sets, every rule and every argument at once, which valgebra decides, refutes with a
-call that one policy allows and the other does not, or leaves undecided.
+The calls a policy allows to a tool are then a set (Shi et al. 2025, §4.3): each allowing rule's
+condition, minus the conditions of every rule tried before it, joined. Progent asks an SMT
+solver whether an update narrows a policy, a tool at a time (Shi et al. 2025, §4.3); here the
+question is an inclusion between two such sets, which valgebra decides, refutes with a call
+that one policy allows and the other does not, or leaves undecided.
 """
 
 from __future__ import annotations
@@ -133,7 +134,7 @@ def updates(old: Mapping[str, Sequence[Rule]], new: Mapping[str, Sequence[Rule]]
     """Return, for each tool the new policy names, whether it narrows the old policy's calls.
 
     A narrowing is applied without asking, and an expansion needs approval, as Progent has it
-    (Shi et al. 2025, §4.3).
+    (Shi et al. 2025, §5).
     """
     found = []
     for tool, rules in sorted(new.items()):

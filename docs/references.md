@@ -5,7 +5,9 @@ description: Every work the method and the modules cite, under its key.
 # References
 
 The works the method and the modules cite, each under the key a text cites it by: the
-surnames of its one or two authors, or its first author's with `et al.`, and the year.
+surnames of its one or two authors, or its first author's with `et al.`, and the year. A work
+read in a preprint names the version read, an arXiv link its version, and a place cited in it,
+a section or a numbered statement, is that version's.
 `tools/docs_lint.py` holds this list and the citations in the tree equal, in both
 directions.
 
@@ -35,8 +37,9 @@ directions.
   the one cited here.
 - **Bauer et al. 2011.** A. Bauer, M. Leucker, C. Schallhart. Runtime verification for LTL and
   TLTL. ACM Transactions on Software Engineering and Methodology 20(4), 2011.
-  [doi:10.1145/2000799.2000800](https://doi.org/10.1145/2000799.2000800). A monitor decides a
-  property on a prefix only by a bad or a good one, which a pending state is not.
+  [doi:10.1145/2000799.2000800](https://doi.org/10.1145/2000799.2000800), read in the authors'
+  manuscript. A monitor decides a property on a prefix only by a bad or a good one, which a
+  pending state is not.
 - **Roşu and Chen 2012.** G. Roşu, F. Chen. Semantics and algorithms for parametric monitoring.
   Logical Methods in Computer Science 8(1:09), 2012. Parametric trace slicing, which a policy
   does not read.
@@ -62,23 +65,23 @@ directions.
 - **Kambhampati et al. 2024.** S. Kambhampati, K. Valmeekam, L. Guan, M. Verma, K. Stechly,
   S. Bhambri, L. Saldyt, A. Murthy. Position: LLMs can't plan, but can help planning in
   LLM-Modulo frameworks. ICML 2024, PMLR 235.
-  [arXiv:2402.01817](https://arxiv.org/abs/2402.01817)
+  [arXiv:2402.01817v3](https://arxiv.org/abs/2402.01817v3)
 - **Yao et al. 2024.** S. Yao, N. Shinn, P. Razavi, K. Narasimhan. τ-bench: a benchmark for
   tool-agent-user interaction in real-world domains.
-  [arXiv:2406.12045](https://arxiv.org/abs/2406.12045), 2024.
+  [arXiv:2406.12045v1](https://arxiv.org/abs/2406.12045v1), 2024.
 - **Elkoussy and Perez 2026.** L. Elkoussy, J. Perez. AgentLTL: a trace-verification
   framework for measuring, enforcing, and training procedural compliance in tool-using LLM
-  agents. [arXiv:2607.02599](https://arxiv.org/abs/2607.02599), 2026.
+  agents. [arXiv:2607.02599v1](https://arxiv.org/abs/2607.02599v1), 2026.
 - **Mansoor et al. 2026.** I. K. Mansoor, A. Phadke, P. Rana. Verified tool calls improve LLM
   agent reliability under non-atomic failures.
-  [arXiv:2608.02645](https://arxiv.org/abs/2608.02645), 2026. A postcondition read before a
+  [arXiv:2608.02645v1](https://arxiv.org/abs/2608.02645v1), 2026. A postcondition read before a
   retry, which the method does not read.
 
 ## Information flow and privilege for agents
 
 - **Sah et al. 2026.** T. Sah, V. Srivastava, D. Sah, K. Jordan. The verifier tax: horizon
   dependent safety success tradeoffs in tool using LLM agents. ACM CAIS 2026.
-  [arXiv:2603.19328](https://arxiv.org/abs/2603.19328). Integrity leaks, identifiers made up
+  [arXiv:2603.19328v1](https://arxiv.org/abs/2603.19328v1). Integrity leaks, identifiers made up
   to pass authentication, and deterministic grounding gates against them: a flow rule with
   `only` over a program, and the proxy's check at run time.
 - **Beurer-Kellner et al. 2025.** L. Beurer-Kellner, B. Buesser, A.-M. Creţu, E. Debenedetti,
@@ -93,14 +96,14 @@ directions.
   Why the proxy's flow rules, read by equality, are no guarantee.
 - **Debenedetti et al. 2025.** E. Debenedetti, I. Shumailov, T. Fan, J. Hayes, N. Carlini,
   D. Fabian, C. Kern, C. Shi, A. Terzis, F. Tramèr. Defeating prompt injections by design.
-  [arXiv:2503.18813](https://arxiv.org/abs/2503.18813), 2025. CaMeL.
+  [arXiv:2503.18813v2](https://arxiv.org/abs/2503.18813v2), 2025. CaMeL.
 - **Costa et al. 2025.** M. Costa, B. Köpf, A. Kolluri, A. Paverd, M. Russinovich,
   A. Salem, S. Tople, L. Wutschitz, S. Zanella-Béguelin. Securing AI agents with
-  information-flow control. [arXiv:2505.23643](https://arxiv.org/abs/2505.23643), 2025.
+  information-flow control. [arXiv:2505.23643v2](https://arxiv.org/abs/2505.23643v2), 2025.
   FIDES.
 - **Shi et al. 2025.** T. Shi, J. He, Z. Wang, H. Li, L. Wu, W. Guo, D. Song. Progent:
   securing AI agents with privilege control.
-  [arXiv:2504.11703](https://arxiv.org/abs/2504.11703), 2025.
+  [arXiv:2504.11703v3](https://arxiv.org/abs/2504.11703v3), 2025.
 
 ## Specifications and prior work
 

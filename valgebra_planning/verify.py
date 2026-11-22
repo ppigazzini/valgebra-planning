@@ -599,8 +599,8 @@ class _Walk:
 
         The value's own set is asked first, ``answer`` where it was; where that leaves the
         question open and a test narrowed a field of the value, its belief is, the set of
-        values every test on the way admits (Bertoli et al. 2006, Def. 3.4). A value outside
-        the belief is one the program may hold here, so a refutation is exact.
+        values every test on the way admits (Bertoli et al. 2006, Def. 3.4). A value of the
+        belief outside ``question`` is one the program may hold here, so a refutation is exact.
 
         A loop's item lies in the array's declared `items`, which another keyword of the array
         may narrow, so a question its set leaves open is asked of the value holding the array:
@@ -643,9 +643,9 @@ class _Walk:
         """Return a value of the record ``read`` stopped at, lacking the next key of ``ref``.
 
         A value drawn for the record is a witness only where valgebra proves a value of the
-        root's belief carries it there: the record's declared set is a belief holding every
-        value the record takes (Bertoli et al. 2006, Def. 3.4), and may admit one no member
-        carries.
+        root's belief carries it there: the record's declared set holds every value the record
+        takes, as a belief holds every state possible (Bertoli et al. 2006, §3), and, unlike a
+        belief, may admit one no member carries.
         """
         if read.record is None:
             return ()
@@ -709,9 +709,9 @@ class _Walk:
         """Return whether valgebra proves a value of ``variable``'s belief holds each one placed.
 
         For a loop's item, valgebra proves the values of its belief holding each one placed
-        not empty, then a value of its holder's belief holding a non-empty array of them at the
-        array's path, a level at a time up to a value no loop reads (Bertoli et al. 2006, Def.
-        3.4). There a value given or drawn for it serves as a template: valgebra proves it,
+        not empty, then a value of its holder's belief (Bertoli et al. 2006, Def. 3.4) holding a
+        non-empty array of them at the array's path, a level at a time up to a value no loop
+        reads. There a value given or drawn for it serves as a template: valgebra proves it,
         with any such array in place of its own, inside the belief, or the values holding one
         not empty. Where the program holds the holder ``now`` only as it did when the loop
         began, `_holder`, nothing is proven.
@@ -954,7 +954,7 @@ def verify(
     error, and a call neither retried nor given an error block leaves that path uncovered.
     A retry is accepted only for a tool that is read-only or idempotent, since calling twice
     must act as calling once; it ends under fairness, the strong cyclic reading (Cimatti et al.
-    2003, Def. 2.10). Each policy
+    2003, §2.3). Each policy
     adds a link at the end of every path: proven where no bad state can be reached there,
     refuted where one surely is, undecided where one possibly is. Each flow rule adds a link
     for every value from one of its sources bound to its sink, and, where implicit flows are

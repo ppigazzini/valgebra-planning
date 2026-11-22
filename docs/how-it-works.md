@@ -232,9 +232,9 @@ CaMeL (Debenedetti et al. 2025) runs a model's plan in an interpreter that recor
 value came from and checks a policy before each call; FIDES (Costa et al. 2025) labels each
 value's integrity and confidentiality in the planner; Progent (Shi et al. 2025) allows each
 tool's calls by a privilege policy. Each checks a call as the agent makes it. valgebra-planning
-asks the integrity half of those questions of the whole program before it runs, as flow rules
-and privilege policies over sets, for every output the contracts admit; its runner and proxy
-ask them again of each call made.
+asks Progent's question and the integrity half of the others of the whole program before it
+runs, as privilege policies and flow rules over sets, for every output the contracts admit; its
+runner and proxy ask them again of each call made.
 
 ## What it does not cover
 

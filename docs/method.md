@@ -131,8 +131,8 @@ Each rule is checked the same way by the planner, which makes no call breaking i
 verifier, which adds a link for it.
 
 - **Errors** (`errors`). Any tool may answer with an error. A call may be retried only where the
-  tool's annotations say it is read-only or idempotent, a strong cyclic solution ending under
-  fairness (Daniele et al. 2000); any other call needs an error block,
+  tool's annotations say it is read-only or idempotent, a strong cyclic solution (Daniele et al.
+  2000) ending under fairness (Cimatti et al. 2003); any other call needs an error block,
   `try:`/`except ToolError:`, since retrying it may act twice. A call made again in its error
   block on the values it was given is a retry written out, and held as one. A retry's link
   lists what it rests on: the tool's errors transient within the runner's 8 attempts, and the
@@ -157,8 +157,8 @@ verifier, which adds a link for it.
 - **Flows** (`valgebra_planning/flows.py`). A value from an untrusted source reaches a sink
   argument only inside the rule's endorsed set, and with `implicit` no sink call runs under a
   test on such a value, in a loop over an array from such a source, or after a loop whose body
-  may end the run under such a test: the integrity half of
-  CaMeL (Debenedetti et al. 2025), FIDES (Costa et al. 2025) and Progent (Shi et al. 2025),
+  may end the run under such a test: the integrity half of CaMeL (Debenedetti et al. 2025) and
+  FIDES (Costa et al. 2025), and Progent's restriction of a tool's arguments (Shi et al. 2025),
   decided over sets. With `only`, the rule holds every origin but its sources, so a sink takes
   a value from a named tool or input on every path, and a literal or another tool's value only
   inside the endorsed set: an identifier the program did not retrieve, the integrity leak of

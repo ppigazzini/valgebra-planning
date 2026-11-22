@@ -219,7 +219,7 @@ lead of an entry on [the works cited](../references.md), the one place a work's 
 title, venue and identifier are written.
 
 **In the package, a citation names the result by its place.** After the key comes the place
-in the work: `(Cimatti et al. 2003, Def. 2.11)`, `(Shi et al. 2025, §4.2, Alg. 2)`. A place is
+in the work: `(Cimatti et al. 2003, Def. 2.10)`, `(Shi et al. 2025, §4.2, Alg. 2)`. A place is
 `§` and a section number, or `Def.`, `Thm.`, `Lem.`, `Prop.`, `Cor.`, `Ex.`, `Alg.` or `Fig.`
 and a number, several separated by commas, and the number is the one the copy the references
 page lists prints: a conference version and its journal version can number a result apart, so

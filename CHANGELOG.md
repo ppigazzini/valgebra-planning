@@ -109,6 +109,17 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- Seventeen citations named a place that does not say their sentence. A strong solution is
+  (Cimatti et al. 2003, Def. 2.10), where Def. 2.11 is the nondeterministic one; fairness, and
+  no bound on the failures before the goal, is §2.3's remark after that definition; a belief as
+  every value possible is (Bertoli et al. 2006, §3), where Def. 3.4 is belief execution along a
+  path; Progent's expansion needs approval in §5, not §4.3. A loop's item entering as its
+  array's item set is stated as the package's own step, a conditional plan holding no loop; the
+  runner's attempts are stated as the bound a retry rests on, not what fairness gives; Progent's
+  rules are a restriction of a tool's arguments, not an integrity check; and the list form of a
+  rule is valgebra-planning's reading of Progent's format, which prints an object. The
+  references page names the version read of each work read in a preprint.
+
 - A library's `"trusted": true` holds for a live server's tools. With `--server` the server's
   listing replaced `tools.json` and its trust with it, so the command line could not trust a
   live server's annotations; a `tools.json` holding `trusted` alone marks them.
