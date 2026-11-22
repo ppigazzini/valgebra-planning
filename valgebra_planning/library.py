@@ -23,11 +23,11 @@ from typing import Any
 from valgebra_planning.contracts import (
     Contract,
     Task,
+    fixes,
     flag,
     keys_read,
     read_contract,
     read_task,
-    unclashed,
 )
 from valgebra_planning.flows import Flow, read_flow
 from valgebra_planning.mining import Types, infer_outputs, mine
@@ -69,7 +69,19 @@ class Library:
 
 #: The keys a task reads.
 _TASK_KEYS = frozenset(
-    {"name", "inputs", "goal", "goals", "errors", "policies", "flows", "types", "depth", "stops"}
+    {
+        "name",
+        "inputs",
+        "goal",
+        "goals",
+        "errors",
+        "policies",
+        "flows",
+        "types",
+        "depth",
+        "stops",
+        "constants",
+    }
 )
 
 
@@ -177,9 +189,10 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
             goals[0],
             stops=spec.get("stops"),
             fallbacks=goals[1:],
+            constants=spec.get("constants"),
             assert_format=asserted,
         )
-        unclashed(task, tools)
+        fixes(task, tools)
         problems.append(
             Problem(
                 task=task,

@@ -10,6 +10,7 @@ from valgebra_planning import planner
 from valgebra_planning._valgebra import Sampler
 from valgebra_planning.cells import abstract
 from valgebra_planning.contracts import Contract, read_contract, read_task
+from valgebra_planning.critic import read_program
 from valgebra_planning.flows import read_flow
 from valgebra_planning.mining import mine
 from valgebra_planning.planner import plan, predicates
@@ -540,3 +541,64 @@ def test_a_plan_with_no_program_names_what_only_a_tested_input_fills() -> None:
         GRASPED,
     )
     assert plan(_enumerated(), given, depth=8, policies=[asked]).program is not None
+
+
+INTENT = {"confirm_with_user.action": "grasp", "confirm_with_user.purpose": "pick_up"}
+
+
+def test_a_constant_the_task_fixes_is_written_where_its_argument_is() -> None:
+    asked = read_policy(CONFIRMED_FIRST)
+    task = read_task("pick", {"name": {"type": "string"}, "hand": SIDES}, GRASPED, constants=INTENT)
+    found = plan(_enumerated(), task, depth=8, policies=[asked])
+    assert found.program is not None
+    text = render(found.program)
+    assert "confirm_with_user(action='grasp', purpose='pick_up', object_id=" in text
+    checked = verify(found.program, _enumerated(), task, policies=[asked])
+    fixed = [link.verdict for link in checked.links if "is the task's" in link.claim]
+    assert fixed
+    assert set(fixed) == {"proven"}
+    assert all(link.verdict == "proven" for link in checked.links)
+
+
+def test_a_program_passing_another_value_than_the_task_fixes_is_refuted() -> None:
+    task = read_task("pick", {"name": {"type": "string"}, "hand": SIDES}, GRASPED, constants=INTENT)
+    source = (
+        "c1 = detect_object(name=name)\n"
+        'c2 = confirm_with_user(action="walk", purpose="pick_up", object_id=c1.object_id)\n'
+        "c3 = grasp(object_id=c1.object_id, hand=hand)\n"
+        "return c3.grasp_id\n"
+    )
+    links = verify(read_program(source), _enumerated(), task).links
+    (wrong,) = [link for link in links if link.claim.startswith("confirm_with_user.action is")]
+    assert (wrong.verdict, wrong.counterexample) == ("refuted", ("walk",))
+
+
+def test_a_constant_at_a_sink_an_only_flow_holds_is_refused() -> None:
+    told = read_flow(
+        {
+            "name": "the action is the one detected",
+            "sources": ["detect_object"],
+            "sink": "confirm_with_user.action",
+            "only": True,
+        }
+    )
+    task = read_task("pick", {"name": {"type": "string"}, "hand": SIDES}, GRASPED, constants=INTENT)
+    asked = read_policy(CONFIRMED_FIRST)
+    assert plan(_enumerated(), task, depth=8, policies=[asked], flows=[told]).program is None
+
+
+@pytest.mark.parametrize(
+    ("constants", "says"),
+    [
+        ({"hand": "left"}, "a constant names `tool.argument`"),
+        ({"grasp.arm": "left"}, "which is no argument of a tool"),
+        ({"lift.hand": "left"}, "an argument of a tool not listed: lift"),
+        ({"grasp.hand": "both"}, "to a value outside its set"),
+    ],
+    ids=["no-tool", "no-argument", "unlisted", "outside"],
+)
+def test_a_constant_naming_no_argument_or_outside_its_set_is_refused(
+    constants: dict[str, Any], says: str
+) -> None:
+    with pytest.raises(ValueError, match=says):
+        plan(_enumerated(), read_task("pick", {}, GRASPED, constants=constants))

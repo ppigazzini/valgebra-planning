@@ -87,6 +87,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A task fixes the constants its intent gives, `constants` in `tasks.json` or
+  `read_task(..., constants={"confirm_with_user.action": "grasp"})`. The planner fills an
+  argument only from a value the program holds, so a confirmation taking an `action` and a
+  `purpose` enum was never called and a pick needing it had no program. The planner writes each
+  constant where its argument is, and fills that argument with nothing else; the verifier holds
+  every call to the tool to it, refuting another literal or a held value that may differ; and a
+  flow rule judges it as a literal, so an `only` flow refuses one at its sink. A constant naming
+  no argument of a listed tool, or a value outside its argument's set, is refused. The
+  confirmation and the pick it guards are then planned, every link proven.
+
 - `constraints.txt` holds the tested set: every dependency, the `mcp` extra's among them, at the
   lock's version, as `uv export --locked --no-dev --all-extras --no-emit-project --no-hashes`
   writes it, and a test holds its pins to the lock's. The README says to pin the file at a

@@ -373,6 +373,7 @@ class _Walk:
         for slot in contract.arguments:
             if slot.required and slot.path[0] not in dict(call.bindings):
                 self.links.append(Link(where, f"{slot.name} is bound", "refuted"))
+        self.fixed(call, env, where)
         if not contract.plain and len(bound) == len(call.bindings):
             self.record(call, contract, bound, where, env)
         after = states
@@ -825,6 +826,27 @@ class _Walk:
         except (Unsupported, RecursionError):
             drawn = []
         return given + [v for v in drawn if held.values.is_valid(v)]
+
+    def fixed(self, call: Call, env: dict[Ref, _Held], where: str) -> None:
+        """Add a link for each argument the task fixes: the call passes the task's constant.
+
+        A task's intent fixes the value, as the action a confirmation asks about, so a program
+        passing another, a literal or a held value that may differ, is refuted there.
+        """
+        given = dict(call.bindings)
+        for tool, argument, value in self.task.constants:
+            if tool != call.tool or argument not in given:
+                continue
+            ref = given[argument]
+            claim = f"{call.tool}.{argument} is the task's {Const.of(value)}"
+            if isinstance(ref, Const):
+                same = ref == Const.of(value)
+                found = () if same else (ref.value,)
+                self.links.append(Link(where, claim, "proven" if same else "refuted", found))
+                continue
+            held = self.held(env, ref, where)
+            if held is not None:
+                self.inclusion(where, claim, ref, held, listed([value]), env)
 
     def constant(self, where: str, const: Const, slot: Slot) -> None:
         """Add the link of a constant inside the argument it fills, decided by membership."""

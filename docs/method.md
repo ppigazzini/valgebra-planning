@@ -283,8 +283,12 @@ and a value from a task input with it, since a proxy sees no task.
   which the walk resolves from the document's root and so reads as any value, a gap the
   companion's reader of the whole schema closes; a field whose record's `properties` do not declare it, which takes any JSON
   value, as one an `anyOf` alone declares; and a program the planner writes holds no
-  constant, tests no key and loops over no array. A program written elsewhere may do all three, and each is checked like any
-  value.
+  constant but those its task fixes, tests no key and loops over no array. A program written
+  elsewhere may do all three, and each is checked like any value. A task fixes the constants its
+  intent gives in `constants`, as the action a confirmation asks about: the planner writes each
+  where its argument is, the verifier holds every call to the tool to it, and a flow rule judges
+  it as the literal it is. A choice the planner should not make, as which hand grasps, is a task
+  input, typed by its enum.
 - **No Python door.** A tool is read from the JSON Schema its server publishes, never from a
   Python function's annotations. Where a call travels as JSON, the MCP SDK, FastMCP and the
   OpenAI Agents SDK publish that schema from the same annotations, so a second reading adds no

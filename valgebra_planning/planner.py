@@ -30,7 +30,7 @@ from typing import Any
 
 from valgebra_planning._valgebra import Validator, intersection, nothing, union
 from valgebra_planning.cells import Abstraction, Predicate, abstract, gather
-from valgebra_planning.contracts import Contract, Slot, Task, record_of, unclashed
+from valgebra_planning.contracts import Contract, Slot, Task, fixes, listed, record_of
 from valgebra_planning.flows import Flow
 from valgebra_planning.mining import SlotKey, Types
 from valgebra_planning.policy import Policy
@@ -38,6 +38,7 @@ from valgebra_planning.program import (
     Block,
     Branch,
     Call,
+    Const,
     For,
     Next,
     Ref,
@@ -59,6 +60,8 @@ DEPTH = 6
 MAX_BINDINGS = 16
 
 _GOAL = "goal"
+#: What the reference a task's constant is held under starts with, which no program names.
+_CONSTANT = "constant:"
 #: The expansions spent trying the other first calls once a weak program is found, so the weak
 #: program leaving the fewest cells uncovered among them is the one returned.
 RANKING = 2_000
@@ -164,6 +167,16 @@ class _Search:
     #: The search toward the goal the task accepts after this one's, which a weak program's
     #: stop is filled from where it finds a program.
     fallback: _Search | None = None
+    #: The reference each constant the task fixes is held under, by its tool and argument, and
+    #: the value each such reference holds: only its argument takes it (`call`).
+    fixed: dict[tuple[str, str], Ref] = field(default_factory=dict)
+    literals: dict[Ref, Any] = field(default_factory=dict)
+
+    def bound(self, state: _State, ref: Ref) -> Validator[Any]:
+        """Return the values a binding passes: a constant's own, or its reference's cells'."""
+        if ref in self.literals:
+            return listed([self.literals[ref]])
+        return self.values(state.cells(ref))
 
     def cells_of(self, name: str) -> frozenset[int]:
         return self.abstraction.cells_of(self.abstraction.index(name))
@@ -221,7 +234,9 @@ class _Search:
         )
 
     def solve(self, state: _State, depth: int, *, weak: bool) -> Block | None:
-        goal = next((ref for ref, cells in state.refs if cells <= self.goal), None)
+        goal = next(
+            (r for r, cells in state.refs if cells <= self.goal and r not in self.literals), None
+        )
         if goal is not None and (not self.policies or self.settled(state)):
             return Block((), Return(goal))
         key = (state.signature(), self.read(state), depth, weak)
@@ -245,8 +260,17 @@ class _Search:
         full: dict[str, list[Ref]] = {}
         partial: dict[str, list[Ref]] = {}
         for slot in required:
+            constant = self.fixed.get((contract.name, slot.path[0]))
+            if constant is not None:
+                # The task fixes this argument: its constant fills it, and nothing else does.
+                full[slot.path[0]], partial[slot.path[0]] = [constant], []
+                continue
             arg = self.cells_of(_argument_name(slot))
-            refs = [(r, c) for r, c in state.refs if self.agree(state, r, slot)]
+            refs = [
+                (r, c)
+                for r, c in state.refs
+                if r not in self.literals and self.agree(state, r, slot)
+            ]
             full[slot.path[0]] = [r for r, c in refs if c and c <= arg]
             partial[slot.path[0]] = [r for r, c in refs if c & arg and not c <= arg]
         if any(not full[name] and not partial[name] for name in full):
@@ -320,8 +344,9 @@ class _Search:
             return Call(contract.name, bindings, result, retry=True)
         without = state.but(made=state.made | {(contract.name, bindings)})
         fallback = self.solve(without, depth - 1, weak=weak)
-        if fallback is None and weak and bindings and self.settled(state):
-            fallback = self.stopping(without, bindings[0][1], depth - 1)
+        held = [ref for _, ref in bindings if ref not in self.literals]
+        if fallback is None and weak and held and self.settled(state):
+            fallback = self.stopping(without, held[0], depth - 1)
         if fallback is None:
             return None
         return Call(contract.name, bindings, result, on_error=fallback)
@@ -378,9 +403,7 @@ class _Search:
     ) -> bool:
         if contract.plain:
             return True
-        record = record_of(
-            {name: self.values(state.cells(ref)) for name, ref in bindings}, closed=True
-        )
+        record = record_of({name: self.bound(state, ref) for name, ref in bindings}, closed=True)
         return record.relation_to(contract.accepts) == "subset"
 
     def policed(
@@ -389,9 +412,7 @@ class _Search:
         """Return each policy's states after the call, or None if one may turn bad."""
         if not self.policies:
             return state.policed
-        record = record_of(
-            {name: self.values(state.cells(ref)) for name, ref in bindings}, closed=True
-        )
+        record = record_of({name: self.bound(state, ref) for name, ref in bindings}, closed=True)
         after = tuple(
             policy.step(held, contract.name, record, contract.hints)
             for policy, held in zip(self.policies, state.policed, strict=True)
@@ -442,11 +463,12 @@ class _Search:
             if flow.implicit and any(map(flow.holds, state.tested)):
                 return False
             for name, ref in bindings:
-                if name != flow.argument or not flow.holds(state.origin(ref)):
+                origin = None if ref in self.literals else state.origin(ref)
+                if name != flow.argument or not flow.holds(origin):
                     continue
                 if flow.endorsed is None:
                     return False
-                if self.values(state.cells(ref)).relation_to(flow.endorsed) != "subset":
+                if self.bound(state, ref).relation_to(flow.endorsed) != "subset":
                     return False
         return True
 
@@ -476,6 +498,39 @@ def _reason(cut: int, depth: int, contracts: Mapping[str, Contract], task: Task)
     return reason
 
 
+def _literal(block: Block, literals: Mapping[Ref, Any]) -> Block:
+    """Return ``block`` with each reference a constant is held under written as its literal."""
+    if not literals:
+        return block
+    calls = tuple(
+        Call(
+            call.tool,
+            tuple(
+                (name, Const.of(literals[ref]) if isinstance(ref, Ref) and ref in literals else ref)
+                for name, ref in call.bindings
+            ),
+            call.result,
+            call.retry,
+            None if call.on_error is None else _literal(call.on_error, literals),
+        )
+        for call in block.calls
+    )
+    end = block.end
+    if isinstance(end, Branch):
+        end = Branch(
+            end.ref,
+            end.tool,
+            end.argument,
+            _literal(end.then, literals),
+            _literal(end.otherwise, literals),
+            end.values,
+            end.key,
+        )
+    elif isinstance(end, For):
+        end = For(end.ref, end.item, _literal(end.body, literals), _literal(end.after, literals))
+    return Block(calls, end)
+
+
 def _sourceless(contracts: Mapping[str, Contract], task: Task) -> list[str]:
     """Return each required argument a value reaches only by a test of a task input into it.
 
@@ -486,11 +541,13 @@ def _sourceless(contracts: Mapping[str, Contract], task: Task) -> list[str]:
     """
     held = [slot.values for slots in task.held.values() for slot in slots]
     results = [slot.values for contract in contracts.values() for slot in contract.results]
+    fixed = {f"{tool}.{argument}" for tool, argument, _ in task.constants}
     return sorted(
         slot.name
         for contract in contracts.values()
         for slot in contract.arguments
         if slot.required
+        and slot.name not in fixed
         and not any(_meets(value, slot.values) for value in results)
         and not any(value.relation_to(slot.values) == "subset" for value in held)
     )
@@ -509,6 +566,7 @@ def _reachable(
     the goal alone (Feng et al. 2017, §6.3), with valgebra deciding each overlap.
     """
     held = [slot.values for slots in task.held.values() for slot in slots]
+    held += [listed([value]) for _, _, value in task.constants]
     callable_: dict[str, Contract] = {}
     grown = True
     while grown:
@@ -988,7 +1046,7 @@ def plan(
     names every binding that rests on one. Raises `ValueError` for a task naming an input as
     a tool.
     """
-    unclashed(task, contracts)
+    fixes(task, contracts)
     # The tools are tried in their names' order, so a server listing them in another order
     # gets the same program.
     contracts = dict(sorted(contracts.items()))
@@ -1014,6 +1072,15 @@ def plan(
         )
         for name in names
     ]
+    # Each constant the task fixes is held under a reference no program names, in the cell its
+    # value lies in, and written as the literal once the search returns.
+    fixed = {
+        (tool, argument): Ref(f"{_CONSTANT}{index}")
+        for index, (tool, argument, _) in enumerate(task.constants)
+    }
+    literals = {fixed[tool, argument]: value for tool, argument, value in task.constants}
+    for one in searches:
+        one.fixed, one.literals = fixed, literals
     for one, after in itertools.pairwise(searches):
         one.fallback = after
         after.stops = searches[0].stops
@@ -1024,6 +1091,10 @@ def plan(
             for var, slots in task.held.items()
             for slot in slots
             if search.holds(_held_name(slot))
+        )
+        + tuple(
+            (ref, frozenset(i for i, c in enumerate(abstraction.cells) if c.values.is_valid(value)))
+            for ref, value in literals.items()
         ),
         frozenset(),
         1,
@@ -1035,7 +1106,7 @@ def plan(
         return _reading(checked)
 
     def tidied(program: Block) -> Block:
-        program = _tidy(program, search.stops, kept)
+        program = _tidy(_literal(program, literals), search.stops, kept)
         unpadded = _tidy(_unpadded(program, reading), search.stops, kept) if kept else program
         return _tidy(_test_first(unpadded, reading), search.stops, kept)
 
