@@ -247,11 +247,14 @@ HELD-BY: test_a_value_from_an_untrusted_source_does_not_reach_the_sink, test_the
 **Which branch runs carries a tested value's influence.** A call made under a condition depends
 on what the condition read, the dependency CaMeL's STRICT mode adds (Debenedetti et al. 2025,
 §5.4). With `implicit`, a sink called under a test on a value from a source is refused, and a
-call in a loop over an untrusted array alike. **[LOAD-BEARING: implicit-flows]**
+call in a loop over an untrusted array alike. What follows a loop whose body may end the run
+runs only where no iteration did, so it runs under every test a path ending the run there is
+under: a statement after an operation that may end a run early depends on what that operation
+read (Debenedetti et al. 2025, §7). **[LOAD-BEARING: implicit-flows]**
 
-IMPLEMENTED-BY: flows.py
+IMPLEMENTED-BY: flows.py, verify.py::_Walk.loop
 
-HELD-BY: test_a_sink_called_under_a_test_on_an_untrusted_value_is_an_implicit_flow, test_a_call_in_a_loop_over_an_untrusted_array_is_an_implicit_flow, test_only_with_implicit_refutes_a_sink_under_a_test_on_any_other_origin
+HELD-BY: test_a_sink_called_under_a_test_on_an_untrusted_value_is_an_implicit_flow, test_a_call_in_a_loop_over_an_untrusted_array_is_an_implicit_flow, test_only_with_implicit_refutes_a_sink_under_a_test_on_any_other_origin, test_a_sink_after_a_loop_its_body_may_stop_runs_under_the_body_s_tests, test_an_early_return_from_a_loop_is_a_test_on_its_array
 
 **An identifier must come from the tool that retrieves it.** A model that makes up an identifier
 to pass an authentication step commits an integrity leak (Sah et al. 2026, §4.3). With `only`,

@@ -150,7 +150,8 @@ verifier, which adds a link for it.
   never left.
 - **Flows** (`valgebra_planning/flows.py`). A value from an untrusted source reaches a sink
   argument only inside the rule's endorsed set, and with `implicit` no sink call runs under a
-  test on such a value or in a loop over an array from such a source: the integrity half of
+  test on such a value, in a loop over an array from such a source, or after a loop whose body
+  may end the run under such a test: the integrity half of
   CaMeL (Debenedetti et al. 2025), FIDES (Costa et al. 2025) and Progent (Shi et al. 2025),
   decided over sets. With `only`, the rule holds every origin but its sources, so a sink takes
   a value from a named tool or input on every path, and a literal or another tool's value only

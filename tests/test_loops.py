@@ -9,7 +9,7 @@ from valgebra_planning.contracts import item_slots, read_contract, read_task
 from valgebra_planning.critic import ProgramError, read_program
 from valgebra_planning.flows import read_flow
 from valgebra_planning.policy import read_policy
-from valgebra_planning.program import render
+from valgebra_planning.program import Block, Branch, Call, For, Next, Ref, Return, render
 from valgebra_planning.run import run
 from valgebra_planning.verify import verify
 
@@ -552,3 +552,68 @@ def test_what_follows_a_loop_over_items_the_walk_cannot_read_is_verified() -> No
         read_program("r = get()\nfor x in r.rs:\n    u = use(tag=x)\nreturn r.n"), tools, task
     )
     assert {link.claim: link.verdict for link in checked.links}["return r.n <= goal"] == "refuted"
+
+
+ALERTS = read_flow(
+    {"name": "alerts", "sources": ["search"], "sink": "alert.message", "implicit": True}
+)
+A_OR_B = 'if entity.name in ("a", "b"):'
+
+
+def test_a_sink_after_a_loop_its_body_may_stop_runs_under_the_body_s_tests() -> None:
+    stopping = f"""\
+c1 = search(query=query)
+for entity in c1.entities:
+    {A_OR_B}
+        c2 = notify(name=entity.name)
+    else:
+        stop(entity.name)
+c3 = alert(message=query)
+return c1.count"""
+    claims = _claims(stopping, flows=[ALERTS])
+    assert claims["flow alerts: alert runs under a test on search"] == "refuted"
+
+
+def test_an_early_return_from_a_loop_is_a_test_on_its_array() -> None:
+    # The critic's reader refuses a return in a body; the IR holds one, as the runner runs it.
+    body = Block(
+        (),
+        Branch(
+            Ref("entity", ("name",)),
+            "",
+            "",
+            Block((), Return(Ref("c1", ("count",)))),
+            Block((), Next()),
+            ("a",),
+        ),
+    )
+    program = Block(
+        (Call("search", (("query", Ref("query")),), "c1"),),
+        For(
+            Ref("c1", ("entities",)),
+            "entity",
+            body,
+            Block(
+                (Call("alert", (("message", Ref("query")),), "c3"),), Return(Ref("c1", ("count",)))
+            ),
+        ),
+    )
+    checked = verify(program, TOOLS, TASK, flows=[ALERTS])
+    claims = {link.claim: link.verdict for link in checked.links}
+    assert claims["flow alerts: alert runs under a test on search"] == "refuted"
+    assert not checked.proven
+    # Whether the sink is called follows the value the body tested.
+    for name, alerted in (("a", []), ("z", ["alert"])):
+        made: list[str] = []
+        tools = {
+            "search": lambda name=name, **_: {"count": 1, "entities": [{"name": name}]},
+            "alert": lambda made=made, **_: made.append("alert"),
+        }
+        run(program, TOOLS, TASK, {"query": "q"}, tools, enforce=False)
+        assert made == alerted
+
+
+def test_a_sink_after_a_loop_no_iteration_of_which_ends_the_run_keeps_its_links() -> None:
+    after = LOOP.replace("return c1.count", "c3 = alert(message=query)\nreturn c1.count")
+    claims = _claims(after, flows=[ALERTS])
+    assert not any(claim.startswith("flow alerts") for claim in claims)

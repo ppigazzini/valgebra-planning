@@ -14,6 +14,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
   through the tool error that refused it. A key the tool's schemas do not declare is the value's
   own text and is written `*`: `get_run returned a value outside its contract (ok: bool_type)`.
 
+- An early exit from a loop is a test. A loop whose body may end the run, in a `stop` or a
+  `return`, lets what follows it run only where no iteration ended the run, and that block was
+  verified under the tests made before the loop alone. A sink called after such a loop under an
+  `implicit` flow rule had no flow link, and a program built with a `return` in the body was
+  proven. The block after the loop runs under every test a path ending the run in the body is
+  under, the array's source among them, so the sink is refuted as the same test written as an
+  `if` is.
+
 ## [0.0.5] - 2026-11-21
 
 A security release: four ways 0.0.4 proved a wrong program are closed, each under Security. The

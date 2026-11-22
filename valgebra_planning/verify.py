@@ -137,6 +137,8 @@ class _Walk:
     links: list[Link] = field(default_factory=list)
     #: The policy states each iteration of the loop being walked ends in.
     ends: list[_States] | None = None
+    #: The origins tested on each path that ends the run inside the loop being walked.
+    exits: list[frozenset[str]] | None = None
     gaps: list[Gap] = field(default_factory=list)
     #: The values drawn for each value holding a loop's array, by the set held for it; drawn
     #: apart from `rng`, so a witness drawn elsewhere is the same with loops or without.
@@ -154,9 +156,11 @@ class _Walk:
                 claim = f"return {end.ref} <= goal"
                 self.inclusion(where, claim, end.ref, held, self.task.goal, env)
             self.obeyed(where, path.states)
+            self.ended(path)
         elif isinstance(end, Stop):
             self.gaps.append(Gap(where, str(end.ref)))
             self.obeyed(where, path.states)
+            self.ended(path)
         elif isinstance(end, Next):
             if self.ends is not None:
                 self.ends.append(path.states)
@@ -171,10 +175,14 @@ class _Walk:
         Nothing crosses iterations, so one walk over the item's set holds for every item. The
         body may run any number of times, so the states a policy may be in when it starts are
         taken to a fixpoint, the states being finite. How many times it runs is the array's, so
-        its calls run under a test on the array's source. The item's name binds the item
-        alone: nothing the program held under that name, nor any field of it, is read in the
-        body. The item keeps the array it is read from, so a question its set leaves open is
-        asked of every item of the array, `_Walk.asked`.
+        its calls run under a test on the array's source (Debenedetti et al. 2025, §5.4). What
+        follows runs only where no iteration ended the run, so it runs under every test a path
+        ending the run in the body is under, the array's source among them: an early exit is a
+        test, as a statement after an operation that may end a run early depends on what that
+        operation read (Debenedetti et al. 2025, §7). The item's name binds the item alone:
+        nothing the program held under that name, nor any field of it, is read in the body. The
+        item keeps the array it is read from, so a question its set leaves open is asked of
+        every item of the array, `_Walk.asked`.
         """
         held = self.held(env, end.ref, where)
         if held is None:
@@ -185,15 +193,18 @@ class _Walk:
         inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
         states = path.states
         while self.policies:
-            ends = self.iterate(
+            ends, _ = self.iterate(
                 end.body, inner, inside, _Path(states, tested, path.acted), silent=True
             )
             grown = tuple(s.union(*(e[i] for e in ends)) for i, s in enumerate(states))
             if grown == states:
                 break
             states = grown
-        self.iterate(end.body, inner, inside, _Path(states, tested, path.acted), silent=False)
-        self.block(end.after, env, where, _Path(states, path.tested, path.acted))
+        _, exits = self.iterate(
+            end.body, inner, inside, _Path(states, tested, path.acted), silent=False
+        )
+        after = path.tested.union(*exits)
+        self.block(end.after, env, where, _Path(states, after, path.acted))
 
     def element(self, held: _Held) -> Slot:
         """Return the slot of an element of the array ``held``, as far as valgebra proves it.
@@ -222,16 +233,27 @@ class _Walk:
 
     def iterate(
         self, body: Block, env: dict[Ref, _Held], where: str, path: _Path, *, silent: bool
-    ) -> list[_States]:
-        """Walk a loop's body; return the policy states its iterations end in."""
-        links, gaps, ends = self.links, self.gaps, self.ends
-        self.ends = []
+    ) -> tuple[list[_States], list[frozenset[str]]]:
+        """Walk a loop's body; return the states its iterations end in, and what ends the run.
+
+        The second list holds, for each path ending the run in the body, the origins it tested.
+        """
+        links, gaps, ends, exits = self.links, self.gaps, self.ends, self.exits
+        self.ends, self.exits = [], []
         if silent:
             self.links, self.gaps = [], []
         self.block(body, env, where, path)
-        found = self.ends
-        self.links, self.gaps, self.ends = links, gaps, ends
-        return found
+        found, left = self.ends, self.exits
+        self.links, self.gaps, self.ends, self.exits = links, gaps, ends, exits
+        if exits is not None:
+            # A path ending the run in a loop inside this one ends it in this one too.
+            exits.extend(left)
+        return found, left
+
+    def ended(self, path: _Path) -> None:
+        """Record the origins a path ending the run inside a loop tested, for what follows it."""
+        if self.exits is not None:
+            self.exits.append(path.tested)
 
     def obeyed(self, where: str, states: _States) -> None:
         """Add a link per policy where a path ends: whether it may end in a bad or pending state."""
