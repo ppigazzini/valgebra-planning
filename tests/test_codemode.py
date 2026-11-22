@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
-from valgebra_planning.codemode import repair, stubs
+from valgebra_planning.codemode import PREAMBLE, repair, stubs
 from valgebra_planning.contracts import read_contract, read_task
-from valgebra_planning.critic import critique
+from valgebra_planning.critic import ProgramError, critique, read_program
 from valgebra_planning.planner import plan
 from valgebra_planning.program import render
 
@@ -203,3 +203,60 @@ def test_repair_accepts_a_weak_program_where_asked_and_stays_strict_by_default()
     assert not strictly.accepted
     note = critique(PLANNED, PICKING, task).notes
     assert note == ("uncovered: c2.distance (at else); the task tolerates it",)
+
+
+def test_the_preamble_s_program_is_one_the_critic_reads_and_proves() -> None:
+    written = PREAMBLE.split("A program for another task reads:\n\n", 1)[1].split('"""', 1)[0]
+    source = "\n".join(line.removeprefix("    ") for line in written.strip("\n").splitlines())
+    status = {"enum": ["shipped", "lost"]}
+    order = {"type": "string", "pattern": "^ord_[0-9]+$"}
+    shop = {
+        contract.name: contract
+        for contract in map(
+            read_contract,
+            [
+                {
+                    "name": "find_order",
+                    "inputSchema": _closed({"order_id": order}),
+                    "outputSchema": _closed({"order_id": order, "status": status}),
+                },
+                {
+                    "name": "send_notice",
+                    "inputSchema": _closed({"order_id": order, "status": {"const": "shipped"}}),
+                    "outputSchema": _closed({"notice_id": {"type": "string"}}),
+                },
+            ],
+        )
+    }
+    task = read_task("notify", {"order_id": order}, {"type": "string"}, stops={"find_order": {}})
+    checked = critique(source, shop, task)
+    assert checked.verified
+    assert checked.weak
+
+
+@pytest.mark.parametrize(
+    ("source", "says"),
+    [
+        (
+            "c1 = find_parcel(tracking=tracking)\nnotify(email=c1.parcel.contact)\nreturn 1\n",
+            "line 2: a call's result is bound to a name: `c2 = notify(...)`",
+        ),
+        (
+            "from typing import Any\nc1 = find_parcel(tracking=tracking)\nreturn 1\n",
+            "line 1: the tools are given: write the program alone",
+        ),
+        (
+            "c1 = find_parcel(tracking=tracking)\nstop(c1)\nreturn 1\n",
+            "line 2: a `stop` ends its path",
+        ),
+        (
+            "c1 = find_parcel(tracking=tracking)\nreturn c1.parcels[0]\n",
+            "an array's items by a loop, `for item in c1.items:`",
+        ),
+    ],
+    ids=["bare-call", "import", "stop-first", "index"],
+)
+def test_a_program_error_names_the_form_the_reader_reads(source: str, says: str) -> None:
+    with pytest.raises(ProgramError) as refused:
+        read_program(source)
+    assert says in str(refused.value)

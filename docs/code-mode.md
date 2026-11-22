@@ -11,6 +11,12 @@ The same steps have [a command line](command-line.md); what a link means is
 
 ## Stubs, critique, run
 
+`stubs` writes each tool as a typed Python function, under a preamble stating what a program may
+hold and one worked program for a task unlike any library's. A program the reader does not read
+is refused naming the line and the form it reads there: a call left unbound is answered with the
+assignment to write, `c2 = notify(...)`, and the stubs handed back as a program with the line to
+leave out.
+
 Run from the repository root:
 
 ```python

@@ -53,7 +53,11 @@ def _ref(node: ast.expr) -> Ref:
             node = node.value
         elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant):
             if not isinstance(node.slice.value, str):
-                raise _fail(node, "a field is read by its name")
+                raise _fail(
+                    node,
+                    "a field is read by its name, as `c1.items`, and an array's items by a loop, "
+                    "`for item in c1.items:`",
+                )
             path.append(node.slice.value)
             node = node.value
         elif isinstance(node, ast.Name):
@@ -194,7 +198,9 @@ def _loop(statement: ast.For, rest: Block) -> For:
 def _ending(last: ast.stmt, *, looping: bool) -> Return | Stop | Branch:
     if isinstance(last, ast.Return) and last.value is not None:
         if looping:
-            raise _fail(last, "a loop's body does not return")
+            raise _fail(
+                last, "a `return` in a loop's body is not read: end the loop, then return after it"
+            )
         return Return(_ref(last.value))
     if isinstance(last, ast.If):
         return _branch(last, looping=looping)
@@ -206,6 +212,24 @@ def _ending(last: ast.stmt, *, looping: bool) -> Return | Stop | Branch:
     ):
         return Stop(_ref(last.value.args[0]))
     raise _fail(last, "a block ends in a return, a stop or a test")
+
+
+def _misplaced(statement: ast.stmt, number: int) -> str:
+    """Return what a statement standing before a block's last one should be written as."""
+    if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+        called = statement.value.func
+        if isinstance(called, ast.Name) and called.id == "stop":
+            return (
+                "a `stop` ends its path: nothing after it runs, so it is a block's last statement"
+            )
+        tool = called.id if isinstance(called, ast.Name) else "tool"
+        return f"a call's result is bound to a name: `c{number} = {tool}(...)`"
+    if isinstance(statement, (ast.Import, ast.ImportFrom, ast.FunctionDef, ast.ClassDef)):
+        return "the tools are given: write the program alone, with no import, function or class"
+    return (
+        "before a block's last statement come calls, each bound to a name, a `try` around one, "
+        "and loops"
+    )
 
 
 def _block(
@@ -226,7 +250,7 @@ def _block(
         elif isinstance(statement, ast.Assign):
             calls.append(_call(statement))
         elif rest:
-            raise _fail(statement, "only calls and loops come before a block's last statement")
+            raise _fail(statement, _misplaced(statement, len(calls) + 1))
         else:
             return Block(tuple(calls), _ending(statement, looping=looping))
     if looping:

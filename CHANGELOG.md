@@ -38,6 +38,17 @@ All notable changes to valgebra-planning are recorded here. The format follows
   a call that takes any state the run may be in to a bad one is refused; `Monitor.errored`
   records the error, and `Monitor.held` returns every state held.
 
+### Changed
+
+- A program the reader does not read is refused naming the form it reads there. A call left
+  unbound was answered "only calls and loops come before a block's last statement", which names
+  the statement it refuses as allowed, and a model resubmitted it unchanged: it is answered with
+  the assignment to write, `c2 = notify(...)`. An import, a function or a class, the stubs handed
+  back, is answered that the tools are given; a `stop` before a block's end that it ends its
+  path; a return in a loop's body and an item read by its index with the form to write instead.
+  The stubs' preamble holds one worked program, for a task unlike any library's, which the
+  critic reads and proves.
+
 ### Added
 
 - A task names the stops it accepts as ends, and `repair` may accept a program stopping only
