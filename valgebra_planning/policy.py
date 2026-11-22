@@ -93,16 +93,19 @@ class Policy:
         tool: str,
         record: Validator[Any],
         hints: frozenset[str] = frozenset(),
+        result: Validator[Any] | None = None,
     ) -> frozenset[str]:
         """Return the states the automaton may be in after a call whose record lies in ``record``.
 
         A transition taken surely leaves its source; one taken possibly adds its target and
         keeps the source, as does a call no guard of the state surely matches. A bad state is
         never left. A transition reading the result is stepped after those reading the call,
-        from the states they leave, and is taken possibly at most: no result is known here.
+        from the states they leave: where ``result`` holds the set the result lies in, as in one
+        case of a split on it, its guard is read against that set; otherwise it is taken
+        possibly at most, no result being known.
         """
         made = self._stepped(states, tool, record, hints, returned=False)
-        return self._stepped(made, tool, record, hints, returned=True)
+        return self._stepped(made, tool, record, hints, returned=True, result=result)
 
     def _stepped(
         self,
@@ -112,6 +115,7 @@ class Policy:
         hints: frozenset[str],
         *,
         returned: bool,
+        result: Validator[Any] | None = None,
     ) -> frozenset[str]:
         after: set[str] = set()
         for state in states:
@@ -127,8 +131,11 @@ class Policy:
                 ):
                     continue
                 taken = _taken(record, transition.guard)
-                if returned and taken == "surely":
-                    taken = "possibly"
+                if returned and transition.result is not None:
+                    taken = _both(
+                        taken,
+                        "possibly" if result is None else _taken(result, transition.result),
+                    )
                 if taken != "never":
                     after.add(transition.target)
                 if taken == "surely":
@@ -146,6 +153,13 @@ class Policy:
         if not bad:
             return "never"
         return "surely" if bad == states else "possibly"
+
+
+def _both(one: Reach, other: Reach) -> Reach:
+    """Return whether two guards are both met, from whether each is."""
+    if "never" in (one, other):
+        return "never"
+    return "surely" if one == other == "surely" else "possibly"
 
 
 def _taken(record: Validator[Any], guard: Validator[Any]) -> Reach:

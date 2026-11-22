@@ -190,12 +190,17 @@ stepped on sets of states; a bad state is never left. At run time the same autom
 monitor stepping on concrete records. A call that answers with an error may have acted or not,
 so the walk reads its error block from either set of states, and the monitor holds both after
 it, refusing a call that takes any of them to a bad state. A transition may read the call's
-result: the monitor steps it when the result arrives, and the walk, which holds no result,
-takes it possibly at most, so no link is proven through it. **[LOAD-BEARING: policy-automaton]**
+result: the monitor steps it when the result arrives. The walk splits the path at the call, as
+an observation splits a belief execution tree (Bertoli et al. 2006, Def. 3.6): each case holds
+the result in one cell of the guards and their complements, the belief met with the
+observation (Bertoli et al. 2006, Def. 3.4), and the automaton stepped on that cell, so a guard
+is taken surely or never in each; a cell valgebra proves empty is dropped, and so is a branch
+no value of a case reaches. The planner holds no case, and takes such a transition possibly at
+most. **[LOAD-BEARING: policy-automaton]**
 
-IMPLEMENTED-BY: policy.py
+IMPLEMENTED-BY: policy.py, verify.py::_Walk.call, verify.py::_Walk.reached
 
-HELD-BY: test_the_monitor_reads_a_trace_call_by_call, test_a_bad_state_is_never_left, test_a_call_that_answered_with_an_error_holds_the_policy_in_either_state, test_a_run_refuses_the_call_an_approval_that_answered_with_an_error_would_allow, test_a_call_the_server_answers_with_an_error_leaves_the_policy_in_either_state, test_a_transition_reading_the_result_is_taken_when_the_result_arrives, test_a_transition_reading_the_result_is_possibly_taken_before_the_run, test_the_gate_reads_a_result_a_transition_waits_on, test_a_guard_the_arguments_only_overlap_leaves_the_policy_undecided, test_a_program_planned_under_the_policy_approves_first_and_is_proven, test_a_program_planned_without_the_policy_is_refuted_on_its_freight_path_alone
+HELD-BY: test_the_monitor_reads_a_trace_call_by_call, test_a_bad_state_is_never_left, test_a_call_that_answered_with_an_error_holds_the_policy_in_either_state, test_a_run_refuses_the_call_an_approval_that_answered_with_an_error_would_allow, test_a_call_the_server_answers_with_an_error_leaves_the_policy_in_either_state, test_a_transition_reading_the_result_is_taken_when_the_result_arrives, test_a_walk_splits_at_a_call_a_result_guard_reads_and_refutes_the_case_it_breaks, test_a_program_moving_only_under_the_answer_its_policy_reads_is_proven, test_the_gate_reads_a_result_a_transition_waits_on, test_a_guard_the_arguments_only_overlap_leaves_the_policy_undecided, test_a_program_planned_under_the_policy_approves_first_and_is_proven, test_a_program_planned_without_the_policy_is_refuted_on_its_freight_path_alone
 
 **An obligation is decided over the whole program.** A property that no continuation of a
 run's prefix makes true or false for good, as a notice owed after every booking, is not

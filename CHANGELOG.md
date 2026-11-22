@@ -74,6 +74,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A policy transition reading a call's result is proven or refuted before the run. The walk
+  took it possibly at most, so a program asking for a yes and walking only under it was
+  undecided, as was one walking after a no. The verifier splits the path at the call, as an
+  observation splits a belief execution tree (Bertoli et al. 2006, Def. 3.6): one case for each
+  cell of the guards and their complements valgebra leaves inhabited, the result held there and
+  the policy stepped on it, a guard taken surely or never in each; a branch no value of a case
+  reaches is dropped. The program walking only under the yes is proven, its stop the no's alone,
+  and the one ignoring the answer is refuted on the no. Links in a case carry its place,
+  `case:c2:0`. The planner takes such a transition possibly at most.
+
 - A plan tests before it makes a call only one branch needs. The search makes a call where it
   first may, so a confirmation a policy requires before a grasp was asked before the distance
   test deciding whether the grasp is made at all, and asked on the path that stops. After the

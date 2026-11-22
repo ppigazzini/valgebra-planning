@@ -163,8 +163,11 @@ verifier, which adds a link for it.
   annotation is destructive and open-world, and read-only only where it says so; the policy's link
   then lists the hints it reads as an assumption. A transition may read the call's result instead,
   a set it must lie in: the runner and the proxy step it when the result arrives, a call answering
-  with an error taking none, and here it is taken possibly at most, so a link resting on it is
-  undecided, never proven. A pending state is an obligation: a path may pass through it and must
+  with an error taking none. The verifier splits the path at such a call, one case for each cell
+  of the guards and their complements that valgebra leaves inhabited, the result held in that
+  cell and the policy stepped on it, and a branch no value of a case reaches is no path: a program
+  walking only under a yes is proven, and one walking after a no is refuted on that case. The
+  planner holds no case, and takes such a transition possibly at most. A pending state is an obligation: a path may pass through it and must
   not end in it, as a booking owes a notice. Every path of a program ends, a loop's after any
   number of items, so a pending state is decided before the run, where a monitor reading a prefix
   cannot decide it (Bauer et al. 2011); the runner reads it when the run ends. A bad state is

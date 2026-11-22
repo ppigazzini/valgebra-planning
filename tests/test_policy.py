@@ -490,10 +490,37 @@ def test_a_run_moves_only_after_the_answer_the_policy_reads(*, answer: bool) -> 
     assert ended.ok is walked
 
 
-def test_a_transition_reading_the_result_is_possibly_taken_before_the_run() -> None:
-    # The walk reads no result: until the walk splits on it, a link through it is undecided.
+def test_a_walk_splits_at_a_call_a_result_guard_reads_and_refutes_the_case_it_breaks() -> None:
+    # One case holds the yes and walks under it; the other walks after a no.
     skills = _skills(("detect_object", "confirm_with_user", "walk_to"))
     task = read_task("walk", {"name": {"type": "string"}}, {"type": "boolean"})
     checked = verify(read_program(IGNORED), skills, task, policies=[ANSWERED_YES])
-    verdicts = {link.claim: link.verdict for link in checked.links}
-    assert verdicts["policy motion after a yes holds"] == "undecided"
+    verdicts = {
+        link.where: link.verdict
+        for link in checked.links
+        if link.claim == "policy motion after a yes holds"
+    }
+    assert verdicts == {"case:c2:0": "proven", "case:c2:1": "refuted"}
+
+
+GUARDED = (
+    "c1 = detect_object(name=name)\n"
+    "c2 = confirm_with_user(question=name)\n"
+    "if c2.confirmed == True:\n"
+    "    c3 = walk_to(object_id=c1.object_id)\n"
+    "    return c3.arrived\n"
+    "stop(c2.confirmed)\n"
+)
+
+
+def test_a_program_moving_only_under_the_answer_its_policy_reads_is_proven() -> None:
+    skills = _skills(("detect_object", "confirm_with_user", "walk_to"))
+    task = read_task("walk", {"name": {"type": "string"}}, {"type": "boolean"})
+    checked = verify(read_program(GUARDED), skills, task, policies=[ANSWERED_YES])
+    assert checked.verified
+    # Each case reaches the one branch its answer meets, so the stop is the no's alone.
+    assert [gap.where for gap in checked.gaps] == ["case:c2:1.else"]
+    held = sorted(
+        link.where for link in checked.links if link.claim == "policy motion after a yes holds"
+    )
+    assert held == ["case:c2:0.then", "case:c2:1.else"]

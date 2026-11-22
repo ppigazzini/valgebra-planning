@@ -132,6 +132,9 @@ class _Held:
     origin: Slot
     #: Where the value is a loop's item: the array it is read from.
     loop: _Loop | None = field(default=None, compare=False)
+    #: Whether the value is a call's result narrowed to one case of a split on a policy's
+    #: result guard, so a branch none of its values reaches is no path.
+    case: bool = field(default=False, compare=False)
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -165,8 +168,16 @@ class _Walk:
     seed: int = 0
 
     def block(self, block: Block, env: dict[Ref, _Held], where: str, path: _Path) -> None:
-        for call in block.calls:
-            env, path = self.call(call, env, where, path)
+        for index, call in enumerate(block.calls):
+            cases = self.call(call, env, where, path)
+            if len(cases) > 1:
+                rest = Block(block.calls[index + 1 :], block.end)
+                for number, (case_env, case_path) in enumerate(cases):
+                    self.block(
+                        rest, case_env, _join(where, f"case:{call.result}:{number}"), case_path
+                    )
+                return
+            env, path = cases[0]
         end = block.end
         if isinstance(end, Return):
             held = self.held(env, end.ref, where)
@@ -318,16 +329,42 @@ class _Walk:
         outside = _Held(intersection(held.values, complement(tested)), held.origin, held.loop)
         # Which branch runs carries the tested value's influence: an implicit flow.
         tested = _Path(path.states, path.tested | {held.origin.tool}, path.acted)
-        self.block(test.then, {**env, test.ref: inside}, _join(where, "then"), tested)
-        self.block(test.otherwise, {**env, test.ref: outside}, _join(where, "else"), tested)
+        for side, narrowed, name in (
+            (test.then, inside, "then"),
+            (test.otherwise, outside, "else"),
+        ):
+            branched = {**env, test.ref: narrowed}
+            if not self.reached(branched, test.ref.variable):
+                continue
+            self.block(side, branched, _join(where, name), tested)
+
+    def reached(self, env: dict[Ref, _Held], variable: str) -> bool:
+        """Return whether a branch is a path: not where a case's value is proven to miss it.
+
+        A call's result narrowed to one case of a split on a policy's result guard reaches a
+        branch only where some value of the case meets every test on the way; a case and a
+        branch valgebra proves disjoint are no execution (Bertoli et al. 2006, Def. 3.4).
+        """
+        root = env.get(Ref(variable))
+        if root is None or not root.case:
+            return True
+        return self.belief(env, variable).relation_to(nothing) != "subset"
 
     def call(
         self, call: Call, env: dict[Ref, _Held], where: str, path: _Path
-    ) -> tuple[dict[Ref, _Held], _Path]:
+    ) -> list[tuple[dict[Ref, _Held], _Path]]:
+        """Walk a call; return the cases the path goes on in, one where nothing splits it.
+
+        A policy transition reading the call's result splits the path at the call, as an
+        observation splits a belief execution tree in two (Bertoli et al. 2006, Def. 3.6): each
+        case holds the result in one cell of the guards' sets and their complements, the belief
+        met with the observation (Bertoli et al. 2006, Def. 3.4), and the policy stepped on that
+        cell; a cell valgebra proves empty is dropped.
+        """
         contract = self.contracts.get(call.tool)
         if contract is None:
             self.links.append(Link(where, f"{call.tool} is a tool", "refuted"))
-            return env, path
+            return [(env, path)]
         self.flowing(call, env, where, path)
         acted = path.acted
         failing = self.repeated(call, contract, where, acted) if acted or call.on_error else acted
@@ -339,8 +376,8 @@ class _Walk:
         if not contract.plain and len(bound) == len(call.bindings):
             self.record(call, contract, bound, where, env)
         after = states
+        record = record_of({name: held.values for name, held in bound.items()}, closed=True)
         if self.policies:
-            record = record_of({name: held.values for name, held in bound.items()}, closed=True)
             after = tuple(
                 policy.step(held, call.tool, record, contract.hints)
                 for policy, held in zip(self.policies, states, strict=True)
@@ -351,7 +388,25 @@ class _Walk:
         defined = {ref: held for ref, held in env.items() if ref.variable != call.result}
         for slot in contract.results:
             defined[Ref(call.result, slot.path)] = _Held(slot.values, slot)
-        return defined, _Path(after, path.tested, _unread(acted, call.result) if acted else acted)
+        left = _unread(acted, call.result) if acted else acted
+        whole = defined.get(Ref(call.result))
+        guards = [
+            transition.result
+            for policy in self.policies
+            for transition in policy.transitions
+            if transition.result is not None and transition.reads(call.tool, contract.hints)
+        ]
+        if whole is None or not guards:
+            return [(defined, _Path(after, path.tested, left))]
+        cases = []
+        for cell in _cells(whole.values, guards):
+            stepped = tuple(
+                policy.step(held, call.tool, record, contract.hints, cell)
+                for policy, held in zip(self.policies, states, strict=True)
+            )
+            narrowed = {**defined, Ref(call.result): _Held(cell, whole.origin, case=True)}
+            cases.append((narrowed, _Path(stepped, path.tested, left)))
+        return cases
 
     def repeated(self, call: Call, contract: Contract, where: str, acted: _Acted) -> _Acted:
         """Check a call against those that may have acted on this path; return what its block holds.
@@ -888,6 +943,22 @@ def _tested(
         for ref, held in env.items()
         if ref.variable == variable and ref.path and held.values is not held.origin.values
     ]
+
+
+def _cells(values: Validator[Any], guards: Sequence[Validator[Any]]) -> list[Validator[Any]]:
+    """Return ``values`` split by each guard and its complement, each part valgebra leaves open.
+
+    A part valgebra proves empty holds no result, so no case is walked for it.
+    """
+    cells = [values]
+    for guard in guards:
+        cells = [
+            part
+            for cell in cells
+            for part in (intersection(cell, guard), intersection(cell, complement(guard)))
+            if part.relation_to(nothing) != "subset"
+        ]
+    return cells
 
 
 def _join(where: str, branch: str) -> str:
