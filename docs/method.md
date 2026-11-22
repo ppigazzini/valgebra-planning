@@ -165,8 +165,12 @@ verifier, which adds a link for it.
   Sah et al. 2026, is refuted before the run.
 - **Mined types** (`valgebra_planning/mining.py`). Slots holding one observed value are one
   semantic type (APIphany, Guo et al. 2022), and a value fills an argument only where their
-  types agree. A mined type is an assumption: the verifier reads none, and a plan names each
-  binding that rests on one.
+  types agree. A call a planned program made, marked `"planned": true` in the log, shares a
+  value with the result it was bound from by construction, so its arguments link nothing and a
+  wrong binding a plan made is never read back as observed. A task input a log records,
+  `{"inputs": {...}}`, is typed as any slot; one it never records fills no argument whose type
+  a tool's result was seen in. A mined type is an assumption: the verifier reads none, and a
+  plan names each binding that rests on one.
 - **Inferred outputs** (`valgebra_planning/mining.py`). A tool listed without an `outputSchema`
   gets one shaped from its results in the observed calls: each kind seen, an object's keys every
   observed one holds required, nothing narrower guessed. It is an assumption as a mined type is:

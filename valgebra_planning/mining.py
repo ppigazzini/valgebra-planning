@@ -6,6 +6,17 @@ that a later call took as an argument links the two slots, and slots linked by a
 value form one semantic type (APIphany, Guo et al. 2022, §4). A binding across two types is then
 refused, which narrows the planner's choices to what the observations show.
 
+A witness is a call a server answered, its arguments chosen elsewhere: APIphany collects them
+ahead of time, in a sandbox or from production traffic (Guo et al. 2022, §1), and a value two
+locations share by chance merges them spuriously (Guo et al. 2022, §7.2). A call a planned
+program made, marked ``"planned": true``, shares a value with the result it was bound from by
+construction, so its arguments link nothing; its result is the server's and links as any.
+
+A task input is a value from outside the tools. A log may record the inputs a run started
+with, ``{"inputs": {...}}``, and an input seen so is typed as any slot is. An input never seen
+fills an argument only where no tool's result was seen in the argument's type: where the
+observations show a slot's values coming from a tool, a value from outside is not one of them.
+
 A mined type is an assumption, never a proof: the verifier reads none, every link of a
 program stays valgebra's, and a plan names each binding that relied on one. A slot never
 observed carries no type and is bound as its set alone allows.
@@ -22,7 +33,8 @@ from valgebra_planning.contracts import Contract
 
 __all__ = ["SlotKey", "Types", "infer_outputs", "mine"]
 
-#: A slot as the miner names it: ``("argument", "tool.name")`` or ``("result", "tool.path")``.
+#: A slot as the miner names it: ``("argument", "tool.name")``, ``("result", "tool.path")``, or
+#: ``("input", "name.path")`` for a task input.
 SlotKey = tuple[str, str]
 
 
@@ -31,10 +43,21 @@ class Types:
     """The semantic type of every slot seen in the observations."""
 
     of: Mapping[SlotKey, int]
+    #: The types a tool's result was seen in.
+    returned: frozenset[int] = frozenset()
 
-    def agree(self, one: SlotKey, other: SlotKey) -> bool:
-        """Return whether two slots may be bound together: one is untyped, or both share one."""
-        return one not in self.of or other not in self.of or self.of[one] == self.of[other]
+    def agree(self, value: SlotKey, argument: SlotKey) -> bool:
+        """Return whether a value's slot may fill an argument.
+
+        Two typed slots agree where they share a type. A task input never observed agrees with
+        an argument whose type holds no result, its values being seen to come from outside the
+        tools; any other untyped slot agrees with every argument.
+        """
+        if value in self.of and argument in self.of:
+            return self.of[value] == self.of[argument]
+        if value[0] == "input" and value not in self.of:
+            return argument not in self.of or self.of[argument] not in self.returned
+        return True
 
     def typed(self, one: SlotKey, other: SlotKey) -> bool:
         """Return whether both slots carry a type, so binding them rests on the observations."""
@@ -54,18 +77,34 @@ def _seen(value: Any) -> bool:
     return value is not None and not isinstance(value, bool)
 
 
+def _inputs(value: Any, path: tuple[str, ...]) -> list[tuple[SlotKey, tuple[bool, Any]]]:
+    """Return a task input's slots: the whole value, and each field of a record, as held."""
+    found = [(("input", ".".join(path)), (True, value))]
+    if isinstance(value, dict):
+        for name, field in value.items():
+            found += _inputs(field, (*path, name))
+    return found
+
+
 def _holders(
     observed: Iterable[Mapping[str, Any]], contracts: Mapping[str, Contract]
 ) -> dict[object, list[SlotKey]]:
     """Return, for every value observed, the slots it was seen in."""
     holders: dict[object, list[SlotKey]] = {}
     for call in observed:
+        if "inputs" in call:
+            for name, value in call["inputs"].items():
+                for key, (_, held) in _inputs(value, (name,)):
+                    if _seen(held):
+                        holders.setdefault(json_key(held), []).append(key)
+            continue
         contract = contracts.get(call["tool"])
         if contract is None:
             continue
+        chosen = () if call.get("planned") else contract.arguments
         seen = [
             (("argument", slot.name), _walk(call.get("arguments", {}), slot.path))
-            for slot in contract.arguments
+            for slot in chosen
         ] + [
             (("result", slot.name), _walk(call.get("result"), slot.path))
             for slot in contract.results
@@ -80,9 +119,11 @@ def _holders(
 def mine(observed: Iterable[Mapping[str, Any]], contracts: Mapping[str, Contract]) -> Types:
     """Return the semantic types the observed calls show.
 
-    Each observation is ``{"tool": name, "arguments": {...}, "result": ...}``. Every argument
-    and every result field a contract names is a slot; two slots holding one value, under
-    JSON equality, are one type.
+    Each observation is ``{"tool": name, "arguments": {...}, "result": ...}``, with
+    ``"planned": true`` where a planned program made the call, or ``{"inputs": {...}}``, the
+    values a run started with. Every argument and every result field a contract names is a slot,
+    and so is each input and each of its fields; two slots holding one value, under JSON
+    equality, are one type. A planned call's arguments are no slot.
     """
     parent: dict[SlotKey, SlotKey] = {}
 
@@ -98,7 +139,8 @@ def mine(observed: Iterable[Mapping[str, Any]], contracts: Mapping[str, Contract
             parent[root(key)] = root(keys[0])
         root(keys[0])
     roots = sorted({root(key) for key in parent})
-    return Types({key: roots.index(root(key)) for key in parent})
+    of = {key: roots.index(root(key)) for key in parent}
+    return Types(of, frozenset(of[key] for key in of if key[0] == "result"))
 
 
 #: The JSON kind of a Python value `json.loads` returns, a bool being no integer.

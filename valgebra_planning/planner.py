@@ -399,7 +399,11 @@ class _Search:
         """Return whether the mined types let ``ref`` fill ``slot``; always, with none mined."""
         if self.types is None:
             return True
-        return self.types.agree(_result_key(state.origin(ref), ref), ("argument", slot.name))
+        origins = dict(state.origins)
+        source = (
+            _result_key(origins[ref.variable], ref) if ref.variable in origins else _input_key(ref)
+        )
+        return self.types.agree(source, ("argument", slot.name))
 
     def flowing(
         self, state: _State, contract: Contract, bindings: tuple[tuple[str, Ref], ...]
@@ -474,6 +478,11 @@ def _result_key(origin: str, ref: Ref) -> SlotKey:
     return ("result", ".".join((origin, *ref.path)))
 
 
+def _input_key(ref: Ref) -> SlotKey:
+    """Return the slot a reference to a task input reads, as the miner names it."""
+    return ("input", ".".join((ref.variable, *ref.path)))
+
+
 def _assumed(
     block: Block,
     types: Types | None,
@@ -485,16 +494,9 @@ def _assumed(
     found = []
     for call in block.calls:
         for name, ref in call.bindings:
-            if not isinstance(ref, Ref) or ref.variable not in made:
-                continue
-            source = made[ref.variable]
-            if types is not None and types.typed(
-                _result_key(source, ref), ("argument", f"{call.tool}.{name}")
-            ):
-                found.append(f"{ref} -> {call.tool}.{name}")
-            if contracts[source].inferred:
-                found.append(
-                    f"{ref} -> {call.tool}.{name}, from the output of {source} as observed"
+            if isinstance(ref, Ref):
+                found += _resting(
+                    ref, f"{call.tool}.{name}", made.get(ref.variable), types, contracts
                 )
         if call.retry:
             found += [f"retry {call.tool}: {a}" for a in retry_assumptions(contracts[call.tool])]
@@ -505,6 +507,26 @@ def _assumed(
     if isinstance(end, Branch):
         found += _assumed(end.then, types, contracts, made)
         found += _assumed(end.otherwise, types, contracts, made)
+    return found
+
+
+def _resting(
+    ref: Ref,
+    argument: str,
+    source: str | None,
+    types: Types | None,
+    contracts: Mapping[str, Contract],
+) -> list[str]:
+    """Return what a binding of ``ref`` into ``argument`` rests on: a mined type, an output seen.
+
+    ``source`` is the tool whose result ``ref`` reads, None for a task input.
+    """
+    key = _input_key(ref) if source is None else _result_key(source, ref)
+    found = []
+    if types is not None and types.typed(key, ("argument", argument)):
+        found.append(f"{ref} -> {argument}")
+    if source is not None and contracts[source].inferred:
+        found.append(f"{ref} -> {argument}, from the output of {source} as observed")
     return found
 
 

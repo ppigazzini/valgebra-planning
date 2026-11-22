@@ -228,12 +228,17 @@ HELD-BY: test_an_empty_goal_and_a_universal_goal_are_found, test_a_guard_no_reco
 calls and merges into one group the locations a value was seen at, by union-find (Guo et al.
 2022, §4). A binding across two mined types is refused, which narrows the planner's choices
 to what the observations show. A boolean or a null links nothing, and a mined type is an
-assumption: the verifier reads none, and a plan names each binding resting on one.
-**[LOAD-BEARING: type-mining]**
+assumption: the verifier reads none, and a plan names each binding resting on one. A witness
+is a call a server answered, collected ahead of time in a sandbox or from production traffic
+(Guo et al. 2022, §1), and two locations sharing a value by chance are merged spuriously (Guo et
+al. 2022, §7.2); a call a planned program made shares a value with the result it was bound
+from by construction, so its arguments link nothing. A task input is a value from outside the
+tools: one a log shows is typed as any slot, and one it never shows fills no argument whose
+type a tool's result was seen in. **[LOAD-BEARING: type-mining]**
 
 IMPLEMENTED-BY: mining.py
 
-HELD-BY: test_slots_holding_one_observed_value_are_one_type, test_a_boolean_or_a_null_links_nothing, test_mined_types_route_the_notice_through_the_sanitizer_as_observed, test_the_verifier_reads_no_mined_type
+HELD-BY: test_slots_holding_one_observed_value_are_one_type, test_a_boolean_or_a_null_links_nothing, test_mined_types_route_the_notice_through_the_sanitizer_as_observed, test_the_verifier_reads_no_mined_type, test_a_planned_call_s_arguments_link_nothing, test_a_task_input_no_log_shows_fills_no_argument_a_tool_s_result_was_seen_in, test_a_task_input_a_log_shows_is_typed_as_any_slot
 
 ## Flows and privileges
 

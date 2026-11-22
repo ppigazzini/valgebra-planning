@@ -17,7 +17,7 @@ A library is a directory (`valgebra_planning/library.py` reads it):
 | `tasks.json` | `{"tasks": [...]}`, each task a `name`, the JSON Schema of each value the agent starts with in `inputs`, the JSON Schema of the `goal`, and the rules it is held to: `errors` (any tool may fail), `policies` and `flows` by name, `types`, the file of observed calls its semantic types are mined from; `depth`, the calls and tests a path may take where the task sets its own bound; and `stops`, for a tool or an input, the JSON Schema of the whole value a path may stop on there, an outcome the task accepts as an end |
 | `policies.json` | `{"policies": [...]}`, each an automaton over calls (`valgebra_planning/policy.py`): `initial`, the `bad` states no path may reach, the `pending` states no path may end in, and the `transitions` |
 | `flows.json` | `{"flows": [...]}`, each a flow rule (`valgebra_planning/flows.py`) |
-| a file `types` names | `{"calls": [...]}`, each an observed call: `tool`, `arguments`, `result`; a tool listed without an `outputSchema` gets one shaped from its results there, an assumption every binding resting on it names |
+| a file `types` names | `{"calls": [...]}`, each an observed call: `tool`, `arguments`, `result`, and `"planned": true` where a planned program made it, whose arguments then link nothing; or `{"inputs": {...}}`, the values a run started with, which types each task input it shows; a tool listed without an `outputSchema` gets one shaped from its results there, an assumption every binding resting on it names |
 
 A tool without an `outputSchema` can be called, and nothing it returns can fill another call's
 argument: its result is a set no argument is proven to hold. `examples/parcels` is a library

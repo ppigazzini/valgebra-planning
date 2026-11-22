@@ -109,6 +109,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A planned binding is no longer read back as evidence, and a task input is typed. `mine`
+  linked an argument to any result sharing its value, so the log of a planned run linked each
+  argument to the result the plan bound it from by construction: a detection's confidence
+  passed as a grasp's distance came back as an observed type, and the planner kept the binding
+  with the observations behind it. A call marked `"planned": true` in the log links its result
+  and none of its arguments. A task input was never typed, so with mined types it filled any
+  argument: a free-text name filled a grasp's object id. A log entry `{"inputs": {...}}` types
+  the inputs it shows as any slot, and an input no log shows fills no argument whose type a
+  tool's result was seen in; the critic notes a program that passes one there.
+
 - Seventeen citations named a place that does not say their sentence. A strong solution is
   (Cimatti et al. 2003, Def. 2.10), where Def. 2.11 is the nondeterministic one; fairness, and
   no bound on the failures before the goal, is §2.3's remark after that definition; a belief as

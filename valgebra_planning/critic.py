@@ -29,7 +29,7 @@ from typing import Any
 
 from valgebra_planning.contracts import Contract, Task
 from valgebra_planning.flows import Flow
-from valgebra_planning.mining import Types
+from valgebra_planning.mining import SlotKey, Types
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 from valgebra_planning.verify import Link, Verification, verify
@@ -371,24 +371,46 @@ def _remedy(link: Link) -> str | None:
     return _guard(claim)
 
 
-def _crossed(block: Block, made: dict[str, str], types: Types) -> list[str]:
-    """Return each binding whose value and argument the observed calls show as two types."""
+def _crossing(
+    ref: Ref, target: SlotKey, made: dict[str, str], types: Types, inputs: frozenset[str]
+) -> str | None:
+    """Return the note a binding of ``ref`` into ``target`` crossing the observed types takes."""
+    if ref.variable in made:
+        source = ("result", ".".join((made[ref.variable], *ref.path)))
+    elif ref.variable in inputs:
+        source = ("input", ".".join((ref.variable, *ref.path)))
+    else:
+        return None
+    if types.agree(source, target):
+        return None
+    if types.typed(source, target):
+        return f"assumed: the observed calls show {ref} and {target[1]} as two types"
+    return (
+        f"assumed: the observed calls show {target[1]} taking a tool's result, and {ref} is a"
+        " task input they never show"
+    )
+
+
+def _crossed(block: Block, made: dict[str, str], types: Types, inputs: frozenset[str]) -> list[str]:
+    """Return each binding whose value and argument the observed calls show as two types.
+
+    A task input never observed is noted where it fills an argument a tool's result was seen in.
+    """
     made = made | {call.result: call.tool for call in block.calls}
-    notes = []
-    for call in block.calls:
-        for name, ref in call.bindings:
-            if isinstance(ref, Const) or ref.variable not in made:
-                continue
-            source = ("result", ".".join((made[ref.variable], *ref.path)))
-            target = ("argument", f"{call.tool}.{name}")
-            if types.typed(source, target) and not types.agree(source, target):
-                notes.append(f"assumed: the observed calls show {ref} and {target[1]} as two types")
-        if call.on_error is not None:
-            notes += _crossed(call.on_error, made, types)
+    notes = [
+        note
+        for call in block.calls
+        for name, ref in call.bindings
+        if isinstance(ref, Ref)
+        and (note := _crossing(ref, ("argument", f"{call.tool}.{name}"), made, types, inputs))
+    ]
+    nested = [call.on_error for call in block.calls if call.on_error is not None]
     if isinstance(block.end, Branch):
-        notes += _crossed(block.end.then, made, types) + _crossed(block.end.otherwise, made, types)
+        nested += [block.end.then, block.end.otherwise]
     elif isinstance(block.end, For):
-        notes += _crossed(block.end.body, made, types) + _crossed(block.end.after, made, types)
+        nested += [block.end.body, block.end.after]
+    for inner in nested:
+        notes += _crossed(inner, made, types, inputs)
     return notes
 
 
@@ -438,5 +460,5 @@ def critique(
     ]
     notes += [f"assumed: {a}" for a in sorted({a for link in checked.links for a in link.assumed})]
     if types is not None:
-        notes += _crossed(program, {}, types)
+        notes += _crossed(program, {}, types, frozenset(task.held))
     return Critique(program, checked, tuple(notes))
