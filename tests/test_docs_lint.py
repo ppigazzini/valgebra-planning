@@ -127,22 +127,67 @@ def test_the_theory_page_and_the_package_name_each_other() -> None:
     ]
 
 
-def test_a_place_is_read_where_a_copy_of_its_work_prints_it(tmp_path: Path) -> None:
-    (tmp_path / "PLN_Cimatti2003_Plans.txt").write_text(
-        "Definition 2.11 (Solutions). Let\n2.2 Domains\n"
+def test_a_place_is_read_in_the_copy_the_shelf_s_index_names(tmp_path: Path) -> None:
+    shelf = tmp_path / "text"
+    shelf.mkdir()
+    (shelf / "PLN_Cimatti2003_Plans.txt").write_text(
+        "Definition 2.11 (Solutions). Let\n2.2 Domains\n", encoding="utf-8"
     )
-    (tmp_path / "VER_Rosu2012_Monitoring.txt").write_text("Definition 12. Let X be\n")
+    (shelf / "PLN_Cimatti2003_Other.txt").write_text("Definition 2.1. Let\n", encoding="utf-8")
+    (shelf / "VER_Rosu2012_Monitoring.txt").write_text(
+        "Definition 12. Let X be\n", encoding="utf-8"
+    )
+    index = tmp_path / "REFERENCES.md"
+    index.write_text(
+        "| file | cited | why |\n|---|---|---|\n"
+        "| `PLN_Cimatti2003_Plans` | Cimatti et al. 2003 | plans |\n"
+        "| `PLN_Cimatti2003_Other` | | another work, of the same author and year |\n"
+        "| `VER_Rosu2012_Monitoring` | Roşu and Chen 2012 | monitors |\n",
+        encoding="utf-8",
+    )
     page = (
         "(Cimatti et al. 2003, Def. 2.11, §2.2), (Cimatti et al. 2003, Def. 2.1),"
         " (Roşu and Chen 2012, Def. 12), (Guo et al. 2022, §4)"
     )
     texts = {docs_lint.THEORY: page}
     where = f"{docs_lint.THEORY}: "
-    assert docs_lint.check_places(texts, tmp_path) == [
+    assert docs_lint.check_places(texts, shelf, index) == [
         f"{where}(Cimatti et al. 2003, Def. 2.1) is a place no copy of the work prints",
-        f"{where}'Guo et al. 2022' has no copy on the shelf to read it in",
+        f"{where}'Guo et al. 2022' has no copy the shelf's index names to read it in",
     ]
-    assert docs_lint.check_places(texts, tmp_path / "absent") == []
+    assert docs_lint.check_places(texts, tmp_path / "absent", index) == []
+    assert docs_lint.check_places(texts, shelf, tmp_path / "absent.md") == [
+        "absent.md: missing beside the shelf, so no citation finds its copy"
+    ]
+
+
+PLACED = """\
+**Strong.** A strong solution (Cimatti et al. 2003, Def. 2.10). **[LOAD-BEARING: strong]**
+
+IMPLEMENTED-BY: planner.py, planner.py::plan
+
+HELD-BY: test_plan
+"""
+
+
+def test_an_item_cites_its_claim_s_place_for_a_work_its_claim_cites() -> None:
+    module = (
+        '"""Plans (Cimatti et al. 2003, Def. 2.10)."""\n\n\n'
+        "def plan() -> None:\n"
+        '    """Return a strong plan (Cimatti et al. 2003, Def. 2.11; Feng et al. 2017, §4)."""\n'
+    )
+    texts = {
+        docs_lint.THEORY: PLACED,
+        "valgebra_planning/planner.py": module,
+        "tests/test_planner.py": "def test_plan() -> None:\n    pass\n",
+    }
+    assert docs_lint.check_theory(texts) == [
+        "planner.py::plan: cites 'Feng et al. 2017', which no claim naming it cites",
+        (
+            "planner.py::plan: cites (Cimatti et al. 2003, Def. 2.11), a place no claim naming"
+            " it cites for that work"
+        ),
+    ]
 
 
 def test_the_readme_links_into_the_tree_by_address() -> None:

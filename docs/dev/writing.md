@@ -239,8 +239,11 @@ page in the same change.
 not list, and an entry no tracked text cites. A key of one surname is not read. In the package
 and on the theory page it refuses a citation with no place; an `IMPLEMENTED-BY:` entry naming
 no item, or an item citing none of the works its claim cites; an item citing a work that no
-claim naming it cites; and a `HELD-BY:` name that is no test. Where the papers are at hand, only
-in the author's clone, it refuses a place the copy of its paper does not print.
+claim naming it cites, or citing a work its claim cites at a place the claim does not; and a
+`HELD-BY:` name that is no test. Where the papers are at hand, only in the author's clone, it
+refuses a place the copy of its paper does not print, the copy the shelf's index names for the
+key, never one found by a surname and a year. A place the copy prints may still not say the
+sentence: what it says is read, by the author, before the citation goes in.
 
 ## Commit messages
 

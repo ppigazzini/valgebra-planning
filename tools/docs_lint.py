@@ -63,7 +63,6 @@ import re
 import subprocess
 import sys
 import tokenize
-import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -73,6 +72,10 @@ REFERENCES = "docs/references.md"
 THEORY = "docs/dev/theory.md"
 #: The text renderings of the paper shelf, which only the author's clone holds.
 SHELF = ROOT / "__DEV" / "papers" / "text"
+#: The shelf's index, beside it: a row a copy, its stem first and the key the tree cites it by
+#: second, empty for a copy the tree does not cite.
+SHELF_INDEX = ROOT / "__DEV" / "REFERENCES.md"
+SHELVED = re.compile(r"^\| `(?P<copy>[A-Za-z0-9_]+)` \|(?P<key>[^|]*)\|", re.MULTILINE)
 
 # Each rule is (pattern, description). Applied outside fenced blocks and outside
 # inline code spans.
@@ -508,15 +511,15 @@ def _package(texts: dict[str, str]) -> dict[str, str]:
     }
 
 
-def items(module: str, text: str) -> dict[str, set[str]]:
-    """Return each item of a package module the theory page may name, with the works it cites.
+def items(module: str, text: str) -> dict[str, str]:
+    """Return each item of a package module the theory page may name, with the prose it cites in.
 
     An item is the module, as `cells.py`, or a class or a function in it, as
-    `planner.py::_Search.solve`. It cites what its docstring cites, and what a comment inside it
-    and in no item nested in it cites.
+    `planner.py::_Search.solve`. Its prose is its docstring, and each comment inside it and in no
+    item nested in it.
     """
     tree = ast.parse(text)
-    found = {module: citations(ast.get_docstring(tree) or "")}
+    found = {module: ast.get_docstring(tree) or ""}
     spans: list[tuple[int, int, str]] = []
 
     def walk(node: ast.AST, owner: str) -> None:
@@ -524,7 +527,7 @@ def items(module: str, text: str) -> dict[str, set[str]]:
             if isinstance(child, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
                 qualified = f"{owner}{child.name}"
                 name = f"{module}::{qualified}"
-                found[name] = citations(ast.get_docstring(child) or "")
+                found[name] = ast.get_docstring(child) or ""
                 spans.append((child.lineno, child.end_lineno or child.lineno, name))
                 walk(child, f"{qualified}.")
 
@@ -540,7 +543,8 @@ def items(module: str, text: str) -> dict[str, set[str]]:
             blocks.append((line, line, token.string))
     for line, _, comment in blocks:
         owners = [name for start, end, name in spans if start <= line <= end]
-        found[owners[-1] if owners else module] |= citations(comment)
+        owner = owners[-1] if owners else module
+        found[owner] = f"{found[owner]}\n{comment}"
     return found
 
 
@@ -551,6 +555,7 @@ class Claim:
     tag: str
     ident: str
     cites: set[str]
+    places: set[tuple[str, str]] = field(default_factory=set)
     implemented: list[str] = field(default_factory=list)
     held: list[str] = field(default_factory=list)
 
@@ -573,7 +578,8 @@ def claims(page: str) -> list[Claim]:
             (found[-1].implemented if label == IMPLEMENTED else found[-1].held).extend(listed)
         elif tag := TAG.search(text):
             body = _page_prose("\n".join([*prose, text]))
-            found.append(Claim(tag[1], tag[2], citations(body)))
+            placed = {(key, place) for key, places in located(body) for place in places}
+            found.append(Claim(tag[1], tag[2], citations(body), placed))
             prose = []
         else:
             prose.append(text)
@@ -594,9 +600,10 @@ def check_theory(texts: dict[str, str]) -> list[str]:
         for key, places in located(text)
         if not places
     ]
-    cited: dict[str, set[str]] = {}
+    prose: dict[str, str] = {}
     for relative, text in package.items():
-        cited.update(items(Path(relative).name, text))
+        prose.update(items(Path(relative).name, text))
+    cited = {name: citations(text) for name, text in prose.items()}
     tests = {
         name
         for relative, text in texts.items()
@@ -634,14 +641,40 @@ def check_theory(texts: dict[str, str]) -> list[str]:
             for key in sorted(keys)
             if naming and not any(key in claim.cites for claim in naming)
         ]
+        problems += _misplaced(name, prose[name], naming)
     return problems
 
 
-def copies(key: str, shelf: Path) -> list[Path]:
-    """Return the shelf's renderings of the work a key names, by its first surname and year."""
-    surname = unicodedata.normalize("NFKD", key.split(maxsplit=1)[0])
-    folded = "".join(c for c in surname if c.isascii() and c.isalpha())
-    return sorted(shelf.glob(f"*_{folded}{key[-4:]}_*.txt"))
+def _misplaced(name: str, prose: str, naming: list[Claim]) -> list[str]:
+    """Refuse a place an item cites for a work that no claim naming it cites there.
+
+    An item implements its claim's result, so where it cites a work its claim cites, it cites a
+    place the claim does: an item citing another place of the same work states a result the
+    page does not, or the same result at the wrong place.
+    """
+    works = {key for claim in naming for key in claim.cites}
+    places = {pair for claim in naming for pair in claim.places}
+    return [
+        f"{name}: cites ({key}, {place}), a place no claim naming it cites for that work"
+        for key, found in located(prose)
+        if key in works
+        for place in found
+        if (key, place) not in places
+    ]
+
+
+def shelved(index: str) -> dict[str, list[str]]:
+    """Return the copies the shelf's index names for each key the tree cites.
+
+    A copy is found by the key its row names, never by a surname and a year: two works of one
+    author and year, or a preprint beside its published version, would each answer a search by
+    name, and a place would pass where either prints it.
+    """
+    found: dict[str, list[str]] = {}
+    for row in SHELVED.finditer(index):
+        if key := row["key"].strip():
+            found.setdefault(key, []).append(row["copy"])
+    return found
 
 
 def states(text: str, place: str) -> bool:
@@ -656,10 +689,18 @@ def states(text: str, place: str) -> bool:
     return re.search(pattern, text, re.MULTILINE) is not None
 
 
-def check_places(texts: dict[str, str], shelf: Path = SHELF) -> list[str]:
-    """Refuse a place no copy of its work on the shelf prints; nothing where there is no shelf."""
+def check_places(
+    texts: dict[str, str], shelf: Path = SHELF, index: Path = SHELF_INDEX
+) -> list[str]:
+    """Refuse a place the copy of its work the shelf's index names does not print.
+
+    Nothing is read where there is no shelf, as on a runner, which holds none.
+    """
     if not shelf.is_dir():
         return []
+    if not index.is_file():
+        return [f"{index.name}: missing beside the shelf, so no citation finds its copy"]
+    named = shelved(index.read_text("utf-8"))
     sources = {relative: python_prose(text) for relative, text in _package(texts).items()}
     if THEORY in texts:
         sources[THEORY] = _page_prose(texts[THEORY])
@@ -667,9 +708,11 @@ def check_places(texts: dict[str, str], shelf: Path = SHELF) -> list[str]:
     problems = []
     for relative, text in sorted(sources.items()):
         for key, places in located(text):
-            found = copies(key, shelf)
-            if not found:
-                problems.append(f"{relative}: {key!r} has no copy on the shelf to read it in")
+            found = [shelf / f"{copy}.txt" for copy in named.get(key, ())]
+            if not found or not all(copy.is_file() for copy in found):
+                problems.append(
+                    f"{relative}: {key!r} has no copy the shelf's index names to read it in"
+                )
                 continue
             for copy in found:
                 read.setdefault(copy, copy.read_text("utf-8", errors="replace"))
