@@ -77,11 +77,11 @@ class Gate:
         if flowing is not None:
             return flowing
         # A refused call is never made, so no policy steps on it: the session goes on as before.
-        states = [(monitor.state, monitor.also, monitor.before) for monitor in self.monitors]
+        states = [monitor.snapshot() for monitor in self.monitors]
         for monitor in self.monitors:
             if monitor.observe(tool, arguments, contract.hints):
-                for kept, (state, also, before) in zip(self.monitors, states, strict=True):
-                    kept.state, kept.also, kept.before = state, also, before
+                for kept, snapshot in zip(self.monitors, states, strict=True):
+                    kept.restore(snapshot)
                 return monitor.violations[-1]
         return None
 

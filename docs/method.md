@@ -305,12 +305,15 @@ and a value from a task input with it, since a proxy sees no task.
   undecided. From every stop of the parcel library, its values held as constants, no plan exists
   at depth 8. A resumed segment would also have to start from the run's policy states and keep
   each held value's origin, or a flow rule would no longer see it.
-- **A policy carries no value between calls.** A rule about one parcel across two calls is read
-  as one about any two, so a program approving one parcel and booking another passes a rule that
-  a booking follows its own parcel's approval. That one call takes the value another returned
-  is a flow rule with `only`; a policy instance per value, the parametric monitoring of Roşu and
-  Chen 2012, is not read, and a proxy reads no pending state: MCP 2026-07-28 has no session,
-  and a proxy sees no end of a task.
+- **A policy carries no value between calls before the run.** A rule about one parcel across two
+  calls is read as one about any two, so a program approving one parcel and booking another
+  passes a rule that a booking follows its own parcel's approval. That one call takes the value
+  another returned is a flow rule with `only`. A policy naming an argument in `per` holds an
+  instance for each value of it at run time, the parametric monitoring of Roşu and Chen 2012, so
+  the runner and the proxy refuse a booking of a parcel no approval was for; the walk holds no
+  value's identity, takes every transition of such a policy possibly at most, and proves none of
+  its links. A proxy reads no pending state: MCP 2026-07-28 has no session, and a proxy sees no
+  end of a task.
 - **A call is given no input.** A server may answer a call by asking for input: an elicitation,
   a sampling, its roots, or an interaction it waits on, MCP 2026-07-28's `input_required`. The
   runner and the proxy give none and forward none, so the call fails as a tool error, which an

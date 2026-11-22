@@ -72,6 +72,10 @@ directions.
 - **Elkoussy and Perez 2026.** L. Elkoussy, J. Perez. AgentLTL: a trace-verification
   framework for measuring, enforcing, and training procedural compliance in tool-using LLM
   agents. [arXiv:2607.02599v1](https://arxiv.org/abs/2607.02599v1), 2026.
+- **Kamath et al. 2025.** A. Kamath, S. Zhang, C. Xu, S. Ugare, G. Singh, S. Misailovic.
+  Enforcing temporal constraints for LLM agents.
+  [arXiv:2512.23738v1](https://arxiv.org/abs/2512.23738v1), 2025. Agent-C, whose rules bind an
+  argument's value across two calls, as a policy with `per` does at run time.
 - **Mansoor et al. 2026.** I. K. Mansoor, A. Phadke, P. Rana. Verified tool calls improve LLM
   agent reliability under non-atomic failures.
   [arXiv:2608.02645v1](https://arxiv.org/abs/2608.02645v1), 2026. A postcondition read before a

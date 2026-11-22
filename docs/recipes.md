@@ -294,7 +294,9 @@ no call that breaks a policy, and finds the approved program itself.
 
 **A policy carries no value from one call to another.** It reads that some approval came first,
 not that it approved this order: a program approving one order and refunding another passes it.
-That one call takes the value another returned is a flow rule's, below.
+That one call takes the value another returned is a flow rule's, below. At run time a policy
+naming `"per": "order_id"` holds an instance for each order, so the runner refuses a refund of an
+order no approval was for; before the run it proves none of its links.
 
 ## A notice to the address on file
 

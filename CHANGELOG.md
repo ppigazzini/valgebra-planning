@@ -74,6 +74,15 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A policy may hold an instance for each value an argument takes, `"per": "object_id"`. A policy
+  read a program's calls as one trace, so "each object is confirmed before it is grasped" passed
+  a run confirming one object and grasping another. The monitor holds an instance per value, a
+  call carrying the argument an event of its value's instance alone and one carrying none an
+  event of every instance, each new instance started where those left the policy (Roşu and Chen
+  2012, Def. 11); the runner and the proxy refuse the grasp, naming the value, and a refused call
+  restores every instance through `Monitor.snapshot`. The walk holds no value's identity, so it
+  takes every transition of such a policy possibly at most and proves none of its links.
+
 - A policy transition reading a call's result is proven or refuted before the run. The walk
   took it possibly at most, so a program asking for a yes and walking only under it was
   undecided, as was one walking after a no. The verifier splits the path at the call, as an

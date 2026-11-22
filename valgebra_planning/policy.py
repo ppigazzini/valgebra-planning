@@ -24,22 +24,36 @@ A policy reads one program's calls in order. It carries no value from one call t
 so a rule about the same parcel across two calls is read as a rule about any two calls: a
 program approving one parcel and booking another passes a rule that a booking follows its own
 parcel's approval. A rule that a call takes a value another returned is a flow rule with
-``only`` (`valgebra_planning.flows`). A policy instance per value, a parametric property
-(Roşu and Chen 2012, Def. 12), is not read.
+``only`` (`valgebra_planning.flows`).
+
+A policy naming an argument in ``per`` is a parametric property, one instance of the automaton
+per value that argument takes, each checked on its own slice of the trace (Roşu and Chen 2012,
+Def. 12): a call carrying the argument is an event of the instance its value names alone, and a
+call not carrying it an event of every instance (Roşu and Chen 2012, Def. 11), so "each object
+is confirmed before it is grasped" holds of each object, as Agent-C binds a file read to the
+file opened before it (Kamath et al. 2025, §5.1). The monitor holds the instances at run time;
+the walk holds no value's identity, so it takes every transition of such a policy possibly at
+most, and proves none of its links.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
-from valgebra_planning._valgebra import Validator, compile_schema, intersection, nothing
+from valgebra_planning._valgebra import Validator, compile_schema, intersection, json_key, nothing
 from valgebra_planning.contracts import keys_read
 
-__all__ = ["Monitor", "Policy", "Reach", "Transition", "read_policy"]
+__all__ = ["Monitor", "Policy", "Reach", "Snapshot", "Transition", "read_policy"]
 
 Reach = Literal["never", "possibly", "surely"]
+
+#: A monitor's states, as `Monitor.snapshot` returns them: the state, the others the run may
+#: be in, those before the call observed last, the value it is the instance of, and each
+#: instance's, by its value.
+Snapshot: TypeAlias = "tuple[str, frozenset[str], frozenset[str], str, dict[object, Snapshot]]"
 
 #: What `Monitor.stepped` is given in place of a result for a call made and not yet returned.
 _UNRETURNED: Any = object()
@@ -78,6 +92,8 @@ class Policy:
     transitions: tuple[Transition, ...]
     #: The states a path may pass through and must not end in: an obligation still open.
     pending: frozenset[str] = frozenset()
+    #: The argument whose every value has an instance of its own, or empty for one instance.
+    per: str = ""
 
     def tools(self) -> frozenset[str]:
         """Return every tool a transition names."""
@@ -131,6 +147,9 @@ class Policy:
                 ):
                     continue
                 taken = _taken(record, transition.guard)
+                if self.per and taken == "surely":
+                    # A call may be another value's event: no value's identity is held here.
+                    taken = "possibly"
                 if returned and transition.result is not None:
                     taken = _both(
                         taken,
@@ -171,7 +190,7 @@ def _taken(record: Validator[Any], guard: Validator[Any]) -> Reach:
 
 
 #: The keys a policy and each of its transitions read.
-_POLICY_KEYS = frozenset({"name", "initial", "bad", "transitions", "pending"})
+_POLICY_KEYS = frozenset({"name", "initial", "bad", "transitions", "pending", "per"})
 _TRANSITION_KEYS = frozenset({"from", "to", "tool", "hint", "arguments", "result"})
 
 
@@ -182,6 +201,7 @@ def read_policy(spec: Mapping[str, Any], *, assert_format: bool = False) -> Poli
     ``hint`` a tool must set, and optionally the JSON Schema its ``arguments`` record must meet,
     every record where it names none. With ``result``, the JSON Schema the call's result must
     meet, the transition is taken when the result arrives rather than when the call is made.
+    With ``per``, an argument's name, the policy has an instance for each value it takes.
     A key neither reads is refused, naming it, and so is a
     transition naming both a tool and a hint, or neither. With ``assert_format``, ``format``
     in a guard is read as an assertion, as the library's contracts read it.
@@ -212,7 +232,17 @@ def read_policy(spec: Mapping[str, Any], *, assert_format: bool = False) -> Poli
         frozenset(spec["bad"]),
         transitions,
         frozenset(spec.get("pending", ())),
+        _per(spec),
     )
+
+
+def _per(spec: Mapping[str, Any]) -> str:
+    """Return the argument a policy has an instance per value of, empty where it names none."""
+    per = spec.get("per", "")
+    if not isinstance(per, str):
+        message = f"policy {spec.get('name')!r}: 'per' is an argument's name"
+        raise TypeError(message)
+    return per
 
 
 @dataclass(slots=True)
@@ -223,6 +253,11 @@ class Monitor:
     an error may not have acted, so after one the run may also be in a state ``also`` holds,
     as the verifier reads the error's block from either set of states: a call is refused where
     any state the run may be in reaches a bad one.
+
+    A policy with ``per`` holds an instance for each value its argument takes, in ``instances``
+    by the value's JSON text, each started where the calls carrying no value left the policy;
+    ``state`` and ``also`` are then the instance those calls step, which every other is too.
+    ``instances`` keys each by the value under JSON equality, and ``value`` names it.
     """
 
     policy: Policy
@@ -232,13 +267,40 @@ class Monitor:
     also: frozenset[str] = frozenset()
     #: The states held before the call observed last.
     before: frozenset[str] = field(default=frozenset(), init=False, repr=False)
+    #: The instance of each value the ``per`` argument took, by the value under JSON equality.
+    instances: dict[object, Monitor] = field(default_factory=dict, repr=False)
+    #: The value an instance holds the policy for, as JSON text; empty for the policy's own.
+    value: str = ""
+    #: The instances the call observed last stepped.
+    touched: list[Monitor] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.state = self.state or self.policy.initial
 
     def held(self) -> frozenset[str]:
-        """Return every state the run may be in."""
-        return self.also | {self.state}
+        """Return every state the run may be in, in any instance."""
+        held = self.also | {self.state}
+        return held.union(*(instance.held() for instance in self.instances.values()))
+
+    def snapshot(self) -> Snapshot:
+        """Return what a refused call restores: every instance's states."""
+        return (
+            self.state,
+            self.also,
+            self.before,
+            self.value,
+            {key: instance.snapshot() for key, instance in self.instances.items()},
+        )
+
+    def restore(self, snapshot: Snapshot) -> None:
+        """Return to the states `snapshot` holds, every instance's among them."""
+        state, also, before, value, instances = snapshot
+        self.state, self.also, self.before, self.value = state, also, before, value
+        self.instances = {}
+        for key, held in instances.items():
+            instance = Monitor(self.policy)
+            instance.restore(held)
+            self.instances[key] = instance
 
     def stepped(
         self,
@@ -267,20 +329,61 @@ class Monitor:
                 return transition.target
         return state
 
+    def stepping(self, arguments: Mapping[str, Any]) -> list[Monitor]:
+        """Return the instances a call steps.
+
+        A call carrying the ``per`` argument is an event of its value's instance alone, started
+        where the calls carrying none left the policy; any other call is an event of every
+        instance (Roşu and Chen 2012, Def. 11).
+        """
+        per = self.policy.per
+        if not per or per not in arguments:
+            return [self, *self.instances.values()]
+        key = json_key(arguments[per])
+        instance = self.instances.get(key)
+        if instance is None:
+            value = json.dumps(arguments[per], sort_keys=True)
+            instance = Monitor(self.policy, self.state, also=self.also, value=value)
+            self.instances[key] = instance
+        return [instance]
+
+    def moved(
+        self, tool: str, arguments: Mapping[str, Any], hints: frozenset[str], result: Any
+    ) -> list[str]:
+        """Step this instance alone on one call or its result; return the bad states it reaches."""
+        held = self.also | {self.state}
+        if result is _UNRETURNED:
+            self.before = held
+        self.state = self.stepped(self.state, tool, arguments, hints, result)
+        self.also = frozenset(self.stepped(s, tool, arguments, hints, result) for s in self.also)
+        self.also -= {self.state}
+        return sorted(((self.also | {self.state}) & self.policy.bad) - held)
+
+    def step(
+        self, tool: str, arguments: Mapping[str, Any], hints: frozenset[str], result: Any
+    ) -> bool:
+        """Step every instance a call reaches; record the first bad state one reaches."""
+        stepped = self.stepping(arguments)
+        if result is _UNRETURNED:
+            self.touched = stepped
+        for instance in stepped:
+            reached = instance.moved(tool, arguments, hints, result)
+            if reached:
+                verb = "reached" if result is _UNRETURNED else "returned into"
+                self.violations.append(f"{self.named(instance)}: {tool} {verb} {reached[0]}")
+                return True
+        return False
+
+    def named(self, instance: Monitor) -> str:
+        """Return how a violation names the policy: with the value, for a value's instance."""
+        which = f" for {self.policy.per} {instance.value}" if instance.value else ""
+        return f"{self.policy.name}{which}"
+
     def observe(
         self, tool: str, arguments: Mapping[str, Any], hints: frozenset[str] = frozenset()
     ) -> bool:
         """Step on one call; return whether it may reach a bad state, which is never left."""
-        held = self.held()
-        self.before = held
-        self.state = self.stepped(self.state, tool, arguments, hints)
-        self.also = frozenset(self.stepped(s, tool, arguments, hints) for s in self.also)
-        self.also -= {self.state}
-        reached = sorted((self.held() & self.policy.bad) - held)
-        if reached:
-            self.violations.append(f"{self.policy.name}: {tool} reached {reached[0]}")
-            return True
-        return False
+        return self.step(tool, arguments, hints, _UNRETURNED)
 
     def returned(
         self,
@@ -290,24 +393,18 @@ class Monitor:
         hints: frozenset[str] = frozenset(),
     ) -> bool:
         """Step on a call's result; return whether it may reach a bad state, never left."""
-        held = self.held()
-        self.state = self.stepped(self.state, tool, arguments, hints, result)
-        self.also = frozenset(self.stepped(s, tool, arguments, hints, result) for s in self.also)
-        self.also -= {self.state}
-        reached = sorted((self.held() & self.policy.bad) - held)
-        if reached:
-            self.violations.append(f"{self.policy.name}: {tool} returned into {reached[0]}")
-            return True
-        return False
+        return self.step(tool, arguments, hints, result)
 
     def errored(self) -> None:
         """Hold the states before the call observed last too: it answered with an error."""
-        self.also = (self.also | self.before) - {self.state}
+        for instance in self.touched or [self]:
+            instance.also = (instance.also | instance.before) - {instance.state}
 
     def ended(self) -> bool:
         """Return whether the run may end in a pending state: an obligation it leaves open."""
-        pending = sorted(self.held() & self.policy.pending)
-        if not pending:
-            return False
-        self.violations.append(f"{self.policy.name}: the run ended in {pending[0]}")
-        return True
+        for instance in [self, *self.instances.values()]:
+            pending = sorted((instance.also | {instance.state}) & self.policy.pending)
+            if pending:
+                self.violations.append(f"{self.named(instance)}: the run ended in {pending[0]}")
+                return True
+        return False

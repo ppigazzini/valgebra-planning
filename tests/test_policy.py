@@ -524,3 +524,127 @@ def test_a_program_moving_only_under_the_answer_its_policy_reads_is_proven() -> 
         link.where for link in checked.links if link.claim == "policy motion after a yes holds"
     )
     assert held == ["case:c2:0.then", "case:c2:1.else"]
+
+
+EACH_CONFIRMED = read_policy(
+    {
+        "name": "each object is confirmed before it is grasped",
+        "initial": "start",
+        "bad": ["violated"],
+        "per": "object_id",
+        "transitions": [
+            {
+                "from": "start",
+                "tool": "confirm_with_user",
+                "result": {"properties": {"confirmed": {"const": True}}},
+                "to": "ok",
+            },
+            {"from": "start", "tool": "grasp", "to": "violated"},
+            {"from": "ok", "tool": "reset", "to": "start"},
+        ],
+    }
+)
+YES = {"confirmed": True}
+
+
+def test_a_policy_per_value_holds_an_instance_for_each_value_its_argument_takes() -> None:
+    monitor = Monitor(EACH_CONFIRMED)
+    asked = {"question": "may I grasp it?", "object_id": "obj_1"}
+    assert not monitor.observe("confirm_with_user", asked)
+    assert not monitor.returned("confirm_with_user", asked, YES)
+    assert not monitor.observe("grasp", {"object_id": "obj_1"})
+    assert monitor.observe("grasp", {"object_id": "obj_2"})
+    assert monitor.violations == [
+        f'{EACH_CONFIRMED.name} for object_id "obj_2": grasp reached violated'
+    ]
+    assert monitor.state == "start"
+
+
+def test_a_call_carrying_no_value_steps_every_instance_and_the_ones_to_come() -> None:
+    monitor = Monitor(EACH_CONFIRMED)
+    asked = {"question": "may I grasp it?", "object_id": "obj_1"}
+    monitor.observe("confirm_with_user", asked)
+    monitor.returned("confirm_with_user", asked, YES)
+    assert not monitor.observe("reset", {})
+    assert monitor.observe("grasp", {"object_id": "obj_1"})
+
+
+def test_a_refused_call_restores_every_instance() -> None:
+    monitor = Monitor(EACH_CONFIRMED)
+    asked = {"question": "may I grasp it?", "object_id": "obj_1"}
+    monitor.observe("confirm_with_user", asked)
+    monitor.returned("confirm_with_user", asked, YES)
+    kept = monitor.snapshot()
+    monitor.observe("grasp", {"object_id": "obj_2"})
+    monitor.restore(kept)
+    assert monitor.held() == frozenset({"start", "ok"})
+    assert not monitor.observe("grasp", {"object_id": "obj_1"})
+
+
+PERSONAL = {
+    "confirm_with_user": read_contract(
+        {
+            "name": "confirm_with_user",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"question": {"type": "string"}, "object_id": OBJECT_ID},
+                "required": ["question", "object_id"],
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {"confirmed": {"type": "boolean"}},
+                "required": ["confirmed"],
+                "additionalProperties": False,
+            },
+        }
+    ),
+    "grasp": read_contract(
+        {
+            "name": "grasp",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"object_id": OBJECT_ID},
+                "required": ["object_id"],
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {"grasp_id": {"type": "string"}},
+                "required": ["grasp_id"],
+            },
+        }
+    ),
+}
+SWAPPED = (
+    "c1 = confirm_with_user(question=question, object_id=first)\n"
+    "c2 = grasp(object_id=second)\n"
+    "return c2.grasp_id\n"
+)
+
+
+@pytest.mark.parametrize(("second", "refused"), [("obj_1", False), ("obj_2", True)])
+def test_a_run_refuses_a_grasp_of_an_object_no_confirmation_was_for(
+    second: str, *, refused: bool
+) -> None:
+    task = read_task(
+        "grasp",
+        {"question": {"type": "string"}, "first": OBJECT_ID, "second": OBJECT_ID},
+        {"type": "string"},
+    )
+    made: list[str] = []
+    tools = {
+        "confirm_with_user": lambda **_: {"confirmed": True},
+        "grasp": lambda object_id: made.append(object_id) or {"grasp_id": "grs_1"},
+    }
+    inputs = {"question": "may I?", "first": "obj_1", "second": second}
+    ended = run(read_program(SWAPPED), PERSONAL, task, inputs, tools, policies=[EACH_CONFIRMED])
+    assert (ended.outcome == "refused") is refused
+    assert made == ([] if refused else ["obj_1"])
+    # The walk holds no value's identity, so it proves no link of such a policy either way.
+    checked = verify(read_program(SWAPPED), PERSONAL, task, policies=[EACH_CONFIRMED])
+    verdicts = {link.verdict for link in checked.links if link.claim.startswith("policy")}
+    assert verdicts == {"undecided"}
+
+
+def test_a_policy_names_its_per_argument_by_name() -> None:
+    with pytest.raises(TypeError, match="'per' is an argument's name"):
+        read_policy({"name": "p", "initial": "a", "bad": [], "transitions": [], "per": 1})

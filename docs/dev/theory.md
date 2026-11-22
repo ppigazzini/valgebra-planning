@@ -213,16 +213,22 @@ IMPLEMENTED-BY: policy.py
 
 HELD-BY: test_a_path_ending_with_an_obligation_open_is_refuted, test_the_planner_settles_every_obligation_and_pads_no_path, test_an_obligation_a_loop_may_leave_open_is_undecided_and_one_it_settles_proven, test_a_run_ending_with_an_obligation_open_breaks, test_a_policy_holds_over_any_number_of_iterations
 
-**A policy carries no value from one call to another.** A parametric property is a base property
-read once for each binding of its parameters, one trace slice an instance (Roşu and Chen 2012,
-Def. 12); a policy here is one instance for the whole program. So a rule about the same parcel
-across two calls is read as a rule about any two calls, and a program approving one parcel and
-booking another passes it. A rule that a call takes a value another returned is a flow rule
-with `only`. **[DEVIATION: no-parametric-policy]**
+**A policy carries no value from one call to another, but at run time with `per`.** A
+parametric property is a base property read once for each binding of its parameters, one trace
+slice an instance (Roşu and Chen 2012, Def. 12). A policy without `per` is one instance for the
+whole program, so a rule about the same parcel across two calls is read as a rule about any two
+calls, and a program approving one parcel and booking another passes it; a rule that a call
+takes a value another returned is a flow rule with `only`. A policy naming an argument in `per`
+is the parametric property at run time: the monitor holds an instance for each value the
+argument takes, a call carrying it an event of its value's instance alone and a call carrying
+none an event of every instance (Roşu and Chen 2012, Def. 11), as Agent-C binds a file read to
+the file opened before it (Kamath et al. 2025, §5.1). The walk holds no value's identity, so it
+takes every transition of such a policy possibly at most and proves none of its links: the
+static half is not built. **[DEVIATION: no-parametric-policy]**
 
-IMPLEMENTED-BY: policy.py
+IMPLEMENTED-BY: policy.py, policy.py::Monitor.stepping
 
-HELD-BY: test_a_rule_about_one_parcel_reads_as_a_rule_about_any_two_calls, test_every_call_on_an_item_the_user_listed_is_a_flow_rule_with_only
+HELD-BY: test_a_rule_about_one_parcel_reads_as_a_rule_about_any_two_calls, test_every_call_on_an_item_the_user_listed_is_a_flow_rule_with_only, test_a_policy_per_value_holds_an_instance_for_each_value_its_argument_takes, test_a_call_carrying_no_value_steps_every_instance_and_the_ones_to_come, test_a_run_refuses_a_grasp_of_an_object_no_confirmation_was_for
 
 ## Vacuity
 
