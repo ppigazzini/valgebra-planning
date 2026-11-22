@@ -23,6 +23,13 @@ def test_a_british_word_is_refused_in_prose_and_in_a_name() -> None:
     assert docs_lint.british_words("the behavior is normalized, modeled and labeled") == []
 
 
+def test_a_name_the_standard_library_publishes_keeps_its_spelling() -> None:
+    assert docs_lint.british_words("except asyncio.CancelledError:") == []
+    assert docs_lint.british_words("concurrent.futures.CancelledError, a cancelled call") == [
+        "cancelled"
+    ]
+
+
 def test_a_history_word_is_read_in_comments_and_docstrings_only() -> None:
     source = (
         '"""Return the cells, as they previously were."""\nWORDS = "used to"  # formerly a list\n'

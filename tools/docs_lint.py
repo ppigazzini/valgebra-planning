@@ -25,7 +25,8 @@ The rules, and what each costs a reader when it breaks:
   `mkdocs.yml` do not name fails, and the reverse, and so does a manifest out of the nav's
   order or a line whose summary is not its page's `description:`.
 * **A British spelling,** in every tracked text file and its path, prose, code and names
-  alike, and in a commit message.
+  alike, and in a commit message. A name the standard library publishes keeps its spelling:
+  `CancelledError`, asyncio's and `concurrent.futures`', is read as no word.
 * **A word stating what the tree was,** on every tracked page, in every comment and
   docstring of a Python source, on every comment line of a TOML or YAML file, and in a
   commit message. A text states what holds now, and the history is git's. `CHANGELOG.md`
@@ -122,6 +123,8 @@ BRITISH = re.compile(
     r"|fulfilment)",
     re.IGNORECASE,
 )
+#: The standard library's names spelled the British way, which code must spell as published.
+PUBLISHED = re.compile(r"\bCancelledError\b")
 #: One word of prose, or one word of a name: `build_unrecognised` is two, and
 #: `NonNegativeMetres` three.
 WORD = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])")
@@ -375,7 +378,7 @@ def check_markdown(path: Path, text: str) -> list[str]:
 
 def british_words(line: str) -> list[str]:
     """Give each British word of a line, a name read a word at a time."""
-    return [found for found in WORD.findall(line) if BRITISH.fullmatch(found)]
+    return [found for found in WORD.findall(PUBLISHED.sub("", line)) if BRITISH.fullmatch(found)]
 
 
 def check_words(text: str, pattern: re.Pattern[str], why: str) -> list[str]:
