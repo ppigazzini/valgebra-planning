@@ -142,7 +142,8 @@ verifier, which adds a link for it.
   loop's body may run any number of times, so the states a policy may be in when it starts are
   taken to a fixpoint, the states being finite. A policy reads one program's calls in order and
   carries no value from one call to another. A transition may read an annotation hint,
-  `destructiveHint` or another, on any tool setting it; the policy's link then lists the hints it
+  `destructiveHint` or another, on any tool giving it, MCP's default read where a tool sets none: a
+  tool setting no annotation is destructive and open-world, and read-only only where it says so; the policy's link then lists the hints it
   reads as an assumption. A pending state is an obligation: a path may pass through it and must
   not end in it, as a booking owes a notice. Every path of a program ends, a loop's after any
   number of items, so a pending state is decided before the run, where a monitor reading a prefix

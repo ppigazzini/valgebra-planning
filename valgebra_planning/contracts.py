@@ -85,7 +85,8 @@ class Contract:
     #: Whether calling twice acts as calling once: the tool's annotations say it is
     #: read-only or idempotent. A hint the server gives; a retry trusts it.
     idempotent: bool = False
-    #: Every annotation hint the tool sets true, `readOnlyHint` or `destructiveHint`.
+    #: Every annotation hint the tool gives, MCP's defaults where it sets none: a tool setting
+    #: none is destructive and open-world.
     hints: frozenset[str] = frozenset()
     #: Whether the server's annotations are trusted, waiving the assumption a retry makes.
     trusted: bool = False
@@ -216,10 +217,31 @@ def field_slot(slot: Slot, key: str) -> Slot:
     )
 
 
+#: MCP's tool annotation hints, each read as the protocol reads a tool that sets none.
+_MCP_HINTS = frozenset({"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"})
+
+
 def _hints(annotations: object) -> frozenset[str]:
-    if not isinstance(annotations, Mapping):
-        return frozenset()
-    return frozenset(name for name, value in annotations.items() if value is True)
+    """Return the hints a tool's annotations give, MCP's defaults where it sets none.
+
+    A tool is read-only only where it says so, and destructive and open-world unless it says
+    otherwise; destructive is read where the tool is not read-only (MCP 2026-07-28,
+    ``ToolAnnotations``). A policy keyed on ``destructiveHint`` reads a motion that sets no
+    annotation, and a value that is no boolean is read as absent. Any other hint a tool sets
+    true is given as it is.
+    """
+    given: Mapping[str, Any] = annotations if isinstance(annotations, Mapping) else {}
+    hints = {name for name, value in given.items() if value is True and name not in _MCP_HINTS}
+    read_only = given.get("readOnlyHint") is True
+    if read_only:
+        hints.add("readOnlyHint")
+    elif given.get("destructiveHint") is not False:
+        hints.add("destructiveHint")
+    if given.get("idempotentHint") is True:
+        hints.add("idempotentHint")
+    if given.get("openWorldHint") is not False:
+        hints.add("openWorldHint")
+    return frozenset(hints)
 
 
 def _idempotent(annotations: object) -> bool:

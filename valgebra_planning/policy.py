@@ -46,8 +46,9 @@ Reach = Literal["never", "possibly", "surely"]
 class Transition:
     """From ``source`` to ``target`` on a call to ``tool`` whose arguments lie in ``guard``.
 
-    With ``hint`` set and ``tool`` empty, the call is to any tool whose annotations set that hint,
-    ``destructiveHint`` or another: a hint its server gives, untrusted unless the server is.
+    With ``hint`` set and ``tool`` empty, the call is to any tool whose annotations give that hint,
+    ``destructiveHint`` or another, MCP's default read where a tool sets none, so a tool setting
+    no annotation is destructive: a hint its server gives, untrusted unless the server is.
     """
 
     source: str

@@ -46,6 +46,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A tool's hints are MCP's where it sets none. A hint was read only where a tool set it true, and
+  MCP reads a tool that sets no annotation as destructive and open-world: a motion setting no
+  annotation was outside a policy keyed on `destructiveHint`, and under a trusted server even the
+  note that the hint was assumed went. `Contract.hints` gives `destructiveHint` unless the tool is
+  read-only or sets it false, and `openWorldHint` unless it sets it false; `readOnlyHint` and
+  `idempotentHint` hold where set true, as the retry reading has always read them.
+
 - A run always ends in a `Run` naming its cause. A tool raising anything but `ToolError` raised
   out of `run`, past the program's error block and with no record of the call, and so did a call
   to a tool the run was not given, after the calls before it were made. An exception ends the run

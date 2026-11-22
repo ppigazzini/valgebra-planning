@@ -43,9 +43,90 @@ AFTER_NOTICE = read_policy(
 )
 
 
-def test_a_tool_carries_every_hint_its_annotations_set() -> None:
-    assert TOOLS["find_parcel"].hints == {"readOnlyHint"}
-    assert TOOLS["book_return"].hints == frozenset()
+def test_a_tool_carries_every_hint_its_annotations_give_with_mcp_s_defaults() -> None:
+    assert TOOLS["find_parcel"].hints == {"readOnlyHint", "openWorldHint"}
+    # `idempotentHint: false`: destructive by default, as MCP reads a tool not read-only.
+    assert TOOLS["book_return"].hints == {"destructiveHint", "openWorldHint"}
+
+
+def _hinted(annotations: object) -> frozenset[str]:
+    spec = {"name": "t", "inputSchema": {"type": "object"}}
+    if annotations is not None:
+        spec["annotations"] = annotations
+    return read_contract(spec).hints
+
+
+def test_a_tool_setting_no_annotation_is_destructive_and_open_world() -> None:
+    assert _hinted(None) == {"destructiveHint", "openWorldHint"}
+    assert _hinted({}) == {"destructiveHint", "openWorldHint"}
+    assert _hinted({"readOnlyHint": True}) == {"readOnlyHint", "openWorldHint"}
+    assert _hinted({"destructiveHint": False, "openWorldHint": False}) == frozenset()
+    # A read-only tool is never destructive, whatever it says of it.
+    assert _hinted({"readOnlyHint": True, "destructiveHint": True}) == {
+        "readOnlyHint",
+        "openWorldHint",
+    }
+    # A value that is no boolean is read as absent: the default holds.
+    assert _hinted({"readOnlyHint": "true", "destructiveHint": "false"}) == {
+        "destructiveHint",
+        "openWorldHint",
+    }
+    assert _hinted({"idempotentHint": True, "x-vendor": True}) == {
+        "destructiveHint",
+        "idempotentHint",
+        "openWorldHint",
+        "x-vendor",
+    }
+
+
+CONFIRMED = read_policy(
+    {
+        "name": "every destructive call confirmed",
+        "initial": "start",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "start", "tool": "confirm", "to": "ok"},
+            {"from": "start", "hint": "destructiveHint", "to": "violated"},
+        ],
+    }
+)
+
+
+def test_an_unannotated_motion_is_held_by_a_policy_on_destructive_calls() -> None:
+    walking = {
+        contract.name: contract
+        for contract in map(
+            read_contract,
+            [
+                {"name": "walk_to", "inputSchema": {"type": "object"}},
+                {
+                    "name": "look",
+                    "inputSchema": {"type": "object"},
+                    "annotations": {"readOnlyHint": True},
+                },
+                {
+                    "name": "confirm",
+                    "inputSchema": {"type": "object"},
+                    "annotations": {"readOnlyHint": True},
+                },
+            ],
+        )
+    }
+    task = read_task("walk", {}, True)
+    unconfirmed = verify(
+        read_program("c1 = walk_to()\nstop(c1)\n"), walking, task, policies=[CONFIRMED]
+    )
+    confirmed = verify(
+        read_program("c1 = confirm()\nc2 = walk_to()\nstop(c2)\n"),
+        walking,
+        task,
+        policies=[CONFIRMED],
+    )
+    looked = verify(read_program("c1 = look()\nstop(c1)\n"), walking, task, policies=[CONFIRMED])
+    policy = "policy every destructive call confirmed holds"
+    assert {link.claim: link.verdict for link in unconfirmed.links}[policy] == "refuted"
+    assert {link.claim: link.verdict for link in confirmed.links}[policy] == "proven"
+    assert {link.claim: link.verdict for link in looked.links}[policy] == "proven"
 
 
 def test_a_retry_rests_on_its_annotations_and_on_its_errors_being_transient() -> None:
