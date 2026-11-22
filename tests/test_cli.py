@@ -46,10 +46,18 @@ def test_a_library_holding_a_key_no_reader_reads_exits_2(
 ) -> None:
     for name in ("tools.json", "tasks.json"):
         (tmp_path / name).write_text((Path(PARCELS) / name).read_text())
-    task = {"name": "t", "inputs": {}, "goal": {}, "depth": 9}
+    task = {"name": "t", "inputs": {}, "goal": {}, "dept": 9}
     (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}))
     assert main(["plan", str(tmp_path)]) == 2
-    assert "task 't': 'depth' is no key it reads" in capsys.readouterr().err
+    assert "task 't': 'dept' is no key it reads" in capsys.readouterr().err
+
+
+def test_plan_takes_a_depth_and_says_why_no_program_was_found(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["plan", PARCELS, "--task", "settle a parcel", "--depth", "1"]) == 1
+    assert "no program within the bound of 1 calls and tests, which cut" in capsys.readouterr().out
+    assert main(["plan", PARCELS, "--task", "settle a parcel"]) == 0
 
 
 def test_critique_refuses_the_naive_chain_and_accepts_the_planned_program(

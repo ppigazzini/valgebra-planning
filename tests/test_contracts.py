@@ -322,13 +322,15 @@ ASKED = {"name": "posing", "inputs": {"id": {"type": "string"}}, "goal": {}}
 @pytest.mark.parametrize(
     ("files", "refused", "match"),
     [
-        ({"tasks.json": {"tasks": [{**ASKED, "depth": 9}]}}, ValueError, "'depth' is no key"),
+        ({"tasks.json": {"tasks": [{**ASKED, "dept": 9}]}}, ValueError, "'dept' is no key"),
+        ({"tasks.json": {"tasks": [{**ASKED, "depth": 0}]}}, ValueError, "'depth' is a positive"),
+        ({"tasks.json": {"tasks": [{**ASKED, "depth": "9"}]}}, ValueError, "'depth' is a positive"),
         ({"tasks.json": {"task": [ASKED]}}, ValueError, "tasks.json: 'task' is no key"),
         ({"tasks.json": {"tasks": [{**ASKED, "errors": "yes"}]}}, TypeError, "'errors' is true"),
         ({"tools.json": {"tools": [LOOKUP], "trusted": "true"}}, TypeError, "'trusted' is true"),
         ({"policies.json": {"policy": []}}, ValueError, "policies.json: 'policy' is no key"),
     ],
-    ids=["task-key", "file-key", "errors", "trusted", "policies-file-key"],
+    ids=["task-key", "depth-0", "depth-str", "file-key", "errors", "trusted", "policies-file-key"],
 )
 def test_a_library_file_holding_a_key_no_reader_reads_is_refused_by_name(
     tmp_path: Path, files: dict[str, object], refused: type[Exception], match: str
@@ -338,3 +340,10 @@ def test_a_library_file_holding_a_key_no_reader_reads_is_refused_by_name(
         (tmp_path / name).write_text(json.dumps(document))
     with pytest.raises(refused, match=match):
         read_library(tmp_path)
+
+
+def test_a_task_s_depth_is_read_with_the_task(tmp_path: Path) -> None:
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [LOOKUP]}))
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [{**ASKED, "depth": 9}, ASKED]}))
+    first, second = read_library(tmp_path).problems
+    assert (first.depth, second.depth) == (9, None)

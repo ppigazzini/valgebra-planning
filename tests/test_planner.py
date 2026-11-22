@@ -269,3 +269,23 @@ def test_a_strong_program_mined_types_admit_is_found_at_its_depth_whatever_the_o
     contracts = _twins(order)
     found = plan(contracts, ACTED, depth=2, types=mine(calls, contracts))
     assert found.strong
+
+
+def test_a_plan_with_no_program_says_whether_the_bound_cut_a_path() -> None:
+    tools = _twins(("other", "ask", "act"))
+    shallow = plan(tools, ACTED, depth=1)
+    assert shallow.program is None
+    assert shallow.reason is not None
+    assert shallow.reason.startswith("no program within the bound of 1 calls and tests, which cut")
+    unreachable = plan(tools, read_task("never", {}, {"type": "string", "pattern": "^zz_"}))
+    assert unreachable.program is None
+    assert unreachable.reason == (
+        "no program: no path reached the bound of 6, so no deeper search finds one from the "
+        "first 16 bindings of each call the search tries"
+    )
+    assert plan(tools, ACTED).reason is None
+
+
+def test_render_takes_a_program_and_refuses_none() -> None:
+    with pytest.raises(TypeError, match="render takes a program, a Block, not NoneType"):
+        render(None)  # ty: ignore[invalid-argument-type]

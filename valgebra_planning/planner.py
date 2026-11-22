@@ -105,6 +105,9 @@ class Plan:
     abstraction: Abstraction
     expanded: int
     assumed: tuple[str, ...] = ()
+    #: Why no program was found, where none was: whether the depth bound cut a path, so a
+    #: deeper search may find one, or none reached it.
+    reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +150,8 @@ class _Search:
     types: Types | None = None
     failed: set[tuple[object, object, int, bool]] = field(default_factory=set)
     expanded: int = 0
+    #: How many paths the depth bound cut in the search last run, short of the goal.
+    cut: int = 0
     #: The cells each stop leaves uncovered, by the stop's identity: a stop is made once
     #: and read back only from the program returned, which keeps it alive.
     stops: dict[int, frozenset[int]] = field(default_factory=dict)
@@ -211,7 +216,10 @@ class _Search:
         if goal is not None and (not self.policies or self.settled(state)):
             return Block((), Return(goal))
         key = (state.signature(), self.read(state), depth, weak)
-        if depth == 0 or key in self.failed:
+        if key in self.failed:
+            return None
+        if depth == 0:
+            self.cut += 1
             return None
         self.expanded += 1
         # Past the goal a path goes on only to settle an obligation, so the calls that may
@@ -785,6 +793,7 @@ def plan(
         return _tidy(_unpadded(program, reading), search.stops, kept) if kept else program
 
     for bound in range(1, depth + 1):
+        search.cut = 0
         program = search.solve(start, bound, weak=False)
         if program is not None:
             program = tidied(program)
@@ -800,6 +809,7 @@ def plan(
         # One search at the full bound: a branch stops only where no continuation exists
         # within the depth its path has left, not where a shallower bound ran out.
         search.failed.clear()
+        search.cut = 0
         program = search.solve(start, depth, weak=True)
         if program is not None:
             program = tidied(program)
@@ -812,4 +822,21 @@ def plan(
                 expanded=search.expanded,
                 assumed=tuple(_assumed(program, types, contracts)),
             )
-    return Plan(None, strong=False, uncovered=(), abstraction=abstraction, expanded=search.expanded)
+    if search.cut:
+        reason = (
+            f"no program within the bound of {depth} calls and tests, which cut {search.cut} "
+            "paths: a deeper search may find one"
+        )
+    else:
+        reason = (
+            f"no program: no path reached the bound of {depth}, so no deeper search finds one "
+            f"from the first {MAX_BINDINGS} bindings of each call the search tries"
+        )
+    return Plan(
+        None,
+        strong=False,
+        uncovered=(),
+        abstraction=abstraction,
+        expanded=search.expanded,
+        reason=reason,
+    )

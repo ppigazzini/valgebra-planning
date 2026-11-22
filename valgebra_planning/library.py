@@ -3,8 +3,9 @@
 A library is a directory. ``tools.json`` holds a server's ``tools/list`` result, ``{"tools":
 [...]}``, and ``"trusted": true`` where the server's annotations are trusted. ``tasks.json``
 holds ``{"tasks": [...]}``, each task its ``name``, the JSON Schema of each input in ``inputs``
-and of the ``goal``, and the rules it names: ``errors`` (any tool may fail), ``policies`` and
-``flows`` by name, and ``types``, the file of observed calls its types are mined from; a tool
+and of the ``goal``, the rules it names, ``errors`` (any tool may fail), ``policies`` and
+``flows`` by name, and ``types``, the file of observed calls its types are mined from, and
+``depth``, the calls and tests a path of its program may take where it sets its own bound; a tool
 listed without an ``outputSchema`` gets one shaped from its results in those observed calls, an
 assumption (`valgebra_planning.mining.infer_outputs`). ``policies.json`` and ``flows.json`` hold
 the rules a task names, as `valgebra_planning.policy.read_policy` and
@@ -44,6 +45,8 @@ class Problem:
     policies: tuple[Policy, ...] = ()
     flows: tuple[Flow, ...] = ()
     types: Types | None = None
+    #: The calls and tests a path may take where the task sets its own bound.
+    depth: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +68,7 @@ class Library:
 
 
 #: The keys a task reads.
-_TASK_KEYS = frozenset({"name", "inputs", "goal", "errors", "policies", "flows", "types"})
+_TASK_KEYS = frozenset({"name", "inputs", "goal", "errors", "policies", "flows", "types", "depth"})
 
 
 def _document(path: Path, keys: frozenset[str]) -> dict[str, Any]:
@@ -91,6 +94,10 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
     specs = _listed(directory / "tasks.json", "tasks")
     for spec in specs:
         keys_read(spec, _TASK_KEYS, f"task {spec.get('name')!r}")
+        depth = spec.get("depth")
+        if depth is not None and (type(depth) is not int or depth < 1):
+            message = f"task {spec.get('name')!r}: 'depth' is a positive integer, not {depth!r}"
+            raise ValueError(message)
     logs = sorted({spec["types"] for spec in specs if "types" in spec})
     observed = [call for log in logs for call in _listed(directory / log, "calls")]
     if tools is None:
@@ -124,6 +131,7 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
                 policies=tuple(policies[name] for name in spec.get("policies", [])),
                 flows=tuple(flows[name] for name in spec.get("flows", [])),
                 types=None if log is None else mine(_listed(directory / log, "calls"), tools),
+                depth=spec.get("depth"),
             )
         )
     return Library(tools, tuple(problems), policies, flows)

@@ -40,6 +40,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A plan with no program says why. `Plan.reason` reads whether the depth bound cut a path, so a
+  deeper search may find one, or no path reached it, so none does from the bindings the search
+  tries; the command `plan` prints it and its JSON carries it. `plan` and `run` take `--depth`,
+  and a task in `tasks.json` may set its own `depth`, a positive integer. `render` raises a
+  `TypeError` naming what it was given where it was given no program, as a plan holding none.
+
 - `Run.outcome` reads how a run ended, `returned`, `stopped`, `refused`, `error` or `ended`, and
   `Run.ok` whether it returned with no check broken; `Run` documents what each field holds for
   each outcome. A stop holds in `value` the value it stopped on, so a caller reading `value`

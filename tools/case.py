@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from valgebra_planning.library import read_library
-from valgebra_planning.planner import plan
+from valgebra_planning.planner import DEPTH, plan
 from valgebra_planning.program import Block, Branch, Stop, render, steps
 from valgebra_planning.verify import verify
 
@@ -51,7 +51,10 @@ def study(example: Path) -> tuple[dict[str, Any], list[str]]:
     for problem in library.problems:
         task, errors, types = problem.task, problem.errors, problem.types
         under, ruled = list(problem.policies), list(problem.flows)
-        found = plan(tools, task, errors=errors, policies=under, flows=ruled, types=types)
+        depth = problem.depth or DEPTH
+        found = plan(
+            tools, task, depth=depth, errors=errors, policies=under, flows=ruled, types=types
+        )
         cells = found.abstraction.cells
         row: dict[str, Any] = {
             "task": task.name,

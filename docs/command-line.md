@@ -14,7 +14,7 @@ A library is a directory (`valgebra_planning/library.py` reads it):
 | file | holds |
 |---|---|
 | `tools.json` | a server's `tools/list` result: `{"tools": [...]}`, each tool its `name`, `inputSchema`, and the `outputSchema` and `annotations` it declares; `"trusted": true` where the server's annotations are trusted |
-| `tasks.json` | `{"tasks": [...]}`, each task a `name`, the JSON Schema of each value the agent starts with in `inputs`, the JSON Schema of the `goal`, and the rules it is held to: `errors` (any tool may fail), `policies` and `flows` by name, `types`, the file of observed calls its semantic types are mined from |
+| `tasks.json` | `{"tasks": [...]}`, each task a `name`, the JSON Schema of each value the agent starts with in `inputs`, the JSON Schema of the `goal`, and the rules it is held to: `errors` (any tool may fail), `policies` and `flows` by name, `types`, the file of observed calls its semantic types are mined from; and `depth`, the calls and tests a path may take where the task sets its own bound |
 | `policies.json` | `{"policies": [...]}`, each an automaton over calls (`valgebra_planning/policy.py`): `initial`, the `bad` states no path may reach, the `pending` states no path may end in, and the `transitions` |
 | `flows.json` | `{"flows": [...]}`, each a flow rule (`valgebra_planning/flows.py`) |
 | a file `types` names | `{"calls": [...]}`, each an observed call: `tool`, `arguments`, `result`; a tool listed without an `outputSchema` gets one shaped from its results there, an assumption every binding resting on it names |
@@ -25,8 +25,8 @@ holding every file.
 
 A rule means what its keys say. A key no reader reads, in a file, a task, a policy, a transition or
 a flow rule, is refused by name, as a misspelled `only` or `arguments` would leave a rule weaker
-than the one written; `errors`, `trusted`, `only` and `implicit` are `true` or `false`, and a
-transition names a `tool` or a `hint`, one of the two. A command reading such a library exits 2
+than the one written; `errors`, `trusted`, `only` and `implicit` are `true` or `false`, a `depth`
+is a positive integer, and a transition names a `tool` or a `hint`, one of the two. A command reading such a library exits 2
 naming the key.
 
 ## Plan
@@ -39,7 +39,9 @@ prints the program for each task (every task when no `--task` is given; `--task`
 it is strong or weak, how many of its links valgebra proves, each link not proven, each value a
 weak program's stops leave uncovered, and each binding resting on a mined type. With `--json` it
 prints one JSON document, a list holding a row per task. The exit status is 1 when a task gets no
-program.
+program, and the row says why: the depth bound cut a path, so a deeper search may find one, or no
+path reached it. `--depth` sets the calls and tests a path may take, for every task planned; a task
+with a `depth` of its own is planned to it otherwise, and any other to six.
 
 ## Critique a program written elsewhere
 

@@ -1,8 +1,9 @@
 """The command line: plan a library's tasks, or critique a program written for one.
 
-    valgebra-planning plan LIBRARY [--task NAME] [--server SERVER] [--json]
+    valgebra-planning plan LIBRARY [--task NAME] [--depth N] [--server SERVER] [--json]
     valgebra-planning critique LIBRARY --task NAME PROGRAM [--server SERVER] [--json]
-    valgebra-planning run LIBRARY --task NAME --inputs JSON --server SERVER [--timeout S] [--json]
+    valgebra-planning run LIBRARY --task NAME --inputs JSON --server SERVER [--depth N]
+        [--timeout S] [--json]
     valgebra-planning check LIBRARY [--server SERVER] [--json]
     valgebra-planning privileges OLD NEW [--json]
     valgebra-planning stubs LIBRARY [--server SERVER]
@@ -38,7 +39,7 @@ from valgebra_planning.codemode import stubs
 from valgebra_planning.contracts import Contract
 from valgebra_planning.critic import ProgramError, critique
 from valgebra_planning.library import Library, Problem, read_library
-from valgebra_planning.planner import Plan, plan
+from valgebra_planning.planner import DEPTH, Plan, plan
 from valgebra_planning.privilege import describe, read_privileges, updates
 from valgebra_planning.program import render
 from valgebra_planning.run import blame
@@ -59,11 +60,17 @@ def _links(checked: Verification) -> list[dict[str, Any]]:
     ]
 
 
-def _planned(library: Library, problem: Problem) -> tuple[dict[str, Any], Plan]:
-    """Return a problem's row, its program verified, and the plan the row reads."""
+def _planned(
+    library: Library, problem: Problem, depth: int | None = None
+) -> tuple[dict[str, Any], Plan]:
+    """Return a problem's row, its program verified, and the plan the row reads.
+
+    The depth is ``depth`` where given, else the task's own, else the planner's default.
+    """
     found = plan(
         library.tools,
         problem.task,
+        depth=depth or problem.depth or DEPTH,
         errors=problem.errors,
         policies=problem.policies,
         flows=problem.flows,
@@ -71,7 +78,7 @@ def _planned(library: Library, problem: Problem) -> tuple[dict[str, Any], Plan]:
     )
     row: dict[str, Any] = {"task": problem.task.name, "program": None}
     if found.program is None:
-        return row, found
+        return row | {"reason": found.reason}, found
     checked = verify(
         found.program,
         library.tools,
@@ -95,7 +102,7 @@ def _planned(library: Library, problem: Problem) -> tuple[dict[str, Any], Plan]:
 def _text(row: dict[str, Any]) -> str:
     lines = [f"## {row['task']}", ""]
     if row["program"] is None:
-        return "\n".join([*lines, "no program"])
+        return "\n".join([*lines, row.get("reason") or "no program"])
     proven = sum(link["verdict"] == "proven" for link in row["links"])
     kind = "strong" if row["strong"] else "weak"
     lines += [row["program"], "", f"{kind}; {proven} of {len(row['links'])} links proven"]
@@ -111,9 +118,9 @@ def _text(row: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _plan(library: Library, names: Sequence[str], *, as_json: bool) -> int:
+def _plan(library: Library, names: Sequence[str], depth: int | None, *, as_json: bool) -> int:
     problems = [library.problem(name) for name in names] if names else list(library.problems)
-    rows = [_planned(library, problem)[0] for problem in problems]
+    rows = [_planned(library, problem, depth)[0] for problem in problems]
     print(json.dumps(rows, indent=2) if as_json else "\n\n".join(map(_text, rows)))
     return 0 if all(row["program"] is not None for row in rows) else 1
 
@@ -169,6 +176,7 @@ def _run(
     inputs: dict[str, Any],
     server: str,
     *,
+    depth: int | None,
     timeout: float | None,
     as_json: bool,
 ) -> int:
@@ -179,7 +187,7 @@ def _run(
         async with connect(server, read_timeout_seconds=timeout) as client:
             library = read_library(directory, await read_server(client))
             problem = library.problem(name)
-            row, found = _planned(library, problem)
+            row, found = _planned(library, problem, depth)
             if found.program is None:
                 return row
             result = await run_on_server(
@@ -299,6 +307,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     for command in (planning, critic, running, checking, stubbed, proxied):
         required = command in (running, proxied)
         command.add_argument("--server", required=required, help="a URL or a command")
+    for command in (planning, running):
+        command.add_argument(
+            "--depth", type=int, help=f"calls and tests a path may take; the task's, else {DEPTH}"
+        )
     for command in (running, proxied):
         command.add_argument(
             "--timeout", type=float, help="seconds a call waits for its answer; no limit by default"
@@ -326,13 +338,14 @@ def _on_library(args: argparse.Namespace) -> int:
             args.task,
             args.inputs,
             args.server,
+            depth=args.depth,
             timeout=args.timeout,
             as_json=args.json,
         )
     tools = None if args.server is None else _served(args.server)
     library = read_library(args.library, tools)
     if args.command == "plan":
-        return _plan(library, args.task, as_json=args.json)
+        return _plan(library, args.task, args.depth, as_json=args.json)
     if args.command == "check":
         return _check(library, as_json=args.json)
     if args.command == "stubs":

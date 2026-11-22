@@ -156,7 +156,13 @@ class Block:
 
 
 def render(block: Block, indent: str = "") -> str:
-    """Return the program as Python-like text, one step a line."""
+    """Return the program as Python-like text, one step a line.
+
+    Raises `TypeError` for anything but a `Block`: a plan with no program holds None.
+    """
+    if not isinstance(block, Block):
+        message = f"render takes a program, a Block, not {type(block).__name__}"
+        raise TypeError(message)
     lines = []
     for call in block.calls:
         made = f"{call.tool}(" + ", ".join(f"{name}={ref}" for name, ref in call.bindings) + ")"

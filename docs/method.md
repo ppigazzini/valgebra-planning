@@ -290,3 +290,6 @@ and a value from a task input with it, since a proxy sees no task.
   would change the signatures the proxy lists. Refused until a client reaching servers over HTTP
   alone, with tools that write and text it does not trust, needs it.
 - **Search bounds.** Six calls and tests a path by default, and the first 16 bindings of a call.
+  `plan` takes another depth, and so do a task's `depth` and the command line's `--depth`. A plan
+  with no program says why in `Plan.reason`: the bound cut a path, so a deeper search may find
+  one, or no path reached it, so none does from the bindings the search tries.
