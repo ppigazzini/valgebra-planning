@@ -87,6 +87,17 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- The planner tests the answer a policy's result guard reads. Read without its result, such a
+  transition was taken possibly, so under "motion after a yes" no program the planner could
+  write made the grasp: a call it alone allows came after it in none. Where the guard reads one
+  field and lists its members, as `{"properties": {"confirmed": {"const": true}}}`, its members cut
+  the cells, and the planner writes `if c3.confirmed in (True,):` after the call, each side
+  stepped on its own set as the verifier's case split steps it; it plans the grasp under the yes
+  and stops on the no, every link proven. A test of listed values renders them as Python
+  literals, as a call writes a constant, so `True` and `None` read back; and the pass leaving out
+  a call nothing needs reads each stop and each unproven link once, where a case split reached
+  one stop once a case and kept a confirmation for the cases it added.
+
 - A task fixes the constants its intent gives, `constants` in `tasks.json` or
   `read_task(..., constants={"confirm_with_user.action": "grasp"})`. The planner fills an
   argument only from a value the program holds, so a confirmation taking an `action` and a

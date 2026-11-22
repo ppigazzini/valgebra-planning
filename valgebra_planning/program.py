@@ -126,7 +126,8 @@ class Branch:
         """Return the set as a program writes it."""
         if self.tool:
             return f"{self.tool}.{self.argument}"
-        return "(" + "".join(f"{json.dumps(v)}, " for v in self.values).rstrip(" ") + ")"
+        # Each value as a Python literal, as a call writes a constant, so the test reads back.
+        return "(" + "".join(f"{v!r}, " for v in self.values).rstrip(" ") + ")"
 
 
 @dataclass(frozen=True, slots=True)

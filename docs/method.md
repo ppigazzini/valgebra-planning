@@ -167,7 +167,9 @@ verifier, which adds a link for it.
   of the guards and their complements that valgebra leaves inhabited, the result held in that
   cell and the policy stepped on it, and a branch no value of a case reaches is no path: a program
   walking only under a yes is proven, and one walking after a no is refuted on that case. The
-  planner holds no case, and takes such a transition possibly at most. A pending state is an obligation: a path may pass through it and must
+  planner writes the same split as a test where the guard reads one field and lists its members,
+  `if c3.confirmed in (True,):`, each side stepped on its own set, so it plans a grasp only under
+  the yes; a guard of another form it takes possibly at most. A pending state is an obligation: a path may pass through it and must
   not end in it, as a booking owes a notice. Every path of a program ends, a loop's after any
   number of items, so a pending state is decided before the run, where a monitor reading a prefix
   cannot decide it (Bauer et al. 2011); the runner reads it when the run ends. A bad state is

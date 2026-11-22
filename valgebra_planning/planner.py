@@ -28,7 +28,14 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from valgebra_planning._valgebra import Validator, intersection, nothing, union
+from valgebra_planning._valgebra import (
+    Validator,
+    anything,
+    complement,
+    intersection,
+    nothing,
+    union,
+)
 from valgebra_planning.cells import Abstraction, Predicate, abstract, gather
 from valgebra_planning.contracts import Contract, Slot, Task, fixes, listed, record_of
 from valgebra_planning.flows import Flow
@@ -62,6 +69,56 @@ MAX_BINDINGS = 16
 _GOAL = "goal"
 #: What the reference a task's constant is held under starts with, which no program names.
 _CONSTANT = "constant:"
+
+
+@dataclass(frozen=True, slots=True)
+class _Guard:
+    """A policy's guard on a tool's result that the planner can test: a field and its members.
+
+    ``whole`` is the guard over the whole result, which a policy reads; ``path`` and ``values``
+    are the one field it reads and the members it lists, which a test writes.
+    """
+
+    path: tuple[str, ...]
+    values: tuple[Any, ...]
+    whole: Validator[Any]
+
+
+def _listing(schema: object) -> tuple[tuple[str, ...], tuple[Any, ...]] | None:
+    """Return the one field a guard's schema reads and the members it lists, or None.
+
+    A guard of the form ``{"properties": {"confirmed": {"const": true}}}``, a property at a time
+    down to a `const` or an `enum`, is a test a program writes: ``if c3.confirmed in (True,):``.
+    """
+    path: list[str] = []
+    while isinstance(schema, dict):
+        keys = set(schema) - {"type", "required"}
+        properties = schema.get("properties")
+        if keys == {"properties"} and isinstance(properties, dict) and len(properties) == 1:
+            ((name, schema),) = properties.items()
+            path.append(name)
+        elif keys == {"const"}:
+            return tuple(path), (schema["const"],)
+        elif keys == {"enum"} and isinstance(schema["enum"], list):
+            return tuple(path), tuple(schema["enum"])
+        else:
+            return None
+    return None
+
+
+def _guards(policies: Sequence[Policy]) -> dict[str, tuple[_Guard, ...]]:
+    """Return, by tool, each guard a policy's transition reads off its result and a test can."""
+    found: dict[str, list[_Guard]] = {}
+    for policy in policies:
+        for transition in policy.transitions:
+            listing = _listing(transition.result_schema)
+            if transition.result is None or not transition.tool or listing is None:
+                continue
+            path, values = listing
+            found.setdefault(transition.tool, []).append(_Guard(path, values, transition.result))
+    return {tool: tuple(guards) for tool, guards in found.items()}
+
+
 #: The expansions spent trying the other first calls once a weak program is found, so the weak
 #: program leaving the fewest cells uncovered among them is the one returned.
 RANKING = 2_000
@@ -171,6 +228,8 @@ class _Search:
     #: the value each such reference holds: only its argument takes it (`call`).
     fixed: dict[tuple[str, str], Ref] = field(default_factory=dict)
     literals: dict[Ref, Any] = field(default_factory=dict)
+    #: The guards a policy reads off each tool's result that a test can split on (`split`).
+    guards: Mapping[str, tuple[_Guard, ...]] = field(default_factory=dict)
 
     def bound(self, state: _State, ref: Ref) -> Validator[Any]:
         """Return the values a binding passes: a constant's own, or its reference's cells'."""
@@ -318,9 +377,74 @@ class _Search:
             stepped = state.but(policed=policed)
             after = self.after(stepped, contract, bindings, result)
             rest = self.solve(after, depth - 1, weak=weak)
+            if rest is None:
+                rest = self.split(state, after, contract, bindings, result, depth, weak=weak)
             if rest is not None:
                 return Block((call, *rest.calls), rest.end)
         return None
+
+    def split(
+        self,
+        before: _State,
+        after: _State,
+        contract: Contract,
+        bindings: tuple[tuple[str, Ref], ...],
+        result: str,
+        depth: int,
+        *,
+        weak: bool,
+    ) -> Block | None:
+        """Return a test on a guard a policy reads off the call's result, and a program each side.
+
+        Read without its result, a transition on the result is taken possibly, so a call it
+        alone allows is never made after it. Tested, each side of the guard is a case, as an
+        observation splits a belief execution tree (Bertoli et al. 2006, Def. 3.6): the result is
+        held inside the guard on one side and outside it on the other, and each policy is stepped
+        on that side's set, so the transition is taken surely or never there.
+        """
+        if depth <= _GUARD:
+            return None
+        record = record_of({name: self.bound(before, ref) for name, ref in bindings}, closed=True)
+        whole = contract.returns if contract.returns is not None else anything
+        held = dict(after.refs)
+        for guard in self.guards.get(contract.name, ()):
+            ref = Ref(result, guard.path)
+            if ref not in held:
+                continue
+            cells = held[ref]
+            tested = frozenset(i for i in cells if self._inside(i, guard.values))
+            sides = []
+            for narrowed, meets in (
+                (tested, guard.whole),
+                (cells - tested, complement(guard.whole)),
+            ):
+                policed = tuple(
+                    policy.step(
+                        states, contract.name, record, contract.hints, intersection(whole, meets)
+                    )
+                    for policy, states in zip(self.policies, before.policed, strict=True)
+                )
+                if not narrowed or any(
+                    policy.reach(states) != "never"
+                    for policy, states in zip(self.policies, policed, strict=True)
+                ):
+                    sides.append(None)
+                else:
+                    sides.append(after.narrowed(ref, narrowed).but(policed=policed))
+            inside, outside = sides
+            then = None if inside is None else self.solve(inside, depth - 2, weak=weak)
+            if then is None:
+                continue
+            otherwise = None if outside is None else self.solve(outside, depth - 2, weak=weak)
+            if otherwise is None and weak and outside is not None and self.settled(outside):
+                otherwise = self.stopping(outside, ref, depth - 2)
+            if otherwise is not None:
+                return Block((), Branch(ref, "", "", then, otherwise, guard.values))
+        return None
+
+    def _inside(self, cell: int, values: tuple[Any, ...]) -> bool:
+        """Return whether valgebra proves a cell inside the members a guard lists."""
+        return self.abstraction.cells[cell].values.relation_to(listed(list(values))) == "subset"
 
     def failure(
         self,
@@ -662,17 +786,26 @@ def _readable(values: Validator[Any], consumers: Sequence[Validator[Any]]) -> bo
     )
 
 
-def predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate]:
+def predicates(
+    contracts: Mapping[str, Contract], task: Task, policies: Sequence[Policy] = ()
+) -> list[Predicate]:
     """Return every argument and the goal, and each result or input some of them may read.
 
     A value no argument and no goal can hold is never passed on, so its cells cost the
     search and decide nothing; it is left out, with its reference. The sets are gathered in
     the order of their names, which fixes the cut: valgebra leaves some meets undecided, and
     which ones depends on the order the cut splits by and draws its members in, so a listing
-    order of its own would make a library's count that order's.
+    order of its own would make a library's count that order's. The members a policy's guard on
+    a result lists cut the cells too, so the field it reads is held and a test can split on it.
     """
+    listings = [
+        (f"guard:{tool}:{index}", guard.values)
+        for tool, held in sorted(_guards(policies).items())
+        for index, guard in enumerate(held)
+    ]
     arguments = [slot for contract in contracts.values() for slot in contract.arguments]
     consumers = [slot.values for slot in arguments] + [task.goal]
+    consumers += [listed(list(values)) for _, values in listings]
     entries = [(_argument_name(slot), slot.values, slot.schema, slot.root) for slot in arguments]
     entries += [
         (_result_name(slot), slot.values, slot.schema, slot.root)
@@ -690,6 +823,10 @@ def predicates(contracts: Mapping[str, Contract], task: Task) -> list[Predicate]
     entries += [
         (f"{_GOAL}:{index}", values, schema, schema)
         for index, (values, schema) in enumerate(task.preferred)
+    ]
+    entries += [
+        (name, listed(list(values)), {"enum": list(values)}, {"enum": list(values)})
+        for name, values in listings
     ]
     return gather(sorted(entries, key=lambda entry: entry[0]))
 
@@ -885,11 +1022,15 @@ def _test_first(program: Block, reading: Callable[[Block], object]) -> Block:
 
 
 def _reading(checked: Verification) -> object:
-    """Return what a verification says of a program: its links not proven, and where it stops."""
+    """Return what a verification says of a program: its links not proven, and where it stops.
+
+    Each is read once: a walk split into cases at a call a result guard reads meets one stop
+    once a case, and a call nothing needs makes more cases, not another stop.
+    """
     unproven = sorted(
-        (link.claim, link.verdict) for link in checked.links if link.verdict != "proven"
+        {(link.claim, link.verdict) for link in checked.links if link.verdict != "proven"}
     )
-    return unproven, sorted(gap.ref for gap in checked.gaps)
+    return unproven, sorted({gap.ref for gap in checked.gaps})
 
 
 def _unpadded(program: Block, reading: Callable[[Block], object]) -> Block:
@@ -1056,7 +1197,8 @@ def plan(
         if any(policy.hints() & contract.hints for policy in policies)
     )
     contracts = _reachable(contracts, task, kept)
-    abstraction = abstract(predicates(contracts, task), seed=seed)
+    guards = _guards(policies)
+    abstraction = abstract(predicates(contracts, task, policies), seed=seed)
     # A task naming goals in an order gets a search toward each, the first's stops filled from
     # the next's: one toward their union would return in whichever is shallowest.
     names = [f"{_GOAL}:{index}" for index in range(len(task.preferred))] or [_GOAL]
@@ -1080,7 +1222,7 @@ def plan(
     }
     literals = {fixed[tool, argument]: value for tool, argument, value in task.constants}
     for one in searches:
-        one.fixed, one.literals = fixed, literals
+        one.fixed, one.literals, one.guards = fixed, literals, guards
     for one, after in itertools.pairwise(searches):
         one.fallback = after
         after.stops = searches[0].stops

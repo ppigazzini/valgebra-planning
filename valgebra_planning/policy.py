@@ -76,6 +76,8 @@ class Transition:
     #: The set the call's result must lie in, for a transition taken when the result arrives;
     #: None for one taken when the call is made.
     result: Validator[Any] | None = None
+    #: The JSON Schema ``result`` compiles from, which the planner reads a test off.
+    result_schema: object = None
 
     def reads(self, tool: str, hints: frozenset[str]) -> bool:
         """Return whether a call to ``tool``, whose annotations set ``hints``, is one it reads."""
@@ -221,6 +223,7 @@ def read_policy(spec: Mapping[str, Any], *, assert_format: bool = False) -> Poli
             result=None
             if "result" not in t
             else compile_schema(t["result"], assert_format=assert_format),
+            result_schema=t.get("result"),
             target=t["to"],
             hint=t.get("hint", ""),
         )

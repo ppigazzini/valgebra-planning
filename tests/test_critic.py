@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -11,7 +12,7 @@ from valgebra_planning.flows import read_flow
 from valgebra_planning.mining import mine
 from valgebra_planning.planner import plan
 from valgebra_planning.policy import read_policy
-from valgebra_planning.program import Branch, render
+from valgebra_planning.program import Block, Branch, Ref, Return, Stop, render
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 TOOLS = {
@@ -193,3 +194,22 @@ def test_a_key_no_attribute_names_reads_back_as_a_subscript() -> None:
     program = read_program(source)
     assert render(program) == source
     assert render(read_program(render(program))) == source
+
+
+@pytest.mark.parametrize(
+    "values", [(True,), (None, "a"), (1, 2.5)], ids=["bool", "null", "numbers"]
+)
+def test_a_test_of_listed_values_renders_as_python_and_reads_back(values: tuple[Any, ...]) -> None:
+    program = Block(
+        (),
+        Branch(
+            Ref("c1", ("confirmed",)),
+            "",
+            "",
+            Block((), Return(Ref("c1"))),
+            Block((), Stop(Ref("c1"))),
+            values,
+        ),
+    )
+    text = render(program)
+    assert render(read_program(text)) == text

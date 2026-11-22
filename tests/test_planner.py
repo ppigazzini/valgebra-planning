@@ -602,3 +602,54 @@ def test_a_constant_naming_no_argument_or_outside_its_set_is_refused(
 ) -> None:
     with pytest.raises(ValueError, match=says):
         plan(_enumerated(), read_task("pick", {}, GRASPED, constants=constants))
+
+
+YES_FIRST = {
+    "name": "motion after a yes",
+    "initial": "start",
+    "bad": ["violated"],
+    "transitions": [
+        {
+            "from": "start",
+            "tool": "confirm_with_user",
+            "result": {"properties": {"confirmed": {"const": True}}},
+            "to": "ok",
+        },
+        {"from": "start", "tool": "grasp", "to": "violated"},
+    ],
+}
+
+
+def test_the_planner_tests_the_answer_a_result_guard_reads() -> None:
+    yes = read_policy(YES_FIRST)
+    task = read_task("pick", {"name": {"type": "string"}, "hand": SIDES}, GRASPED, constants=INTENT)
+    found = plan(_enumerated(), task, depth=8, policies=[yes])
+    assert found.program is not None
+    lines = render(found.program).splitlines()
+    for index, line in enumerate(lines):
+        if "grasp(" in line:
+            # Each grasp sits under a test of the answer, and the test's other side stops on it.
+            above = [text for text in lines[:index] if "confirmed in (True,)" in text]
+            assert above, line
+    assert sum("stop(" in line and ".confirmed)" in line for line in lines) >= 1
+    checked = verify(found.program, _enumerated(), task, policies=[yes])
+    assert all(link.verdict == "proven" for link in checked.links)
+
+
+@pytest.mark.parametrize(
+    ("schema", "read"),
+    [
+        ({"properties": {"confirmed": {"const": True}}}, (("confirmed",), (True,))),
+        (
+            {"type": "object", "properties": {"answer": {"enum": ["yes", "ok"]}}},
+            (("answer",), ("yes", "ok")),
+        ),
+        ({"properties": {"a": {"properties": {"b": {"const": 1}}}}}, (("a", "b"), (1,))),
+        ({"properties": {"distance": {"minimum": 1}}}, None),
+        ({"properties": {"a": {"const": 1}, "b": {"const": 2}}}, None),
+        (None, None),
+    ],
+    ids=["const", "enum", "nested", "bound", "two-fields", "none"],
+)
+def test_a_guard_a_test_writes_is_one_field_listing_its_members(schema: Any, read: Any) -> None:
+    assert planner._listing(schema) == read
