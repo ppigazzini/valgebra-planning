@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import random
 from collections.abc import Callable
@@ -14,8 +15,9 @@ from valgebra_planning._valgebra import Sampler
 from valgebra_planning.contracts import Contract, Task, read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.planner import plan
+from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Block, Call, Next, Ref, Return
-from valgebra_planning.run import Refusal, ToolError, blame, run
+from valgebra_planning.run import CanceledRunError, Refusal, Run, ToolError, arun, blame, run
 from valgebra_planning.verify import verify
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
@@ -445,3 +447,120 @@ def test_how_a_run_ends_is_its_outcome_and_only_a_clean_return_is_ok() -> None:
     assert blame(looping, TOOLS, proven=True) == (
         "the program ends an iteration outside a loop: the program's"
     )
+
+
+def _async(tools: dict[str, Callable[..., Any]]) -> dict[str, Callable[..., Any]]:
+    """Return the same tools as coroutine functions, each awaiting nothing but its answer."""
+
+    def awaited(tool: Callable[..., Any]) -> Callable[..., Any]:
+        async def answer(**arguments: Any) -> Any:
+            return tool(**arguments)
+
+        return answer
+
+    return {name: awaited(tool) for name, tool in tools.items()}
+
+
+@pytest.mark.parametrize("name", ["settle a parcel", "return a parcel"])
+def test_arun_makes_the_checks_of_run_in_run_s_order(name: str) -> None:
+    task = TASKS[name]
+    found = plan(TOOLS, task)
+    assert found.program is not None
+    for seed in range(RUNS):
+        inputs = _inputs(task, random.Random(f"inputs:{seed}"))
+        sync = run(found.program, TOOLS, task, inputs, _random_tools(random.Random(seed)))
+        tools = _async(_random_tools(random.Random(seed)))
+        assert asyncio.run(arun(found.program, TOOLS, task, inputs, tools)) == sync
+
+
+def test_arun_refuses_what_run_refuses_and_hands_an_error_to_its_block() -> None:
+    task = TASKS["settle a parcel"]
+    program = read_program(
+        "c1 = find_parcel(tracking=tracking)\n"
+        "try:\n"
+        "    c2 = notify(email=c1.parcel.contact)\n"
+        "except ToolError:\n"
+        "    stop(c1.parcel)\n"
+        "return c2.notice_id\n"
+    )
+    inputs = {"tracking": "AB123456789IT"}
+
+    def failing(**_: Any) -> Any:
+        message = "notify"
+        raise ToolError(message)
+
+    tools: dict[str, Callable[..., Any]] = {
+        "find_parcel": lambda **_: {"parcel": PARCEL},
+        "notify": failing,
+    }
+    sync = run(program, TOOLS, task, inputs, tools)
+    assert sync.outcome == "stopped"
+    assert asyncio.run(arun(program, TOOLS, task, inputs, _async(tools))) == sync
+
+
+OWED = read_policy(
+    {
+        "name": "every notice is answered",
+        "initial": "clear",
+        "bad": [],
+        "pending": ["owed"],
+        "transitions": [{"from": "clear", "tool": "find_parcel", "to": "owed"}],
+    }
+)
+
+
+def test_a_cancel_ends_the_run_naming_the_obligations_it_leaves() -> None:
+    task = TASKS["settle a parcel"]
+    program = read_program(
+        "c1 = find_parcel(tracking=tracking)\n"
+        "c2 = notify(email=c1.parcel.contact)\n"
+        "return c2.notice_id\n"
+    )
+
+    async def find_parcel(**_: Any) -> Any:
+        return {"parcel": PARCEL}
+
+    async def canceled() -> Run:
+        asked = asyncio.Event()
+
+        async def notify(**_: Any) -> Any:
+            asked.set()
+            await asyncio.sleep(3600)
+
+        running = asyncio.create_task(
+            arun(
+                program,
+                TOOLS,
+                task,
+                {"tracking": "AB123456789IT"},
+                {"find_parcel": find_parcel, "notify": notify},
+                policies=[OWED],
+            )
+        )
+        await asked.wait()
+        running.cancel()
+        with pytest.raises(CanceledRunError) as stopped:
+            await running
+        return stopped.value.run
+
+    ended = asyncio.run(canceled())
+    assert ended.outcome == "canceled"
+    assert ended.stopped == "canceled at notify: every notice is answered may hold owed"
+    assert blame(ended, TOOLS, proven=True) == "the run was canceled at notify: the caller's"
+
+
+def test_a_timeout_reads_a_canceled_run_as_the_cancel_it_is() -> None:
+    task = TASKS["settle a parcel"]
+    program = read_program("c1 = find_parcel(tracking=tracking)\nreturn c1.parcel.parcel_id\n")
+
+    async def find_parcel(**_: Any) -> Any:
+        await asyncio.sleep(3600)
+
+    async def bounded() -> None:
+        async with asyncio.timeout(0.01):
+            await arun(
+                program, TOOLS, task, {"tracking": "AB123456789IT"}, {"find_parcel": find_parcel}
+            )
+
+    with pytest.raises(TimeoutError):
+        asyncio.run(bounded())

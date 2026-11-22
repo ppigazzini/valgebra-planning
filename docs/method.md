@@ -242,6 +242,12 @@ plan, the proof and the run read the contracts as written.
 argument record against the tool's input set, each policy's step, the result against the output set,
 or against the JSON values where the tool declares none, and the returned value against the goal. A
 coroutine an async tool hands back unawaited is no JSON value: it is refused and closed, never run.
+`arun` awaits it instead: one interpreter walks the program and asks for each call, doing no I/O
+of its own, `run` making each call and `arun` awaiting it, so the two make the same checks in the
+same order. A cancel while `arun` awaits a call ends the run: the call may have acted, so each
+policy is held in both sets of states, and the `CanceledRunError` it raises, an
+`asyncio.CancelledError` a timeout reads as its own, carries the run, its outcome `canceled`
+naming the call and each obligation a policy may leave pending.
 It fails closed: the first broken check ends the run before the call is made, the result bound or
 the value returned, and `Run.refused` names it. Before the first call each input the task names is
 held to its set. A tool raising anything but a tool error ends the run, neither retried nor handed

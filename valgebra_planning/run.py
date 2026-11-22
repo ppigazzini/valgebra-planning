@@ -14,10 +14,11 @@ break it meets: a diagnosis, never a guard.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 from valgebra_planning._valgebra import JSON, Validator
 from valgebra_planning.contracts import (
@@ -32,7 +33,17 @@ from valgebra_planning.contracts import (
 from valgebra_planning.policy import Monitor, Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 
-__all__ = ["Outcome", "Refusal", "RefusedResultError", "Run", "ToolError", "blame", "run"]
+__all__ = [
+    "CanceledRunError",
+    "Outcome",
+    "Refusal",
+    "RefusedResultError",
+    "Run",
+    "ToolError",
+    "arun",
+    "blame",
+    "run",
+]
 
 #: How many times a retried call is made before the run gives up on it.
 ATTEMPTS = 8
@@ -82,7 +93,7 @@ class Refusal:
     """Which check ended a run.
 
     One of `inputs`, `arguments`, `policy`, `given`, `result`, `goal`, `error`, `raised`,
-    `read` or `ended`.
+    `read`, `ended` or `canceled`.
 
     ``tool`` is the tool the check was on, where it was on one.
     """
@@ -93,7 +104,23 @@ class Refusal:
 
 
 #: How a run ends, as `Run.outcome` reads it.
-Outcome = Literal["returned", "stopped", "refused", "error", "ended"]
+Outcome = Literal["returned", "stopped", "refused", "error", "ended", "canceled"]
+
+#: A call the interpreter asks of its driver: the tool's name and the arguments it is given.
+_Asked = tuple[str, dict[str, Any]]
+_T = TypeVar("_T")
+
+
+@dataclass(frozen=True, slots=True)
+class _Raised:
+    """What a driver hands back for a call that raised: the exception `_Runner.attempts` reads."""
+
+    error: Exception
+
+
+#: A walk of the interpreter: it yields each call it asks, is sent the call's result or what it
+#: raised as `_Raised`, and returns what it ends in.
+_Steps = Generator[_Asked, Any, _T]
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +137,9 @@ class Run:
       which, and ``value`` is None;
     - ``error``: a tool answered with an error no block handles, ``stopped`` names the call,
       and ``value`` is None;
-    - ``ended``: the program ended an iteration outside a loop, and ``value`` is None.
+    - ``ended``: the program ended an iteration outside a loop, and ``value`` is None;
+    - ``canceled``: `arun` was canceled while a call was awaited, ``stopped`` names the call and
+      each obligation a policy may leave pending, and ``value`` is None.
 
     With ``enforce=False`` a run may return with ``broken`` holding every check it broke:
     its outcome is ``returned`` and it is not ``ok``.
@@ -131,8 +160,9 @@ class Run:
             return "refused"
         if self.why is not None and self.why.check == "error":
             return "error"
-        if self.why is not None and self.why.check == "ended":
-            return "ended"
+        ending: dict[str | None, Outcome] = {"ended": "ended", "canceled": "canceled"}
+        if self.why is not None and self.why.check in ending:
+            return ending[self.why.check]
         return "returned" if self.stopped is None else "stopped"
 
     @property
@@ -173,10 +203,10 @@ class _Runner:
                 return refused
         return None
 
-    def block(self, block: Block, env: dict[str, Any]) -> Run | None:
+    def block(self, block: Block, env: dict[str, Any]) -> _Steps[Run | None]:
         """Run a block; return the run it ends, or None where an iteration of a loop ends."""
         for call in block.calls:
-            outcome = self.call(call, env)
+            outcome = yield from self.call(call, env)
             if outcome is None or isinstance(outcome, Run):
                 return outcome
             env = outcome
@@ -194,17 +224,17 @@ class _Runner:
         if isinstance(end, Next):
             return None
         if isinstance(end, For):
-            return self.loop(end, env)
-        return self.branch(end, env)
+            return (yield from self.loop(end, env))
+        return (yield from self.branch(end, env))
 
-    def loop(self, end: For, env: dict[str, Any]) -> Run | None:
+    def loop(self, end: For, env: dict[str, Any]) -> _Steps[Run | None]:
         """Run a loop's body for each item, then what follows; a body ending the run ends it."""
         items = _read(env, end.ref)
         for item in items if isinstance(items, list) else ():
-            ended = self.block(end.body, {**env, end.item: item})
+            ended = yield from self.block(end.body, {**env, end.item: item})
             if ended is not None:
                 return ended
-        return self.block(end.after, env)
+        return (yield from self.block(end.after, env))
 
     def settled(self) -> Run | None:
         """Check each policy where the run ends; return the run a pending state ends."""
@@ -215,7 +245,7 @@ class _Runner:
                     return refused
         return None
 
-    def call(self, call: Call, env: dict[str, Any]) -> dict[str, Any] | Run | None:
+    def call(self, call: Call, env: dict[str, Any]) -> _Steps[dict[str, Any] | Run | None]:
         """Make one call; return the values held after it, the run it ended, or None (`block`)."""
         contract = self.contracts[call.tool]
         arguments = {
@@ -225,7 +255,7 @@ class _Runner:
         refused = self.admitted(call.tool, contract, arguments)
         if refused is not None:
             return refused
-        made = self.attempts(call, arguments, env)
+        made = yield from self.attempts(call, arguments, env)
         if made is None or isinstance(made, Run):
             return made
         result = made[0]
@@ -279,53 +309,57 @@ class _Runner:
 
     def attempts(
         self, call: Call, arguments: dict[str, Any], env: dict[str, Any]
-    ) -> tuple[Any] | Run | None:
-        """Make the call, retried as it says; return its result, or how its error block ended."""
+    ) -> _Steps[tuple[Any] | Run | None]:
+        """Make the call, retried as it says; return its result, or how its error block ended.
+
+        The call is asked of the driver, which makes it and hands back its result, or the
+        exception it raised as `_Raised`.
+        """
         if call.tool not in self.tools:
             # Nothing is called, so no run goes on past the call, enforced or not.
             message = f"{call.tool} is no tool the run was given"
             self.broken.append(message)
             return Run(None, None, tuple(self.broken), message, Refusal("given", call.tool))
         for _ in range(ATTEMPTS if call.retry else 1):
-            try:
-                return (self.tools[call.tool](**arguments),)
-            except ToolError:
+            answer = yield (call.tool, arguments)
+            if not isinstance(answer, _Raised):
+                return (answer,)
+            if isinstance(answer.error, ToolError):
                 continue
-            except RefusedResultError:
+            if isinstance(answer.error, RefusedResultError):
                 # No result is handed back, so no run goes on past the call, enforced or not.
                 message = (
                     f"{call.tool} returned a value outside its contract, refused by its caller"
                 )
                 self.broken.append(message)
                 return Run(None, None, tuple(self.broken), message, Refusal("result", call.tool))
-            except Exception as error:  # noqa: BLE001 - any failure of a tool ends the run, named
-                # Neither retried nor handed to an error block: an error block answers a tool's
-                # error, and an exception may be a stop asked of the tool or a defect of its
-                # driver. Its text may hold a value, so the message names its class alone.
-                message = f"{call.tool} raised {type(error).__name__}"
-                self.broken.append(message)
-                return Run(None, None, tuple(self.broken), message, Refusal("raised", call.tool))
+            # Neither retried nor handed to an error block: an error block answers a tool's
+            # error, and an exception may be a stop asked of the tool or a defect of its driver.
+            # Its text may hold a value, so the message names its class alone.
+            message = f"{call.tool} raised {type(answer.error).__name__}"
+            self.broken.append(message)
+            return Run(None, None, tuple(self.broken), message, Refusal("raised", call.tool))
         # The call may not have acted: what follows starts from either set of policy states, as
         # the verifier walks it.
         for monitor in self.monitors:
             monitor.errored()
         if call.on_error is not None:
-            return self.block(call.on_error, env)
+            return (yield from self.block(call.on_error, env))
         self.broken.append(f"{call.tool} answered with an error nothing handles")
         stopped = f"an error of {call.tool}"
         return Run(None, stopped, tuple(self.broken), None, Refusal("error", call.tool, call.retry))
 
-    def branch(self, branch: Branch, env: dict[str, Any]) -> Run | None:
+    def branch(self, branch: Branch, env: dict[str, Any]) -> _Steps[Run | None]:
         if branch.key:
             value = _read(env, branch.ref)
             holds = isinstance(value, dict) and branch.key in value
-            return self.block(branch.then if holds else branch.otherwise, env)
+            return (yield from self.block(branch.then if holds else branch.otherwise, env))
         if branch.tool:
             tested = self.contracts[branch.tool].argument(branch.argument).values
         else:
             tested = listed(branch.values)
         taken = branch.then if tested.is_valid(_read(env, branch.ref)) else branch.otherwise
-        return self.block(taken, env)
+        return (yield from self.block(taken, env))
 
 
 class _AbsentError(Exception):
@@ -346,6 +380,23 @@ def _read(env: Mapping[str, Any], ref: Ref) -> Any:
             raise _AbsentError(ref)
         value = value[name]
     return value
+
+
+def _program(runner: _Runner, program: Block, inputs: Mapping[str, Any]) -> _Steps[Run]:
+    """Walk a program from its inputs to the run it ends in, asking the driver for each call."""
+    refused = runner.given(inputs)
+    if refused is not None:
+        return refused
+    try:
+        ended = yield from runner.block(program, dict(inputs))
+    except _AbsentError as absent:
+        message = f"{absent.ref} is no value the run holds"
+        runner.broken.append(message)
+        return Run(None, None, tuple(runner.broken), message, Refusal("read"))
+    if ended is None:
+        runner.broken.append("the program ends an iteration outside a loop")
+        return Run(None, "the end of an iteration", tuple(runner.broken), None, Refusal("ended"))
+    return ended
 
 
 def run(
@@ -370,21 +421,97 @@ def run(
     ends the run at that call. Raises `ValueError` for a task naming an input as a tool.
     """
     unclashed(task, contracts)
-    monitors = [Monitor(policy) for policy in policies]
-    runner = _Runner(contracts, tools, task, monitors, enforce)
-    refused = runner.given(inputs)
-    if refused is not None:
-        return refused
+    runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
+    steps = _program(runner, program, inputs)
     try:
-        ended = runner.block(program, dict(inputs))
-    except _AbsentError as absent:
-        message = f"{absent.ref} is no value the run holds"
-        runner.broken.append(message)
-        return Run(None, None, tuple(runner.broken), message, Refusal("read"))
-    if ended is None:
-        runner.broken.append("the program ends an iteration outside a loop")
-        return Run(None, "the end of an iteration", tuple(runner.broken), None, Refusal("ended"))
-    return ended
+        tool, arguments = next(steps)
+        while True:
+            tool, arguments = steps.send(_made(tools[tool], arguments))
+    except StopIteration as ended:
+        return ended.value
+
+
+def _made(tool: Callable[..., Any], arguments: dict[str, Any]) -> Any:
+    """Return a call's result, or `_Raised` holding what it raised, which the run reads.
+
+    Any exception a tool raises ends the run named, or is the error a retry or a block takes,
+    so each is handed back to the interpreter, never lost; a `BaseException` that is no
+    `Exception` propagates.
+    """
+    try:
+        return tool(**arguments)
+    except Exception as error:  # noqa: BLE001 - handed back whole: the run reads and names it
+        return _Raised(error)
+
+
+class CanceledRunError(asyncio.CancelledError):
+    """A run `arun` ended, canceled while it awaited a call: ``run`` names what it left.
+
+    It is a `asyncio.CancelledError`, so a timeout or a task group canceling the run reads it
+    as the cancel it is.
+    """
+
+    def __init__(self, run: Run) -> None:
+        super().__init__(run.stopped)
+        self.run = run
+
+
+async def arun(
+    program: Block,
+    contracts: Mapping[str, Contract],
+    task: Task,
+    inputs: Mapping[str, Any],
+    tools: Mapping[str, Callable[..., Any]],
+    *,
+    policies: Sequence[Policy] = (),
+    enforce: bool = True,
+) -> Run:
+    """Run ``program`` as `run` does, awaiting each call a tool answers with an awaitable.
+
+    The checks are `run`'s, in `run`'s order: one interpreter walks the program, and only the
+    calls are made here. A tool may be a coroutine function or a plain one. A cancel while a
+    call is awaited ends the run: the call may have acted, so each policy is read from either
+    set of states, and `CanceledRunError` carries the run, its outcome ``canceled`` and
+    ``stopped`` naming the call and each obligation a policy leaves pending.
+    """
+    unclashed(task, contracts)
+    runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
+    steps = _program(runner, program, inputs)
+    try:
+        tool, arguments = next(steps)
+        while True:
+            answer = _made(tools[tool], arguments)
+            if inspect.isawaitable(answer):
+                try:
+                    answer = await _awaited(answer)
+                except asyncio.CancelledError as cancel:
+                    steps.close()
+                    raise CanceledRunError(_canceled(runner, tool)) from cancel
+            tool, arguments = steps.send(answer)
+    except StopIteration as ended:
+        return ended.value
+
+
+async def _awaited(pending: Awaitable[Any]) -> Any:
+    """Return what an awaitable a tool answered with comes to, or `_Raised` holding its error."""
+    try:
+        return await pending
+    except Exception as error:  # noqa: BLE001 - handed back whole: the run reads and names it
+        return _Raised(error)
+
+
+def _canceled(runner: _Runner, tool: str) -> Run:
+    """Return the run a cancel ends at a call to ``tool``: what each policy leaves pending."""
+    for monitor in runner.monitors:
+        monitor.errored()
+    pending = [
+        f"{monitor.policy.name} may hold {state}"
+        for monitor in runner.monitors
+        for state in sorted(monitor.held() & monitor.policy.pending)
+    ]
+    left = "; ".join(pending) if pending else "no obligation left pending"
+    stopped = f"canceled at {tool}: {left}"
+    return Run(None, stopped, tuple(runner.broken), None, Refusal("canceled", tool))
 
 
 #: What each check a proven program should never break holds, as `blame` names it.
@@ -424,6 +551,7 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
         if result.why.retried
         else f"an error of {tool} the program does not handle",
         "ended": "the program ends an iteration outside a loop: the program's",
+        "canceled": f"the run was canceled at {tool}: the caller's",
     }
     if check in named:
         return named[check]

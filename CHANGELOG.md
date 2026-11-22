@@ -79,6 +79,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- `arun` runs a program over async tools. The runner was synchronous, and a coroutine a tool
+  handed back was refused unawaited; an async caller had no runner, and a cancel had no end to
+  name. One interpreter walks the program and asks for each call, doing no I/O of its own: `run`
+  makes each call and `arun` awaits it, so the two make the same checks in the same order, which
+  the suite holds over the parcel programs on drawn answers. A cancel while `arun` awaits a call
+  ends the run, each policy held in both sets of states, and raises `CanceledRunError`, an
+  `asyncio.CancelledError` a timeout reads as its own, carrying the run: its outcome `canceled`,
+  `stopped` naming the call and each obligation a policy may leave pending, and `blame` naming
+  the caller.
+
 - A policy may hold an instance for each value an argument takes, `"per": "object_id"`. A policy
   read a program's calls as one trace, so "each object is confirmed before it is grasped" passed
   a run confirming one object and grasping another. The monitor holds an instance per value, a
