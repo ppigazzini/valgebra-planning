@@ -14,10 +14,11 @@ from mcp.server.lowlevel import Server
 
 from valgebra_planning._valgebra import Sampler
 from valgebra_planning.contracts import read_contract, read_task
+from valgebra_planning.critic import read_program
 from valgebra_planning.planner import plan
 from valgebra_planning.program import Block
 from valgebra_planning.run import Refusal, blame
-from valgebra_planning.servers import read_server, run_on_server
+from valgebra_planning.servers import connect, read_server, run_on_server
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 LISTING = json.loads((EXAMPLE / "tools.json").read_text())["tools"]
@@ -218,3 +219,58 @@ def test_a_result_the_client_refuses_ends_the_run_naming_the_tool_and_never_the_
     )
     captured = capsys.readouterr()
     assert HIDDEN not in repr(result) + captured.out + captured.err + caplog.text
+
+
+WALK = {
+    "name": "walk_to",
+    "inputSchema": {"type": "object", "properties": {"x": {"type": "integer"}}, "required": ["x"]},
+    "outputSchema": {
+        "type": "object",
+        "properties": {"arrived": {"type": "boolean"}},
+        "required": ["arrived"],
+    },
+}
+WALKING = {"walk_to": read_contract(WALK)}
+THREE_WALKS = read_program(
+    "c1 = walk_to(x=1)\nc2 = walk_to(x=2)\nc3 = walk_to(x=3)\nreturn c3.arrived\n"
+)
+
+
+def test_a_canceled_run_sends_no_call_after_the_cancel() -> None:
+    made: list[int] = []
+    walking = asyncio.Event()
+
+    async def listed(_: Any, __: Any) -> types.ListToolsResult:
+        return types.ListToolsResult(tools=[types.Tool.model_validate(WALK)])
+
+    async def called(_: Any, params: types.CallToolRequestParams) -> types.CallToolResult:
+        made.append((params.arguments or {})["x"])
+        walking.set()
+        await asyncio.sleep(0.2)
+        arrived = {"arrived": True}
+        text = types.TextContent(type="text", text=json.dumps(arrived))
+        return types.CallToolResult(content=[text], structured_content=arrived)
+
+    async def once() -> None:
+        walker = Server("walker", on_list_tools=listed, on_call_tool=called)
+        async with Client(walker) as client:
+            task = asyncio.create_task(
+                run_on_server(THREE_WALKS, WALKING, read_task("walk", {}, True), {}, client)
+            )
+            await walking.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            # Three walks take 0.6 s: a worker going on would make the second and the third.
+            await asyncio.sleep(0.8)
+
+    asyncio.run(once())
+    assert made == [1]
+
+
+def test_a_client_waits_for_an_answer_as_long_as_its_read_timeout() -> None:
+    assert connect("https://robot.example/mcp").read_timeout_seconds is None
+    assert (
+        connect("https://robot.example/mcp", read_timeout_seconds=2.5).read_timeout_seconds == 2.5
+    )
+    assert connect("python -m server", read_timeout_seconds=1.5).read_timeout_seconds == 1.5

@@ -99,11 +99,14 @@ uv run valgebra-planning run examples/parcels --task "settle a parcel" \
 ```
 
 `run` plans the task over the server's tools and runs the program against the server
-(`valgebra_planning/servers.py`): each call is a `tools/call`, its `structuredContent` the value
-it returns, an `isError` result, a protocol error or a request for input a tool error, and the run
-fails closed on any argument record, policy step or result outside its contract. It prints how the run ended, and the cause of a break (the
-server, an assumption, or the program), and exits 1 unless it returned a value with no break.
-`tests/parcel_server.py` serves the example's tools over stdio.
+(`valgebra_planning/servers.py`): each call is a `tools/call`, its `structuredContent` the value it
+returns, an `isError` result, a protocol error or a request for input a tool error, and the run
+fails closed on any argument record, policy step or result outside its contract. It prints how the
+run ended, and the cause of a break (the server, an assumption, or the program), and exits 1 unless
+it returned a value with no break. With `--timeout`, `run` and `proxy` give each call that many
+seconds to be answered, after which it fails as a tool error; with none, a call waits for its
+answer. A canceled run sends no call after the cancel. `tests/parcel_server.py` serves the example's
+tools over stdio.
 
 ## A proxy in front of a server
 

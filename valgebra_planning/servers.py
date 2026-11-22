@@ -13,13 +13,16 @@ roots, or an interaction it waits on): the client gives none, so no value a prog
 reaches a call.
 
 Requires the ``mcp`` extra. The runner is synchronous and the client asynchronous, so the run
-goes on a worker thread and each call is sent to the client's event loop.
+goes on a worker thread and each call is sent to the client's event loop. Canceling the task that
+awaits `run_on_server` cancels the call in flight and sends no call after it.
 """
 
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import shlex
+import threading
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -38,17 +41,20 @@ __all__ = ["connect", "read_server", "refused_by_client", "run_on_server"]
 _CLIENT_REFUSALS = ("Invalid structured content returned by tool ", "Invalid schema for tool ")
 
 
-def connect(server: str) -> Client:
+def connect(server: str, *, read_timeout_seconds: float | None = None) -> Client:
     """Return a client for a server: a URL is Streamable HTTP, anything else a stdio command.
 
     The command is split as a POSIX shell splits it (``shlex.split``), on Windows as well: a
     backslash escapes the character after it, so a Windows path is passed quoted, as
     ``shlex.quote`` quotes it, the way pre-commit quotes the interpreter in a hook's ``entry``.
+    With ``read_timeout_seconds``, a request the server has not answered by then fails as a
+    protocol error, so a call fails as a tool error; with none, a request waits for its answer.
     """
     if server.startswith(("http://", "https://")):
-        return Client(server)
+        return Client(server, read_timeout_seconds=read_timeout_seconds)
     command, *arguments = shlex.split(server)
-    return Client(StdioServerParameters(command=command, args=arguments))
+    parameters = StdioServerParameters(command=command, args=arguments)
+    return Client(parameters, read_timeout_seconds=read_timeout_seconds)
 
 
 async def read_server(client: Client) -> dict[str, Contract]:
@@ -90,14 +96,29 @@ async def run_on_server(
     policies: Sequence[Policy] = (),
     enforce: bool = True,
 ) -> Run:
-    """Run ``program`` against the server ``client`` is connected to, failing closed."""
+    """Run ``program`` against the server ``client`` is connected to, failing closed.
+
+    Canceling the task that awaits it cancels the call in flight and sends no call after it.
+    """
     loop = asyncio.get_running_loop()
+    # The lock orders a call's send against the cancel: a call is sent before the cancel, and
+    # is the call in flight it cancels, or after it, and is never sent.
+    guard = threading.Lock()
+    canceled = threading.Event()
+    flying: list[concurrent.futures.Future[Any]] = []
 
     def caller(name: str) -> Callable[..., Any]:
         def call(**arguments: Any) -> Any:
-            sent = asyncio.run_coroutine_threadsafe(client.call_tool(name, arguments), loop)
+            with guard:
+                if canceled.is_set():
+                    raise asyncio.CancelledError
+                sent = asyncio.run_coroutine_threadsafe(client.call_tool(name, arguments), loop)
+                flying[:] = [sent]
             try:
                 result = sent.result()
+            except concurrent.futures.CancelledError:
+                # The call in flight was canceled with the run: the run ends here.
+                raise asyncio.CancelledError from None
             except (MCPError, InputRequiredRoundsExceededError) as error:
                 # Fail the call, as an error block or a refusal reads it: a raise would end the
                 # run with no record of which call broke and why.
@@ -113,6 +134,13 @@ async def run_on_server(
         return call
 
     tools = {name: caller(name) for name in contracts}
-    return await asyncio.to_thread(
-        run, program, contracts, task, inputs, tools, policies=policies, enforce=enforce
-    )
+    try:
+        return await asyncio.to_thread(
+            run, program, contracts, task, inputs, tools, policies=policies, enforce=enforce
+        )
+    except asyncio.CancelledError:
+        with guard:
+            canceled.set()
+            for sent in flying:
+                sent.cancel()
+        raise

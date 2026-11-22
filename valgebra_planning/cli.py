@@ -2,11 +2,11 @@
 
     valgebra-planning plan LIBRARY [--task NAME] [--server SERVER] [--json]
     valgebra-planning critique LIBRARY --task NAME PROGRAM [--server SERVER] [--json]
-    valgebra-planning run LIBRARY --task NAME --inputs JSON --server SERVER [--json]
+    valgebra-planning run LIBRARY --task NAME --inputs JSON --server SERVER [--timeout S] [--json]
     valgebra-planning check LIBRARY [--server SERVER] [--json]
     valgebra-planning privileges OLD NEW [--json]
     valgebra-planning stubs LIBRARY [--server SERVER]
-    valgebra-planning proxy --server SERVER [--library LIBRARY]
+    valgebra-planning proxy --server SERVER [--library LIBRARY] [--timeout S]
 
 ``LIBRARY`` is a directory `valgebra_planning.library.read_library` reads. ``plan`` prints each
 task's program and its verification; it exits 1 when a task gets no program. ``critique`` reads a
@@ -163,12 +163,20 @@ def _served(server: str) -> Mapping[str, Contract]:
     return asyncio.run(listed())
 
 
-def _run(directory: Path, name: str, inputs: dict[str, Any], server: str, *, as_json: bool) -> int:
+def _run(
+    directory: Path,
+    name: str,
+    inputs: dict[str, Any],
+    server: str,
+    *,
+    timeout: float | None,
+    as_json: bool,
+) -> int:
     """Plan a task over a live server's tools and run the program against it, in one session."""
     from valgebra_planning.servers import connect, read_server, run_on_server  # noqa: PLC0415
 
     async def ran() -> dict[str, Any]:
-        async with connect(server) as client:
+        async with connect(server, read_timeout_seconds=timeout) as client:
             library = read_library(directory, await read_server(client))
             problem = library.problem(name)
             row, found = _planned(library, problem)
@@ -241,7 +249,7 @@ def _privileges(old: Path, new: Path, *, as_json: bool) -> int:
     return 0 if all(u.change == "narrowing" for u in found) else 1
 
 
-def _proxy(server: str, directory: Path | None) -> int:
+def _proxy(server: str, directory: Path | None, timeout: float | None) -> int:
     """Serve a proxy over stdio in front of a server, holding calls to a library's rules."""
     from valgebra_planning.proxy import serve  # noqa: PLC0415 - the mcp extra
     from valgebra_planning.servers import connect  # noqa: PLC0415
@@ -251,7 +259,7 @@ def _proxy(server: str, directory: Path | None) -> int:
     flows = () if library is None else tuple(library.flows.values())
 
     async def served() -> None:
-        async with connect(server) as upstream:
+        async with connect(server, read_timeout_seconds=timeout) as upstream:
             await serve(upstream, policies=policies, flows=flows)
 
     asyncio.run(served())
@@ -290,14 +298,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     for command in (planning, critic, running, checking, stubbed, proxied):
         required = command in (running, proxied)
         command.add_argument("--server", required=required, help="a URL or a command")
+    for command in (running, proxied):
+        command.add_argument(
+            "--timeout", type=float, help="seconds a call waits for its answer; no limit by default"
+        )
     args = parser.parse_args(argv)
     if args.command == "privileges":
         return _privileges(args.old, args.new, as_json=args.json)
     if args.command == "proxy":
-        return _proxy(args.server, args.library)
+        return _proxy(args.server, args.library, args.timeout)
     try:
         if args.command == "run":
-            return _run(args.library, args.task, args.inputs, args.server, as_json=args.json)
+            return _run(
+                args.library,
+                args.task,
+                args.inputs,
+                args.server,
+                timeout=args.timeout,
+                as_json=args.json,
+            )
         tools = None if args.server is None else _served(args.server)
         library = read_library(args.library, tools)
         if args.command == "plan":

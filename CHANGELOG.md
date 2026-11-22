@@ -30,7 +30,18 @@ All notable changes to valgebra-planning are recorded here. The format follows
   a call that takes any state the run may be in to a bad one is refused; `Monitor.errored`
   records the error, and `Monitor.held` returns every state held.
 
+### Added
+
+- `connect` takes `read_timeout_seconds`, and the commands `run` and `proxy` take `--timeout`:
+  a call the server has not answered by then fails as a tool error. With none, a call waits for
+  its answer, as before.
+
 ### Fixed
+
+- Canceling the task that awaits `run_on_server` stops the run. The run went on in its worker
+  thread, which no cancel reaches, and sent every call left in the program: two walks reached a
+  robot's server after the cancel. The call in flight is canceled with the run, and the worker
+  sends no call after the cancel.
 
 - A result the mcp client refuses is the `result` check. The client checks a result against the
   output schema its server declares before handing it back, and raises with the value in its
