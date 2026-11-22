@@ -87,6 +87,8 @@ class Gap:
 
     where: str
     ref: str
+    #: Whether valgebra proves the value stopped on inside a set the task tolerates there.
+    tolerated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +102,22 @@ class Verification:
     def proven(self) -> bool:
         """Return whether every link is proven and no path stops."""
         return not self.gaps and all(link.verdict == "proven" for link in self.links)
+
+    @property
+    def verified(self) -> bool:
+        """Return whether every link is proven, whatever paths stop."""
+        return all(link.verdict == "proven" for link in self.links)
+
+    @property
+    def weak(self) -> bool:
+        """Return whether the program reaches the goal on some path and stops only as tolerated.
+
+        Every link is proven, some path returns, and each stop is on a value the task tolerates
+        there: a weak solution, one reaching the goal on some execution (Cimatti et al. 2003,
+        Def. 2.10), whose every other end the task accepts.
+        """
+        returns = any(link.claim.startswith("return ") for link in self.links)
+        return self.verified and returns and all(gap.tolerated for gap in self.gaps)
 
     def count(self, verdict: Verdict) -> int:
         """Return how many links read ``verdict``."""
@@ -158,7 +176,7 @@ class _Walk:
             self.obeyed(where, path.states)
             self.ended(path)
         elif isinstance(end, Stop):
-            self.gaps.append(Gap(where, str(end.ref)))
+            self.gaps.append(Gap(where, str(end.ref), self.tolerated(env, end.ref)))
             self.obeyed(where, path.states)
             self.ended(path)
         elif isinstance(end, Next):
@@ -168,6 +186,22 @@ class _Walk:
             self.loop(end, env, where, path)
         else:
             self.branch(end, env, where, path)
+
+    def tolerated(self, env: dict[Ref, _Held], ref: Ref) -> bool:
+        """Return whether the task tolerates a stop on ``ref`` here.
+
+        It does where valgebra proves every whole value the stopped reference's root may hold
+        here, met with each field tested on the way, inside the set the task gives for the tool
+        or input it came from. A loop's item is read as no whole value of its tool: a stop on it
+        is never tolerated.
+        """
+        root = env.get(Ref(ref.variable))
+        if root is None or root.loop is not None:
+            return False
+        allowed = dict(self.task.stops).get(root.origin.tool)
+        if allowed is None:
+            return False
+        return self.belief(env, ref.variable).relation_to(allowed) == "subset"
 
     def loop(self, end: For, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         """Walk a loop's body for an arbitrary item, the policies at a fixpoint; then what follows.

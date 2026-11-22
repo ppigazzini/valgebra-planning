@@ -70,8 +70,16 @@ refutes both links with a value the parcel's schema admits and the argument refu
 critique names the test that makes the call safe. A field read without the test showing its
 key, as `c1.parcel.note` where the parcel's schema leaves `note` optional, is refuted with a
 record lacking it, and its critique names the key test, `if "note" in c1.parcel:`. The second
-program tests both and covers every other state, and every link is proven. `codemode.repair` runs the same loop with any callable
-from the last critique to a program as the model.
+program tests both and covers every other state, and every link is proven. `codemode.repair` runs
+the same loop with any callable from the last critique to a program as the model.
+
+A task no program covers on every path, as an object a detector may not find, never has a
+program accepted: every program stops somewhere. Such a task names the stops it accepts as ends,
+`stops` in `tasks.json` or `read_task(stops=...)`, a JSON Schema for the whole value of a tool or
+an input a path stops on, and `repair(..., accept="weak")` ends on a program every link of which
+is proven, some path of which returns, and every stop of which lies in the set its task names
+there; `Critique.weak` reads that, and each such stop's note says the task tolerates it. A
+program stopping on every path returns on none and is never accepted so.
 
 ## What makes the proof hold
 

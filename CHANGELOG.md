@@ -40,6 +40,17 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A task names the stops it accepts as ends, and `repair` may accept a program stopping only
+  there. `Critique.accepted` asks every link proven and no path stopping, so a task no program
+  covers on every path, as an object a detector may not find, had no program accepted, and the
+  rounds went to notes no program could act on. A task's `stops`, in `tasks.json` or
+  `read_task`, maps a tool or an input to the JSON Schema of the whole value a path may stop on;
+  `Verification.weak` and `Critique.weak` read a program every link of which is proven, some path
+  of which returns, and every stop of which valgebra proves inside its set, and
+  `repair(..., accept="weak")` ends on one. `Critique.verified` reads every link proven, and a
+  tolerated stop's note says so. A program stopping on every path returns on none and is never
+  weak.
+
 - A policy's transition may read the call's result: `"result"`, a JSON Schema the result must
   meet, makes the transition step when the result arrives rather than when the call is made, as
   "a motion only after the user said yes" asks. The runner and the proxy step it on the result,

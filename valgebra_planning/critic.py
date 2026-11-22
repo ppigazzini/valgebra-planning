@@ -269,6 +269,16 @@ class Critique:
         """Return whether every link is proven and no path stops."""
         return self.verification.proven
 
+    @property
+    def verified(self) -> bool:
+        """Return whether every link is proven, whatever paths stop."""
+        return self.verification.verified
+
+    @property
+    def weak(self) -> bool:
+        """Return whether some path returns and each stop is one the task tolerates."""
+        return self.verification.weak
+
 
 def _guard(claim: str) -> str | None:
     """Return the test that narrows a binding's value into its argument, if the claim is one."""
@@ -398,7 +408,10 @@ def critique(
         if remedy is not None:
             note += f"; {remedy}"
         notes.append(note)
-    notes += [f"{_gap(gap.ref)} (at {gap.where or 'top'})" for gap in checked.gaps]
+    notes += [
+        f"{_gap(gap.ref)} (at {gap.where or 'top'})" + ("; the task tolerates it" * gap.tolerated)
+        for gap in checked.gaps
+    ]
     notes += [f"assumed: {a}" for a in sorted({a for link in checked.links for a in link.assumed})]
     if types is not None:
         notes += _crossed(program, {}, types)

@@ -118,13 +118,16 @@ class Task:
 
     ``held`` maps each variable the agent starts with to its slots, read as a result's are:
     the whole value and each field it guarantees. ``goal`` is the set the returned value must
-    lie in, and ``goal_schema`` the schema it compiles from.
+    lie in, and ``goal_schema`` the schema it compiles from. ``stops`` names, for a tool or an
+    input, the set its whole value may lie in where a path stops on it: an outcome the task
+    accepts as an end, as an object not found.
     """
 
     name: str
     held: Mapping[str, tuple[Slot, ...]]
     goal: Validator[Any]
     goal_schema: object
+    stops: tuple[tuple[str, Validator[Any]], ...] = ()
 
 
 def _root(schema: object) -> object:
@@ -354,11 +357,18 @@ def flag(spec: Mapping[str, Any], key: str, what: str) -> bool:
 
 
 def read_task(
-    name: str, inputs: Mapping[str, object], goal: object, *, assert_format: bool = False
+    name: str,
+    inputs: Mapping[str, object],
+    goal: object,
+    *,
+    stops: Mapping[str, object] | None = None,
+    assert_format: bool = False,
 ) -> Task:
     """Read a task: the schema of each value the agent starts with, and of the goal.
 
-    With ``assert_format``, ``format`` is read as an assertion, as `read_contract` reads it.
+    ``stops`` maps a tool or an input to the JSON Schema of the whole value a path may stop on
+    there. With ``assert_format``, ``format`` is read as an assertion, as `read_contract` reads
+    it.
     """
     held = {}
     for var, schema in inputs.items():
@@ -366,7 +376,11 @@ def read_task(
         compiler = Compiler(root, assert_format=assert_format)
         held[var] = tuple(_result_slots(var, compiler, root, ()))
     goal_set = compile_schema(goal, assert_format=assert_format)
-    return Task(name=name, held=held, goal=goal_set, goal_schema=goal)
+    tolerated = tuple(
+        (origin, compile_schema(schema, assert_format=assert_format))
+        for origin, schema in (stops or {}).items()
+    )
+    return Task(name=name, held=held, goal=goal_set, goal_schema=goal, stops=tolerated)
 
 
 def listed(values: Sequence[Any]) -> Validator[Any]:

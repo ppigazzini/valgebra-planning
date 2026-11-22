@@ -328,3 +328,16 @@ package. **[LOAD-BEARING: backprompt]**
 IMPLEMENTED-BY: codemode.py
 
 HELD-BY: test_a_model_s_program_is_repaired_by_the_critique_it_is_handed, test_the_rounds_run_out_on_a_program_never_mended, test_a_program_the_reader_refuses_is_handed_back_as_the_reason, test_a_model_handed_the_key_test_writes_a_program_the_critic_accepts
+
+**A weak program is accepted where its task tolerates each stop.** A weak solution reaches the
+goal on some execution (Cimatti et al. 2003, Def. 2.10). A task names, for a tool or an input,
+the set its whole value may lie in where a path stops on it, as an object not found; a program
+every link of which is proven, some path of which returns, and every stop of which valgebra
+proves inside the set its task names there is weak in that sense, every other end being one
+the task accepts. `repair` ends on one where asked, `accept="weak"`, so a task no program
+covers on every path is met by one stopping only where it may. A program stopping on every
+path returns on none, and is never accepted so. **[LOAD-BEARING: weak-acceptance]**
+
+IMPLEMENTED-BY: verify.py::Verification.weak
+
+HELD-BY: test_a_weak_program_stops_only_where_its_task_tolerates, test_repair_accepts_a_weak_program_where_asked_and_stays_strict_by_default

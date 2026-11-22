@@ -68,7 +68,9 @@ class Library:
 
 
 #: The keys a task reads.
-_TASK_KEYS = frozenset({"name", "inputs", "goal", "errors", "policies", "flows", "types", "depth"})
+_TASK_KEYS = frozenset(
+    {"name", "inputs", "goal", "errors", "policies", "flows", "types", "depth", "stops"}
+)
 
 
 def _document(path: Path, keys: frozenset[str]) -> dict[str, Any]:
@@ -153,7 +155,13 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
     problems = []
     for spec in specs:
         log = spec.get("types")
-        task = read_task(spec["name"], spec["inputs"], spec["goal"], assert_format=asserted)
+        task = read_task(
+            spec["name"],
+            spec["inputs"],
+            spec["goal"],
+            stops=spec.get("stops"),
+            assert_format=asserted,
+        )
         unclashed(task, tools)
         problems.append(
             Problem(

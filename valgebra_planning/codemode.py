@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from valgebra_planning.contracts import Contract, Task
 from valgebra_planning.critic import Critique, ProgramError, critique
@@ -110,12 +110,16 @@ def repair(
     task: Task,
     *,
     rounds: int = 3,
+    accept: Literal["strong", "weak"] = "strong",
     **rules: Any,
 ) -> Repair:
     """Propose, critique and hand the critique back, until a program is accepted or ``rounds`` end.
 
     ``propose`` takes the last critique as text, None the first time, and returns a program's
     source. The ``rules`` are those `valgebra_planning.critic.critique` holds a program to.
+    With ``accept="weak"``, a program some path of which returns and whose every stop the
+    task tolerates ends the rounds too: a task no program covers on every path, as an object
+    a detector may not find, is met by one stopping only where the task says it may.
     """
     done: list[tuple[str, Critique | str]] = []
     told: str | None = None
@@ -126,7 +130,9 @@ def repair(
         except ProgramError as error:
             checked = str(error)
         done.append((source, checked))
-        if isinstance(checked, Critique) and checked.accepted:
+        if isinstance(checked, Critique) and (
+            checked.accepted or (accept == "weak" and checked.weak)
+        ):
             break
         told = feedback(checked)
     return Repair(tuple(done))
