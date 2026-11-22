@@ -108,8 +108,8 @@ class Plan:
     abstraction: Abstraction
     expanded: int
     assumed: tuple[str, ...] = ()
-    #: Why no program was found, where none was: whether the depth bound cut a path, so a
-    #: deeper search may find one, or none reached it.
+    #: Why no program was found, where none was: whether the depth bound cut a path or none
+    #: reached it, and each argument only a task input fills, under a test.
     reason: str | None = None
     #: For a task naming goals in an order, where each return the verifier proves inside the
     #: first lies: the rest return in a goal the task accepts after it.
@@ -454,6 +454,46 @@ class _Search:
 def _meets(one: Validator[Any], other: Validator[Any]) -> bool:
     """Return whether two sets may share a value: not proven disjoint."""
     return intersection(one, other).relation_to(nothing) != "subset"
+
+
+def _reason(cut: int, depth: int, contracts: Mapping[str, Contract], task: Task) -> str:
+    """Return why a search found no program: the bound, and what only a tested input fills."""
+    if cut:
+        reason = (
+            f"no program within the bound of {depth} calls and tests, which cut {cut} paths "
+            "short of the goal: whether a deeper search finds one is not known"
+        )
+    else:
+        reason = (
+            f"no program: no path reached the bound of {depth}, so no deeper search finds one "
+            f"from the first {MAX_BINDINGS} bindings of each call the search tries"
+        )
+    if sourceless := _sourceless(contracts, task):
+        reason += (
+            f"; no tool returns a value for {', '.join(sourceless)}, which a task input fills "
+            "only under a test"
+        )
+    return reason
+
+
+def _sourceless(contracts: Mapping[str, Contract], task: Task) -> list[str]:
+    """Return each required argument a value reaches only by a test of a task input into it.
+
+    The search fills an argument from a value the program holds, never a constant (`call`). An
+    argument no result of a tool the program may call meets, and no value held fills whole, is
+    filled only by testing a task input into it: a free-text name tested into `left|right`, which
+    names a constant the task does not give.
+    """
+    held = [slot.values for slots in task.held.values() for slot in slots]
+    results = [slot.values for contract in contracts.values() for slot in contract.results]
+    return sorted(
+        slot.name
+        for contract in contracts.values()
+        for slot in contract.arguments
+        if slot.required
+        and not any(_meets(value, slot.values) for value in results)
+        and not any(value.relation_to(slot.values) == "subset" for value in held)
+    )
 
 
 def _reachable(
@@ -1033,21 +1073,11 @@ def plan(
                 assumed=tuple(_assumed(program, types, contracts)),
                 preferred=_preferred(program, contracts, task),
             )
-    if search.cut:
-        reason = (
-            f"no program within the bound of {depth} calls and tests, which cut {search.cut} "
-            "paths: a deeper search may find one"
-        )
-    else:
-        reason = (
-            f"no program: no path reached the bound of {depth}, so no deeper search finds one "
-            f"from the first {MAX_BINDINGS} bindings of each call the search tries"
-        )
     return Plan(
         None,
         strong=False,
         uncovered=(),
         abstraction=abstraction,
         expanded=search.expanded,
-        reason=reason,
+        reason=_reason(search.cut, depth, contracts, task),
     )

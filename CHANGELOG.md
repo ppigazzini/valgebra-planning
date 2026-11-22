@@ -40,6 +40,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- `Plan.reason` names each argument no tool returns a value for, which a task input fills only
+  under a test, and no longer says that a deeper search may find a program. A pick whose grasp
+  takes a `hand` enum and whose confirmation an `action` and a `purpose` enum, planned from an
+  object's name alone, read "a deeper search may find one" at every depth: the planner writes no
+  constant, and one string fills neither two disjoint enums of one call nor any of them but under
+  a test. The reason reads "whether a deeper search finds one is not known" where the bound cut a
+  path, and names `confirm_with_user.action`, `confirm_with_user.purpose` and `grasp.hand`.
+
 - valgebra is required from 0.0.32 and valgebra-jsonschema from 0.0.5, the pair the report's
   probes ran on. Under a test on another field, valgebra 0.0.32 proves a key of a record held
   that 0.0.31 left open, so the walk reads the field with no link on its presence; the parcels

@@ -482,3 +482,61 @@ def test_a_call_every_path_needs_stays_before_the_test() -> None:
     assert text.index("confirm_with_user(") < text.index("if ")
     checked = verify(found.program, _confirming(), PICK, policies=rules)
     assert all(link.verdict == "proven" for link in checked.links)
+
+
+SIDES = {"type": "string", "enum": ["left", "right"]}
+ACTIONS = {"type": "string", "enum": ["grasp", "walk"]}
+PURPOSES = {"type": "string", "enum": ["pick_up", "approach"]}
+
+
+def _enumerated() -> dict[str, Contract]:
+    """Return a pick whose confirmation and grasp each take an enum no tool returns a value for."""
+
+    def listed(name: str, arguments: dict[str, Any], result: dict[str, Any]) -> Contract:
+        return read_contract(
+            {
+                "name": name,
+                "inputSchema": {
+                    "type": "object",
+                    "properties": arguments,
+                    "required": [*arguments],
+                },
+                "outputSchema": {
+                    "type": "object",
+                    "properties": result,
+                    "required": [*result],
+                    "additionalProperties": False,
+                },
+            }
+        )
+
+    return {
+        contract.name: contract
+        for contract in (
+            listed("detect_object", {"name": {"type": "string"}}, {"object_id": OBJECT}),
+            listed(
+                "confirm_with_user",
+                {"action": ACTIONS, "purpose": PURPOSES, "object_id": OBJECT},
+                {"confirmed": {"type": "boolean"}},
+            ),
+            listed("grasp", {"object_id": OBJECT, "hand": SIDES}, {"grasp_id": GRASPED}),
+        )
+    }
+
+
+def test_a_plan_with_no_program_names_what_only_a_tested_input_fills() -> None:
+    asked = read_policy(CONFIRMED_FIRST)
+    found = plan(_enumerated(), PICK, depth=8, policies=[asked])
+    assert found.program is None
+    assert found.reason is not None
+    assert found.reason.endswith(
+        "; no tool returns a value for confirm_with_user.action, confirm_with_user.purpose, "
+        "grasp.hand, which a task input fills only under a test"
+    )
+    assert "whether a deeper search finds one is not known" in found.reason
+    given = read_task(
+        "pick",
+        {"name": {"type": "string"}, "hand": SIDES, "action": ACTIONS, "purpose": PURPOSES},
+        GRASPED,
+    )
+    assert plan(_enumerated(), given, depth=8, policies=[asked]).program is not None

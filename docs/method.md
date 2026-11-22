@@ -336,5 +336,8 @@ and a value from a task input with it, since a proxy sees no task.
   client, so serving HTTP is left to a deployment that authenticates who reaches it.
 - **Search bounds.** Six calls and tests a path by default, and the first 16 bindings of a call.
   `plan` takes another depth, and so do a task's `depth` and the command line's `--depth`. A plan
-  with no program says why in `Plan.reason`: the bound cut a path, so a deeper search may find
-  one, or no path reached it, so none does from the bindings the search tries.
+  with no program says why in `Plan.reason`: the bound cut a path short of the goal, and whether
+  a deeper search finds one is not known, or no path reached it, so none does from the bindings
+  the search tries. It also names each argument no tool returns a value for, which a task input
+  fills only under a test, as a free-text name tested into `left|right`: the planner writes no
+  constant, so such an argument wants a task input of its own.

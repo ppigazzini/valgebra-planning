@@ -39,8 +39,9 @@ prints the program for each task (every task when no `--task` is given; `--task`
 it is strong or weak, how many of its links valgebra proves, each link not proven, each value a
 weak program's stops leave uncovered, and each binding resting on a mined type. With `--json` it
 prints one JSON document, a list holding a row per task. The exit status is 1 when a task gets no
-program, and the row says why: the depth bound cut a path, so a deeper search may find one, or no
-path reached it. `--depth` sets the calls and tests a path may take, for every task planned; a task
+program, and the row says why: the depth bound cut a path short of the goal, and whether a deeper
+search finds one is not known, or no path reached it; and each argument no tool returns a value
+for, which a task input fills only under a test. `--depth` sets the calls and tests a path may take, for every task planned; a task
 with a `depth` of its own is planned to it otherwise, and any other to six.
 
 ## Critique a program written elsewhere
