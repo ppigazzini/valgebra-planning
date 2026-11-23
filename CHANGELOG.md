@@ -15,6 +15,9 @@ All notable changes to valgebra-planning are recorded here. The format follows
   its name or its annotations, and `Gate` refuses one a policy reads when it is built. The recipe
   "a violation a result reports" writes the violation as a state that refuses the calls that must
   not follow it, which the critic holds a program to and the proxy admits `stop` from.
+- `check` notes a result, or a field it guarantees, that any string fills: a proxy answers it to
+  an agent inside the checked value, where no contract bounds the text a model reads. The parcels
+  library holds none.
 
 ### Security
 

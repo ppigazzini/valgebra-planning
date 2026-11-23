@@ -17,7 +17,9 @@ which `check` reports beside the vacuous specifications:
 - a whole result, read as declared, that meets an argument or a task's goal only through keys
   its output schema does not declare: an open record takes any value at a key no field names,
   and a closed one none (Castagna 2023, §3.2), so a plan may pass the record where its declared
-  keys never fit, as a detection whose extra keys a distance would need.
+  keys never fit, as a detection whose extra keys a distance would need;
+- a result, or a field it guarantees, that any string fills: a proxy answers it to an agent
+  inside the checked value, so no contract bounds the text a model reads there.
 
 A finding decides nothing: a plan, a proof and a run read the contracts as written, and what a
 finding names is the author's to narrow or keep.
@@ -199,6 +201,11 @@ def findings(library: Library) -> list[Finding]:
                 certainty,
             )
             for target, certainty in _undeclared_only(contract, targets)
+        ]
+        found += [
+            Finding(where, f"{slot.name} may return any string: an agent reads it unbounded", c)
+            for slot in contract.results
+            if (c := _certainty(_STRINGS.relation_to(slot.values))) is not None
         ]
         gate = _gate_only(contract, tools, goals)
         if gate is not None:

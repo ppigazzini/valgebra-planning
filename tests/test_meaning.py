@@ -160,3 +160,11 @@ def test_a_result_meeting_an_argument_through_undeclared_keys_alone_is_found(
         " declare"
     )
     assert (finding in noted) is found
+
+
+def test_a_result_any_string_fills_is_found() -> None:
+    noted = _tool("note", {"object_id": OBJECT_ID}, {"text": {"type": "string"}}, READ_ONLY)
+    finding = "tool note: note.text may return any string: an agent reads it unbounded"
+    assert finding in _found([DETECT, noted])
+    worded = _tool("note", {"object_id": OBJECT_ID}, {"text": {"enum": ["near", "far"]}}, READ_ONLY)
+    assert not any("may return any string" in f for f in _found([DETECT, worded]))
