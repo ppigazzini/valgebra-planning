@@ -43,7 +43,14 @@ from typing import Any
 from valgebra_planning.codemode import stubs
 from valgebra_planning.contracts import Contract
 from valgebra_planning.critic import ProgramError, critique
-from valgebra_planning.library import Library, Problem, asserts_format, read_library, reads_closed
+from valgebra_planning.library import (
+    Library,
+    Problem,
+    after_violation,
+    asserts_format,
+    read_library,
+    reads_closed,
+)
 from valgebra_planning.meaning import findings
 from valgebra_planning.planner import DEPTH, Plan, plan
 from valgebra_planning.privilege import describe, read_privileges, updates
@@ -339,6 +346,7 @@ def _proxy(args: argparse.Namespace) -> int:
     # The server's tools are read as the library reads its own listing.
     asserted = directory is not None and asserts_format(directory)
     closing = directory is not None and reads_closed(directory)
+    left_open = frozenset() if directory is None else after_violation(directory)
 
     async def served() -> None:
         async with connect(server, read_timeout_seconds=timeout) as upstream:
@@ -350,6 +358,7 @@ def _proxy(args: argparse.Namespace) -> int:
                     assert_format=asserted,
                     closed_results=closing,
                     spell_out=args.spell_out,
+                    after_violation=left_open,
                 )
                 return
             front = await read_proxy(
@@ -359,6 +368,7 @@ def _proxy(args: argparse.Namespace) -> int:
                 assert_format=asserted,
                 closed_results=closing,
                 spell_out=args.spell_out,
+                after_violation=left_open,
             )
             (host, port), verifier = http
             await serve_http(

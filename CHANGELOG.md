@@ -6,6 +6,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A library names the tools a proxy calls after a violation: `"afterViolation": [...]` in
+  `tools.json`, `after_violation` in `valgebra_planning.library`, and `after_violation=` on `proxy`,
+  `read_proxy` and `serve`. Once a result takes a policy to a bad state the proxy refuses every
+  later call but one to such a tool, as a robot's stop; each must be a tool no policy reads, by
+  its name or its annotations, and `Gate` refuses one a policy reads when it is built. The recipe
+  "a violation a result reports" writes the violation as a state that refuses the calls that must
+  not follow it, which the critic holds a program to and the proxy admits `stop` from.
+
 ### Security
 
 - A proxy holds every state a call may have reached where it reads no outcome of it. A result the

@@ -17,6 +17,7 @@ from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 
 from valgebra_planning.cli import _address, _verifier, main
+from valgebra_planning.library import after_violation
 from valgebra_planning.servers import connect
 
 PARCELS = str(Path(__file__).parent.parent / "examples" / "parcels")
@@ -208,6 +209,53 @@ def test_the_proxy_reads_its_server_s_tools_as_its_library_does(
 
     result = asyncio.run(called())
     assert result.is_error is closing
+
+
+@pytest.mark.parametrize(
+    "named", ["stop", [1], {"stop": True}], ids=["a-name", "a-number", "a-map"]
+)
+def test_a_library_names_the_tools_called_after_a_violation_in_a_list(
+    tmp_path: Path, named: object
+) -> None:
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [], "afterViolation": named}))
+    with pytest.raises(TypeError, match="'afterViolation' is a list of tool names"):
+        after_violation(tmp_path)
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [], "afterViolation": ["stop"]}))
+    assert after_violation(tmp_path) == {"stop"}
+
+
+@pytest.mark.parametrize("named", [False, True], ids=["unnamed", "named"])
+def test_the_proxy_calls_the_tools_its_library_names_after_a_violation(
+    tmp_path: Path, *, named: bool
+) -> None:
+    for name in ("tasks.json", "flows.json"):
+        (tmp_path / name).write_text((Path(PARCELS) / name).read_text())
+    listing = json.loads((Path(PARCELS) / "tools.json").read_text())
+    after = {"afterViolation": ["find_parcel"]} if named else {}
+    (tmp_path / "tools.json").write_text(json.dumps(listing | after))
+    policies = json.loads((Path(PARCELS) / "policies.json").read_text())
+    granted = {
+        "name": "no approval granted",
+        "initial": "start",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "start", "tool": "approve_freight", "result": True, "to": "violated"}
+        ],
+    }
+    policies["policies"].append(granted)
+    (tmp_path / "policies.json").write_text(json.dumps(policies))
+    entry = "from valgebra_planning.cli import main; raise SystemExit(main())"
+    command = [sys.executable, "-c", entry, "proxy", "--server", SERVER, "--library", str(tmp_path)]
+
+    async def called() -> Any:
+        async with connect(shlex.join(command)) as client:
+            approved = await client.call_tool("approve_freight", {"parcel_id": "pcl_1"})
+            found = await client.call_tool("find_parcel", {"tracking": "AB123456789IT"})
+            return approved, found
+
+    approved, found = asyncio.run(called())
+    assert approved.is_error
+    assert found.is_error is not named
 
 
 @pytest.mark.parametrize("spelling", [False, True], ids=["as-published", "spelled-out"])

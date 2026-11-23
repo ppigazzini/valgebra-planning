@@ -3,7 +3,8 @@
 A library is a directory. ``tools.json`` holds a server's ``tools/list`` result, ``{"tools":
 [...]}``, ``"trusted": true`` where the server's annotations are trusted, and
 ``"closedResults": true`` where each whole result is read closed, an assumption about the
-server (`valgebra_planning.contracts.read_contract`). ``tasks.json``
+server (`valgebra_planning.contracts.read_contract`), and ``"afterViolation"``, the tools a proxy
+calls after a violation (`after_violation`). ``tasks.json``
 holds ``{"tasks": [...]}``, each task its ``name``, the JSON Schema of each input in ``inputs``
 and of the ``goal``, the rules it names, ``errors`` (any tool may fail), ``policies`` and
 ``flows`` by name, and ``types``, the file of observed calls its types are mined from, and
@@ -37,7 +38,14 @@ from valgebra_planning.flows import Flow, read_flow
 from valgebra_planning.mining import Types, infer_outputs, mine
 from valgebra_planning.policy import Policy, read_policy
 
-__all__ = ["Library", "Problem", "asserts_format", "read_library", "reads_closed"]
+__all__ = [
+    "Library",
+    "Problem",
+    "after_violation",
+    "asserts_format",
+    "read_library",
+    "reads_closed",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,7 +116,9 @@ def _listed(path: Path, key: str) -> list[Any]:
 
 
 #: The keys of ``tools.json``: the listing, and how the library reads its server's tools.
-_TOOLS_KEYS = frozenset({"tools", "trusted", "assertFormat", "closedResults", "postconditions"})
+_TOOLS_KEYS = frozenset(
+    {"tools", "trusted", "assertFormat", "closedResults", "postconditions", "afterViolation"}
+)
 
 
 def asserts_format(directory: Path) -> bool:
@@ -128,6 +138,20 @@ def reads_closed(directory: Path) -> bool:
     `valgebra_planning.servers.read_server` takes it.
     """
     return flag(_document(directory / "tools.json", _TOOLS_KEYS), "closedResults", "tools.json")
+
+
+def after_violation(directory: Path) -> frozenset[str]:
+    """Return the tools a proxy calls after a violation: ``"afterViolation": [...]``.
+
+    Once a result takes a policy to a bad state the proxy refuses every later call but these,
+    as a robot's stop; each is a tool no policy reads, which `valgebra_planning.proxy.Gate`
+    holds when it is built.
+    """
+    named = _document(directory / "tools.json", _TOOLS_KEYS).get("afterViolation", [])
+    if not isinstance(named, list) or not all(isinstance(tool, str) for tool in named):
+        message = f"tools.json: 'afterViolation' is a list of tool names, not {named!r}"
+        raise TypeError(message)
+    return frozenset(named)
 
 
 def _goals(spec: Mapping[str, Any]) -> list[Any]:

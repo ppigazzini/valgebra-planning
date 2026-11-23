@@ -839,3 +839,61 @@ def test_a_call_no_policy_reads_waits_on_none() -> None:
     )
     assert not found.is_error
     assert not done_before
+
+
+def test_a_tool_named_for_it_is_called_after_a_violation() -> None:
+    answers = ANSWERS | {"approve_freight": {"approval_id": "apr_9"}}
+    find = ("find_parcel", {"tracking": "AB123456789IT"})
+    made: list[str] = []
+
+    async def session() -> list[Any]:
+        async with Client(_upstream(made, answers, LISTING)) as upstream:
+            front = proxy(
+                upstream,
+                (await upstream.list_tools()).tools,
+                TOOLS,
+                policies=[GRANTED],
+                after_violation=["find_parcel"],
+            )
+            async with Client(front) as client:
+                return [await client.call_tool(*call) for call in (APPROVAL, find, BOOKING)]
+
+    approval, found, booked = asyncio.run(session())
+    assert _refused(approval).startswith("refused: freight booked after a granted approval")
+    assert not found.is_error
+    assert _refused(booked) == (
+        "refused: freight booked after a granted approval holds denied: no call is made after it"
+    )
+    assert made == ["approve_freight", "find_parcel"]
+
+
+#: A rule every call its server marks destructive, or leaves unmarked, steps.
+EVERY_DESTRUCTIVE = read_policy(
+    {
+        "name": "every destructive call counted",
+        "initial": "start",
+        "bad": ["violated"],
+        "transitions": [{"from": "start", "hint": "destructiveHint", "to": "start"}],
+    }
+)
+
+
+@pytest.mark.parametrize(
+    ("named", "policies", "says"),
+    [
+        ("approve_freight", [GRANTED], "freight booked after a granted approval reads it"),
+        ("notify", [EVERY_DESTRUCTIVE], "every destructive call counted reads it"),
+        ("stop", [], "the proxy holds no such tool"),
+    ],
+    ids=["by-name", "by-an-unset-hint", "no-such-tool"],
+)
+def test_a_tool_a_policy_reads_is_not_called_after_a_violation(
+    named: str, policies: list[Any], says: str
+) -> None:
+    with pytest.raises(ValueError, match=says):
+        Gate(
+            TOOLS,
+            [Monitor(policy) for policy in policies],
+            [],
+            after_violation=frozenset({named}),
+        )

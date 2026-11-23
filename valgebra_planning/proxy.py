@@ -101,6 +101,24 @@ class Gate:
     monitors: list[Monitor]
     flows: Sequence[Flow]
     seen: dict[object, set[str]] = field(default_factory=dict)
+    #: The tools a call may be made to after a result took a policy to a bad state, as a robot's
+    #: stop: each is a tool no policy reads, so admitting it changes no policy's verdict.
+    after_violation: frozenset[str] = frozenset()
+
+    def __post_init__(self) -> None:
+        """Refuse a tool of ``after_violation`` the proxy does not hold, or a policy reads."""
+        for tool in sorted(self.after_violation):
+            if tool not in self.contracts:
+                msg = f"{tool} is called after a violation, and the proxy holds no such tool"
+                raise ValueError(msg)
+            hints = self.contracts[tool].hints
+            for monitor in self.monitors:
+                if any(t.reads(tool, hints) for t in monitor.policy.transitions):
+                    msg = (
+                        f"{tool} is called after a violation, and {monitor.policy.name} reads it: "
+                        "a tool a policy reads would move it after the session stopped"
+                    )
+                    raise ValueError(msg)
 
     def policed(self, tool: str) -> bool:
         """Return whether a policy reads a call to ``tool``, by its name or by its hints."""
@@ -113,15 +131,27 @@ class Gate:
             for transition in monitor.policy.transitions
         )
 
+    def stopped(self, tool: str) -> str | None:
+        """Return the bad state a result took a policy to, which refuses a call to ``tool``.
+
+        A result reaches a bad state after its call was made, so no call follows it but one to
+        a tool of ``after_violation``, which no policy reads.
+        """
+        if tool in self.after_violation:
+            return None
+        for monitor in self.monitors:
+            if held := sorted(monitor.held() & monitor.policy.bad):
+                return f"{monitor.policy.name} holds {held[0]}: no call is made after it"
+        return None
+
     def before(self, tool: str, arguments: dict[str, Any]) -> str | None:
         """Return why a call may not be made, or None."""
         contract = self.contracts.get(tool)
         if contract is None:
             return f"{tool} is no tool the proxy holds"
-        for monitor in self.monitors:
-            # A result took the policy to a bad state after its call was made: no call follows.
-            if held := sorted(monitor.held() & monitor.policy.bad):
-                return f"{monitor.policy.name} holds {held[0]}: no call is made after it"
+        stopped = self.stopped(tool)
+        if stopped is not None:
+            return stopped
         if not contract.accepts.is_valid(arguments):
             detail = failures(contract.accepts, arguments, contract_names(contract))
             return f"{tool} refuses its arguments ({detail})"
@@ -344,6 +374,7 @@ def proxy(
     *,
     policies: Sequence[Policy] = (),
     flows: Sequence[Flow] = (),
+    after_violation: Iterable[str] = (),
 ) -> Server[Any]:
     """Return an MCP server answering ``listing`` through ``upstream``, every call checked.
 
@@ -354,8 +385,16 @@ def proxy(
     Each policy reads such calls in the order they act. A call no policy reads waits on none.
     A call holds the gate while the upstream holds it, so ``upstream`` is a client with a read
     timeout, as `valgebra_planning.servers.connect` takes one.
+
+    Once a result takes a policy to a bad state every later call is refused but one to a tool
+    of ``after_violation``, as a robot's stop; `Gate` refuses such a tool a policy reads.
     """
-    gate = Gate(contracts, [Monitor(policy) for policy in policies], flows)
+    gate = Gate(
+        contracts,
+        [Monitor(policy) for policy in policies],
+        flows,
+        after_violation=frozenset(after_violation),
+    )
     held = asyncio.Lock()
 
     async def listed(_: Any, __: Any) -> types.ListToolsResult:
@@ -378,6 +417,7 @@ async def read_proxy(
     assert_format: bool = False,
     closed_results: bool = False,
     spell_out: bool = False,
+    after_violation: Iterable[str] = (),
 ) -> Server[Any]:
     """Return the proxy in front of the server ``upstream`` is connected to, every page listed.
 
@@ -385,7 +425,8 @@ async def read_proxy(
     `valgebra_planning.servers.read_server` reads them, so a proxy held to a library's rules
     reads the server's tools as the library does. With ``spell_out``, each tool is listed as
     `spelled_out` returns it, and one it returns None for is listed as published, with a
-    `UserWarning` naming it; the gate holds every call to the published schemas.
+    `UserWarning` naming it; the gate holds every call to the published schemas. A call to a
+    tool of ``after_violation`` is admitted after a violation, as `proxy` reads it.
     """
     from valgebra_planning.servers import read_server  # noqa: PLC0415
 
@@ -402,7 +443,14 @@ async def read_proxy(
     contracts = await read_server(
         upstream, assert_format=assert_format, closed_results=closed_results
     )
-    return proxy(upstream, listing, contracts, policies=policies, flows=flows)
+    return proxy(
+        upstream,
+        listing,
+        contracts,
+        policies=policies,
+        flows=flows,
+        after_violation=after_violation,
+    )
 
 
 async def serve(
@@ -413,11 +461,13 @@ async def serve(
     assert_format: bool = False,
     closed_results: bool = False,
     spell_out: bool = False,
+    after_violation: Iterable[str] = (),
 ) -> None:
     """Serve the proxy over stdio in front of the server ``upstream`` is connected to.
 
     The proxy is `read_proxy`'s, its tools read with ``assert_format`` and ``closed_results``,
-    and listed spelled out with ``spell_out``.
+    listed spelled out with ``spell_out``, and those of ``after_violation`` called after a
+    violation.
     """
     from mcp.server.stdio import stdio_server  # noqa: PLC0415 - only a served proxy needs it
 
@@ -428,6 +478,7 @@ async def serve(
         assert_format=assert_format,
         closed_results=closed_results,
         spell_out=spell_out,
+        after_violation=after_violation,
     )
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())

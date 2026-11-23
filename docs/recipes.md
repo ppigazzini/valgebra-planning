@@ -494,6 +494,103 @@ meant, a bound written in euros over an argument in cents, is not vacuous and is
 guard over an argument the tool does not name is flagged only where the input schema sets
 `additionalProperties: false`: an open record may carry any other key, so the guard meets one.
 
+## A violation a result reports
+
+A transition reading a result steps after its call acted, so a rule taking a result to a bad state
+is broken by whatever the server answers there, as a grasp reporting success without contact. No
+program can keep the server from answering so, and the proxy refuses every call after such a
+result, the robot's `stop` among them. Write the violation as a state from which the calls that
+must not follow it are bad, and the critic holds a program to testing the result before them:
+
+```python
+from valgebra_planning.contracts import read_contract, read_task
+from valgebra_planning.critic import critique
+from valgebra_planning.policy import read_policy
+
+OBJECT = {"type": "string", "pattern": "^obj_[0-9]+$"}
+
+
+def tool(name, outputs):
+    return read_contract(
+        {
+            "name": name,
+            "inputSchema": {
+                "type": "object",
+                "properties": {"object_id": OBJECT},
+                "required": ["object_id"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": outputs,
+                "required": sorted(outputs),
+                "additionalProperties": False,
+            },
+            "annotations": {"destructiveHint": True},
+        }
+    )
+
+
+contracts = {
+    "grasp": tool(
+        "grasp",
+        {"status": {"enum": ["grasped", "failed"]}, "contact": {"type": "boolean"}},
+    ),
+    "walk_to": tool("walk_to", {"arrived": {"type": "boolean"}}),
+}
+NO_CONTACT = {"properties": {"status": {"const": "grasped"}, "contact": {"const": False}}}
+
+
+def rule(target):
+    transitions = [{"from": "ok", "tool": "grasp", "result": NO_CONTACT, "to": target}]
+    if target == "suspect":
+        transitions.append({"from": "suspect", "tool": "walk_to", "to": "violated"})
+    return read_policy(
+        {"name": f"into {target}", "initial": "ok", "bad": ["violated"], "transitions": transitions}
+    )
+
+
+task = read_task(
+    "grasp, then walk", {"o": OBJECT}, {"enum": ["grasped", "failed"]}, stops={"grasp": True}
+)
+programs = {
+    "grasp, return": "c1 = grasp(object_id=o)\nreturn c1.status\n",
+    "grasp, walk": "c1 = grasp(object_id=o)\nc2 = walk_to(object_id=o)\nreturn c1.status\n",
+    "grasp, test contact, walk": (
+        "c1 = grasp(object_id=o)\n"
+        "if c1.contact in (True,):\n"
+        "    c2 = walk_to(object_id=o)\n"
+        "    return c1.status\n"
+        "stop(c1.contact)\n"
+    ),
+}
+for target in ("violated", "suspect"):
+    for name, source in programs.items():
+        checked = critique(source, contracts, task, policies=[rule(target)])
+        verdict = "accepted" if checked.accepted else "weak" if checked.weak else "not verified"
+        print(f"into {target}, {name}: {verdict}")
+```
+
+```text
+into violated, grasp, return: not verified
+into violated, grasp, walk: not verified
+into violated, grasp, test contact, walk: not verified
+into suspect, grasp, return: accepted
+into suspect, grasp, walk: not verified
+into suspect, grasp, test contact, walk: weak
+```
+
+The rule into `violated` refutes every program calling `grasp`. The rule into `suspect` accepts the
+grasp alone, refutes the walk after a grasp whose contact it did not test, and holds the walk under
+`if c1.contact in (True,):` weak, the task tolerating the stop on the other side. Where the
+server's contract promises contact with success, the output schema states it, an `if` on `status`
+and a `then` on `contact`: the critic reads no grasp without contact, and the proxy, reading a
+result that breaks the schema as no outcome, holds every state a result may reach, `suspect`
+among them, so the walk after it is refused. A tool the proxy calls after a violation, as `stop`,
+is named in `tools.json` under `"afterViolation"`, and no policy may read it: a tool setting no
+annotation is destructive by MCP's defaults, so a policy keyed on `destructiveHint` reads it, and
+the proxy is not built with it named.
+
 ## A contract a plan can mean
 
 The planner and the critic pass a value to an argument wherever valgebra proves it inside the
