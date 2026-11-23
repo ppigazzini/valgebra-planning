@@ -19,6 +19,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
   at its result guards drops a case valgebra proves empty as an inclusion where it leaves the
   emptiness open. `check` reports a transition the ones before it take every value of, which
   never fires.
+- A proxy reads its server's listing once, and to an end. `read_proxy` followed the listing's
+  cursor until the server named none, so a server naming one cursor for ever held the proxy at
+  its start, and read the listing again for the contracts, so the tools an agent was shown and
+  the contracts the gate held came from two listings. `servers.read_listing` reads the pages
+  once, refusing by name a cursor named twice, which under a server answering each request
+  alone names a page already read, and a listing past `MAX_PAGES` pages; `read_server` takes the
+  listing a caller read.
 
 ### Added
 

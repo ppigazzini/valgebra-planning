@@ -26,14 +26,21 @@ import threading
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from mcp import Client, InputRequiredRoundsExceededError, MCPError, StdioServerParameters
+from mcp import Client, InputRequiredRoundsExceededError, MCPError, StdioServerParameters, types
 
 from valgebra_planning.contracts import Contract, Postcondition, Task, read_contract
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block
 from valgebra_planning.run import RefusedResultError, Run, ToolError, run
 
-__all__ = ["connect", "read_server", "refused_by_client", "run_on_server"]
+__all__ = [
+    "MAX_PAGES",
+    "connect",
+    "read_listing",
+    "read_server",
+    "refused_by_client",
+    "run_on_server",
+]
 
 #: How the mcp client refuses a result against the output schema the server declares, before it
 #: hands the result back (``ClientSession.validate_tool_result``): its text holds the value, so
@@ -57,26 +64,58 @@ def connect(server: str, *, read_timeout_seconds: float | None = None) -> Client
     return Client(parameters, read_timeout_seconds=read_timeout_seconds)
 
 
-async def read_server(
-    client: Client, *, assert_format: bool = False, closed_results: bool = False
-) -> dict[str, Contract]:
-    """Return the contract of every tool the server lists, by name, every page read.
+#: How many pages of a server's tool listing are read before the listing is refused.
+MAX_PAGES = 100
 
-    With ``assert_format``, ``format`` is read as an assertion, and with ``closed_results``
-    each whole result is read closed, as `read_contract` reads them.
+
+async def read_listing(client: Client) -> list[types.Tool]:
+    """Return every tool the server lists, its pages read once, in order.
+
+    A cursor is opaque, and a server answers each request alone (MCP 2026-07-28, the
+    pagination and base protocol pages), so a cursor a listing repeats names a page already
+    read, and the listing never ends: it is refused by name, as one past `MAX_PAGES` pages is.
+    Raises `ValueError`.
     """
-    contracts: dict[str, Contract] = {}
+    tools: list[types.Tool] = []
+    seen: set[str] = set()
     cursor: str | None = None
-    while True:
-        listing = await client.list_tools(cursor=cursor)
-        for tool in listing.tools:
-            spec = tool.model_dump(by_alias=True, exclude_none=True, mode="json")
-            contracts[tool.name] = read_contract(
-                spec, assert_format=assert_format, closed_results=closed_results
-            )
-        cursor = listing.next_cursor
+    for _ in range(MAX_PAGES):
+        page = await client.list_tools(cursor=cursor)
+        tools += page.tools
+        cursor = page.next_cursor
         if cursor is None:
-            return contracts
+            return tools
+        if cursor in seen:
+            msg = f"the server's listing names the cursor {cursor!r} twice, so it never ends"
+            raise ValueError(msg)
+        seen.add(cursor)
+    msg = f"the server's listing runs past {MAX_PAGES} pages"
+    raise ValueError(msg)
+
+
+async def read_server(
+    client: Client,
+    *,
+    assert_format: bool = False,
+    closed_results: bool = False,
+    listing: Sequence[types.Tool] | None = None,
+) -> dict[str, Contract]:
+    """Return the contract of every tool the server lists, by name.
+
+    The tools are `read_listing`'s, or ``listing`` where a caller has read it, so a proxy holds
+    the contracts of the tools it lists. With ``assert_format``, ``format`` is read as an
+    assertion, and with ``closed_results`` each whole result is read closed, as
+    `read_contract` reads them.
+    """
+    tools = await read_listing(client) if listing is None else listing
+    return {
+        tool.name: read_contract(
+            tool.model_dump(by_alias=True, exclude_none=True, mode="json"),
+            assert_format=assert_format,
+            closed_results=closed_results,
+        )
+        for tool in tools
+    }
 
 
 def refused_by_client(error: RuntimeError, tool: str) -> bool:

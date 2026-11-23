@@ -79,7 +79,7 @@ extra.
 | `valgebra_planning.privilege` | `Change`, `Rule`, `Update`, `allowed`, `as_policy`, `describe`, `read_privileges`, `read_rules`, `updates` | |
 | `valgebra_planning.vacuity` | `Certainty`, `Finding`, `vacuities` | |
 | `valgebra_planning.meaning` | `findings` | |
-| `valgebra_planning.servers` | `connect`, `read_server`, `refused_by_client`, `run_on_server` | the `mcp` extra |
+| `valgebra_planning.servers` | `MAX_PAGES`, `connect`, `read_listing`, `read_server`, `refused_by_client`, `run_on_server` | the `mcp` extra |
 | `valgebra_planning.proxy` | `Gate`, `http_app`, `proxy`, `read_proxy`, `serve`, `serve_http`, `spelled_out` | the `mcp` extra |
 
 A module's `__all__` holds what a caller calls, the types those calls take and return, and the

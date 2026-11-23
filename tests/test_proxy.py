@@ -987,3 +987,47 @@ def test_a_protocol_error_names_its_code_and_none_of_its_message() -> None:
     assert [block.text for block in answer.content] == [
         "approve_freight did not answer: error -32603"
     ]
+
+
+def _paged(next_cursor: Any, requests: list[str | None]) -> Server[Any]:
+    """Serve the parcel tools one a page, each page naming the cursor ``next_cursor`` gives it."""
+    tools = [types.Tool.model_validate(tool) for tool in LISTING[:3]]
+
+    async def listed(_: Any, params: Any) -> types.ListToolsResult:
+        cursor = getattr(params, "cursor", None)
+        requests.append(cursor)
+        at = 0 if cursor is None else int(cursor)
+        return types.ListToolsResult(tools=tools[at : at + 1], next_cursor=next_cursor(at))
+
+    async def called(_: Any, __: types.CallToolRequestParams) -> types.CallToolResult:
+        return types.CallToolResult(content=[])
+
+    return Server("pages", on_list_tools=listed, on_call_tool=called)
+
+
+def _listed_by(next_cursor: Any) -> tuple[list[str | None], Any]:
+    requests: list[str | None] = []
+
+    async def session() -> Any:
+        async with Client(_paged(next_cursor, requests)) as upstream:
+            try:
+                front = await read_proxy(upstream)
+            except ValueError as refused:
+                return refused
+            async with Client(front) as client:
+                return [tool.name for tool in (await client.list_tools()).tools]
+
+    return requests, asyncio.run(session())
+
+
+def test_a_listing_is_read_once_for_the_tools_listed_and_the_contracts_held() -> None:
+    requests, names = _listed_by(lambda at: None if at == 2 else str(at + 1))
+    assert names == [tool["name"] for tool in LISTING[:3]]
+    assert requests == [None, "1", "2"]
+
+
+def test_a_listing_naming_a_cursor_twice_is_refused_by_name() -> None:
+    requests, refused = _listed_by(lambda _: "1")
+    assert isinstance(refused, ValueError)
+    assert str(refused) == "the server's listing names the cursor '1' twice, so it never ends"
+    assert requests == [None, "1"]

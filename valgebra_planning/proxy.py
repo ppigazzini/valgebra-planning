@@ -485,7 +485,11 @@ async def read_proxy(
     non_text_blocks: Iterable[str] = (),
     error_texts: Mapping[str, object] | None = None,
 ) -> Server[Any]:
-    """Return the proxy in front of the server ``upstream`` is connected to, every page listed.
+    """Return the proxy in front of the server ``upstream`` is connected to, its listing read once.
+
+    The tools it lists and the contracts its gate holds are read from one listing
+    (`valgebra_planning.servers.read_listing`), which refuses a cursor named twice and a listing
+    past its page bound.
 
     Its tools are read with ``assert_format`` and ``closed_results`` as
     `valgebra_planning.servers.read_server` reads them, so a proxy held to a library's rules
@@ -496,20 +500,19 @@ async def read_proxy(
     ``non_text_blocks`` answers its blocks other than text, and an error's text is held to
     ``error_texts``, as `proxy` reads them.
     """
-    from valgebra_planning.servers import read_server  # noqa: PLC0415
+    from valgebra_planning.servers import read_listing, read_server  # noqa: PLC0415
 
-    listing: list[types.Tool] = []
-    cursor: str | None = None
-    while True:
-        page = await upstream.list_tools(cursor=cursor)
-        listing += page.tools
-        cursor = page.next_cursor
-        if cursor is None:
-            break
-    if spell_out:
-        listing = [_listed(tool, assert_format=assert_format) for tool in listing]
+    published = await read_listing(upstream)
     contracts = await read_server(
-        upstream, assert_format=assert_format, closed_results=closed_results
+        upstream,
+        assert_format=assert_format,
+        closed_results=closed_results,
+        listing=published,
+    )
+    listing = (
+        [_listed(tool, assert_format=assert_format) for tool in published]
+        if spell_out
+        else published
     )
     return proxy(
         upstream,
