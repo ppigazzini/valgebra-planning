@@ -29,6 +29,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- `Repair.met` reads whether the last program a repair took met the mode it ran in, which
+  `Repair.accept` holds: a repair under `accept="weak"` ends on a weak program, and
+  `Repair.accepted`, which reads strict acceptance as the code-mode page uses the word, is false
+  there.
 - A library names the tools a proxy calls after a violation: `"afterViolation": [...]` in
   `tools.json`, `after_violation` in `valgebra_planning.library`, and `after_violation=` on `proxy`,
   `read_proxy` and `serve`. Once a result takes a policy to a bad state the proxy refuses every

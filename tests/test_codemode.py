@@ -198,9 +198,13 @@ def test_repair_accepts_a_weak_program_where_asked_and_stays_strict_by_default()
 
     weakly = repair(proposing(), PICKING, task, accept="weak")
     assert len(weakly.rounds) == 2
+    # The rounds end on a program the weak mode meets, which strict acceptance reads as not met.
+    assert weakly.met
+    assert not weakly.accepted
     strictly = repair(proposing(), PICKING, task)
     assert len(strictly.rounds) == 3
     assert not strictly.accepted
+    assert not strictly.met
     note = critique(PLANNED, PICKING, task).notes
     assert note == ("uncovered: c2.distance (at else); the task tolerates it",)
 

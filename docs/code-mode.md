@@ -84,7 +84,9 @@ program accepted: every program stops somewhere. Such a task names the stops it 
 `stops` in `tasks.json` or `read_task(stops=...)`, a JSON Schema for the whole value of a tool or
 an input a path stops on, and `repair(..., accept="weak")` ends on a program every link of which
 is proven, some path of which returns, and every stop of which lies in the set its task names
-there; `Critique.weak` reads that, and each such stop's note says the task tolerates it. A
+there; `Critique.weak` reads that, and each such stop's note says the task tolerates it.
+`Repair.met` reads whether the last program met the mode the rounds ran in, where
+`Repair.accepted` reads strict acceptance. A
 program stopping on every path returns on none and is never accepted so.
 
 ## What makes the proof hold

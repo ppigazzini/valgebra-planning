@@ -92,15 +92,31 @@ def stubs(contracts: Mapping[str, Contract]) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Repair:
-    """The rounds a program took: each source proposed and its critique, or why it was not read."""
+    """The rounds a program took: each source proposed and its critique, or why it was not read.
+
+    ``accept`` is the mode the rounds ran in, `repair`'s.
+    """
 
     rounds: tuple[tuple[str, Critique | str], ...]
+    accept: Literal["strong", "weak"] = "strong"
 
     @property
     def accepted(self) -> bool:
-        """Return whether the last program proposed was accepted."""
+        """Return whether the last program proposed was accepted: proven, stopping nowhere."""
         last = self.rounds[-1][1] if self.rounds else None
         return isinstance(last, Critique) and last.accepted
+
+    @property
+    def met(self) -> bool:
+        """Return whether the last program proposed met the mode the rounds ran in.
+
+        Under ``accept="weak"`` a program weak under its task's stops meets it, which ends the
+        rounds though `accepted` reads false.
+        """
+        last = self.rounds[-1][1] if self.rounds else None
+        if not isinstance(last, Critique):
+            return False
+        return last.accepted or (self.accept == "weak" and last.weak)
 
 
 def feedback(checked: Critique | str) -> str:
@@ -141,4 +157,4 @@ def repair(
         ):
             break
         told = feedback(checked)
-    return Repair(tuple(done))
+    return Repair(tuple(done), accept)
