@@ -23,11 +23,15 @@ task input is from elsewhere. The proxy serves the agent that starts it over std
 its one gate. MCP 2026-07-28 has no session a client ends, so a policy's pending states are not
 read there. A call the upstream answers with a protocol error, or with a request for input, is
 answered with a tool error: the proxy gives no input and forwards no request for one, since a
-value it never checked would reach the call. Requires the ``mcp`` extra.
+value it never checked would reach the call. A call made whose outcome the gate does not read,
+its result refused, the call canceled or answered by no result, may have acted and returned
+anything, so each policy holds every state the call may have reached. Requires the ``mcp``
+extra.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import warnings
 from collections.abc import Iterable, Mapping, Sequence
@@ -146,15 +150,28 @@ class Gate:
         for monitor in self.monitors:
             monitor.errored()
 
+    def unread(self, tool: str, arguments: Mapping[str, Any]) -> None:
+        """Hold each policy in every state the last call may have reached: no result of it is read.
+
+        The call was made and its outcome is not known: its result was refused, it was canceled,
+        or no result answered it. Every later call is refused where any such state reaches a bad
+        one, and none is made once one is bad.
+        """
+        hints = self.contracts[tool].hints
+        for monitor in self.monitors:
+            monitor.unread(tool, arguments, hints)
+
     def after(
         self, tool: str, value: Any, arguments: Mapping[str, Any] | None = None
     ) -> str | None:
         """Return why a result may not be passed on, or None; remember untrusted tools' values.
 
-        Each policy steps on the result with the call's ``arguments``.
+        Each policy steps on the result with the call's ``arguments``. A result refused is not
+        read: each policy then holds every state a result of the call may reach (`unread`).
         """
         contract = self.contracts[tool]
         if contract.returns is not None and not contract.returns.is_valid(value):
+            self.unread(tool, arguments or {})
             if contract.declared is not None and contract.declared.is_valid(value):
                 return f"{tool} returned a key its output schema does not declare, read closed"
             detail = failures(contract.returns, value, contract_names(contract))
@@ -287,13 +304,18 @@ def proxy(
             return _refusal(refused)
         try:
             result = await upstream.call_tool(params.name, arguments)
+        except asyncio.CancelledError:
+            # The client canceled the call while the upstream held it: it may have acted.
+            gate.unread(params.name, arguments)
+            raise
         except (MCPError, InputRequiredRoundsExceededError) as error:
-            gate.errored()
+            gate.unread(params.name, arguments)
             text = types.TextContent(type="text", text=f"{params.name} did not answer: {error}")
             return types.CallToolResult(content=[text], is_error=True)
         except RuntimeError as error:
             if not refused_by_client(error, params.name):
                 raise
+            gate.unread(params.name, arguments)
             # The client's text holds the value, so the refusal names the tool alone.
             refused = f"{params.name} returned a value outside its contract, refused by the client"
             return _refusal(refused)

@@ -9,14 +9,14 @@ import httpx2
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from mcp import Client, types
+from mcp import Client, MCPError, types
 from mcp.client.streamable_http import streamable_http_client
 from mcp.server.auth.provider import AccessToken
 from mcp.server.lowlevel import Server
 
 from valgebra_planning.contracts import read_contract
 from valgebra_planning.flows import read_flow
-from valgebra_planning.policy import read_policy
+from valgebra_planning.policy import Monitor, read_policy
 from valgebra_planning.proxy import Gate, http_app, proxy, read_proxy, spelled_out
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
@@ -52,6 +52,8 @@ def _upstream(made: list[str], answers: dict[str, Any], listing: list[Any]) -> S
     async def called(_: Any, params: types.CallToolRequestParams) -> types.CallToolResult:
         made.append(params.name)
         value = answers[params.name]
+        if callable(value):
+            value = await value()
         if value is ERROR:
             text = types.TextContent(type="text", text="no answer")
             return types.CallToolResult(content=[text], is_error=True)
@@ -697,3 +699,85 @@ def test_a_spelling_valgebra_does_not_prove_equal_is_listed_as_published_and_nam
     published = [types.Tool.model_validate(tool) for tool in LISTING]
     assert [tool.input_schema for tool in listed] == [tool.input_schema for tool in published]
     assert all(answer.is_error for answer in answers)
+
+
+#: One granted approval: a second approval after a result granting the first is a violation.
+ONCE = read_policy(
+    {
+        "name": "one granted approval",
+        "initial": "start",
+        "bad": ["violated"],
+        "transitions": [
+            {
+                "from": "start",
+                "tool": "approve_freight",
+                "result": {"properties": {"approval_id": {"const": "apr_1"}}},
+                "to": "granted",
+            },
+            {"from": "granted", "tool": "approve_freight", "to": "violated"},
+        ],
+    }
+)
+APPROVAL = ("approve_freight", {"parcel_id": "pcl_1"})
+
+
+def test_a_result_the_gate_refuses_holds_every_state_a_result_may_reach() -> None:
+    published = next(tool for tool in LISTING if tool["name"] == "approve_freight")
+    shut = {"approve_freight": read_contract(published, closed_results=True)}
+    gate = Gate(shut, [Monitor(ONCE)], [])
+    assert gate.before(*APPROVAL) is None
+    assert gate.after("approve_freight", {"approval_id": "apr_1", "note": 1}, APPROVAL[1]) == (
+        "approve_freight returned a key its output schema does not declare, read closed"
+    )
+    assert gate.before(*APPROVAL) == "one granted approval: approve_freight reached violated"
+
+
+async def _no_answer() -> Any:
+    raise MCPError(-32603, "the server failed")
+
+
+async def _slow() -> Any:
+    await asyncio.sleep(5)
+    return {"approval_id": "apr_1"}
+
+
+def _approved_twice(answer: Any, *, cancel: bool = False) -> tuple[list[str], Any]:
+    """Approve once, answered by ``answer``, then approve again: what reached it, the second."""
+    made: list[str] = []
+
+    async def session() -> Any:
+        answers = ANSWERS | {"approve_freight": answer}
+        async with Client(_upstream(made, answers, LISTING)) as upstream:
+            front = proxy(upstream, (await upstream.list_tools()).tools, TOOLS, policies=[ONCE])
+            async with Client(front) as client:
+                if cancel:
+                    with pytest.raises(TimeoutError):
+                        await asyncio.wait_for(client.call_tool(*APPROVAL), timeout=0.1)
+                    # Let the cancel reach the proxy before the next call is sent.
+                    await asyncio.sleep(0.1)
+                else:
+                    await client.call_tool(*APPROVAL)
+                answers["approve_freight"] = {"approval_id": "apr_1"}
+                return await client.call_tool(*APPROVAL)
+
+    second = asyncio.run(session())
+    return made, second
+
+
+@pytest.mark.parametrize(
+    ("answer", "cancel"),
+    [({"approval_id": 7}, False), (_no_answer, False), (_slow, True)],
+    ids=["refused-by-the-client", "no-answer", "canceled"],
+)
+def test_a_call_whose_outcome_is_not_read_holds_every_state_it_may_have_reached(
+    answer: Any, *, cancel: bool
+) -> None:
+    made, second = _approved_twice(answer, cancel=cancel)
+    assert _refused(second) == "refused: one granted approval: approve_freight reached violated"
+    assert made == ["approve_freight"]
+
+
+def test_an_error_the_server_answers_steps_no_transition_reading_a_result() -> None:
+    made, second = _approved_twice(ERROR)
+    assert not second.is_error
+    assert made == ["approve_freight", "approve_freight"]

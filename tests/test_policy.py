@@ -254,6 +254,36 @@ def test_a_call_that_answered_with_an_error_holds_the_policy_in_either_state() -
     assert not again.observe("book_freight_return", {"parcel_id": "pcl_1"})
 
 
+#: A call stepped when it is made, and two transitions reading its result: one from the state the
+#: call leaves, and one, to a bad state, from the state before it.
+READ_AFTER = read_policy(
+    {
+        "name": "a result read after the call",
+        "initial": "idle",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "idle", "tool": "approve_freight", "to": "asked"},
+            {"from": "asked", "tool": "approve_freight", "result": True, "to": "granted"},
+            {"from": "idle", "tool": "approve_freight", "result": True, "to": "violated"},
+        ],
+    }
+)
+
+
+def test_a_call_whose_outcome_is_not_read_holds_the_call_s_whole_image() -> None:
+    monitor = Monitor(READ_AFTER)
+    assert not monitor.observe("approve_freight", {"parcel_id": "pcl_1"})
+    assert not monitor.unread("approve_freight", {"parcel_id": "pcl_1"}, frozenset())
+    # The states before the call, the state it left, and the state a result reaches from there;
+    # no result of the call is read from the state before it.
+    assert monitor.held() == {"idle", "asked", "granted"}
+    assert monitor.violations == []
+    once = Monitor(FREIGHT)
+    assert not once.observe("approve_freight", {"parcel_id": "pcl_1"})
+    assert not once.unread("approve_freight", {"parcel_id": "pcl_1"}, frozenset())
+    assert once.held() == {"start", "approved"}
+
+
 BOOK = (
     "book_freight_return(parcel_id=c1.parcel.parcel_id, state=c1.parcel.state, "
     "weight_g=c1.parcel.weight_g)"

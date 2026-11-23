@@ -403,6 +403,38 @@ class Monitor:
         for instance in self.touched or [self]:
             instance.also = (instance.also | instance.before) - {instance.state}
 
+    def unread(self, tool: str, arguments: Mapping[str, Any], hints: frozenset[str]) -> bool:
+        """Hold every state the call observed last may have reached, its outcome unread.
+
+        A call whose result is refused, which is canceled, or which no result answers may have
+        acted or not, as a call answering with an error may, and may have returned any result. A
+        result no guard reads is no observation, so the run may be anywhere in the call's image
+        (Bertoli et al. 2006, Def. 3.4): beside the states before the call, every state a
+        transition reading its result reaches from the states the call left. Return whether a
+        bad state may now be held, recording it.
+        """
+        left = [
+            (instance, instance.also | {instance.state}) for instance in self.stepping(arguments)
+        ]
+        self.errored()
+        for instance, held in left:
+            reached = frozenset(
+                transition.target
+                for state in held - self.policy.bad
+                for transition in self.policy.transitions
+                if transition.source == state
+                and transition.result is not None
+                and transition.reads(tool, hints)
+                and transition.guard.is_valid(dict(arguments))
+            )
+            instance.also = (instance.also | reached) - {instance.state}
+            if bad := sorted(reached & self.policy.bad):
+                self.violations.append(
+                    f"{self.named(instance)}: {tool} may have returned into {bad[0]}"
+                )
+                return True
+        return False
+
     def ended(self) -> bool:
         """Return whether the run may end in a pending state: an obligation it leaves open."""
         for instance in [self, *self.instances.values()]:

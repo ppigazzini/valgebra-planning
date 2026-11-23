@@ -6,6 +6,17 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- A proxy holds every state a call may have reached where it reads no outcome of it. A result the
+  gate or the mcp client refuses, a call the client in front cancels, and a call no result
+  answers stepped no policy, though the call was made: under a rule stepped on a grasp's result,
+  a grasp whose result broke its schema left the robot's policy at `free`, and the walk after it
+  was made. `Gate.unread` and `Monitor.unread` hold, beside the states before the call, every
+  state a transition reading its result reaches from the states the call left, as a belief no
+  observation narrows; a later call any of them takes to a bad state is refused. A tool error
+  the server answers steps no transition reading a result, as before.
+
 ## [0.0.6] - 2026-11-23
 
 A security release: five defects of 0.0.5 that let a wrong program be proven, or a value its
