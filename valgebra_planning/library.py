@@ -4,7 +4,8 @@ A library is a directory. ``tools.json`` holds a server's ``tools/list`` result,
 [...]}``, ``"trusted": true`` where the server's annotations are trusted, and
 ``"closedResults": true`` where each whole result is read closed, an assumption about the
 server (`valgebra_planning.contracts.read_contract`), and ``"afterViolation"``, the tools a proxy
-calls after a violation (`after_violation`). ``tasks.json``
+calls after a violation (`after_violation`), and ``"nonTextBlocks"``, the tools whose blocks
+other than text a proxy keeps (`non_text_blocks`). ``tasks.json``
 holds ``{"tasks": [...]}``, each task its ``name``, the JSON Schema of each input in ``inputs``
 and of the ``goal``, the rules it names, ``errors`` (any tool may fail), ``policies`` and
 ``flows`` by name, and ``types``, the file of observed calls its types are mined from, and
@@ -43,6 +44,7 @@ __all__ = [
     "Problem",
     "after_violation",
     "asserts_format",
+    "non_text_blocks",
     "read_library",
     "reads_closed",
 ]
@@ -117,7 +119,15 @@ def _listed(path: Path, key: str) -> list[Any]:
 
 #: The keys of ``tools.json``: the listing, and how the library reads its server's tools.
 _TOOLS_KEYS = frozenset(
-    {"tools", "trusted", "assertFormat", "closedResults", "postconditions", "afterViolation"}
+    {
+        "tools",
+        "trusted",
+        "assertFormat",
+        "closedResults",
+        "postconditions",
+        "afterViolation",
+        "nonTextBlocks",
+    }
 )
 
 
@@ -140,6 +150,15 @@ def reads_closed(directory: Path) -> bool:
     return flag(_document(directory / "tools.json", _TOOLS_KEYS), "closedResults", "tools.json")
 
 
+def _named(directory: Path, key: str) -> frozenset[str]:
+    """Return the tool names ``tools.json`` lists at ``key``; refuse anything but such a list."""
+    named = _document(directory / "tools.json", _TOOLS_KEYS).get(key, [])
+    if not isinstance(named, list) or not all(isinstance(tool, str) for tool in named):
+        message = f"tools.json: {key!r} is a list of tool names, not {named!r}"
+        raise TypeError(message)
+    return frozenset(named)
+
+
 def after_violation(directory: Path) -> frozenset[str]:
     """Return the tools a proxy calls after a violation: ``"afterViolation": [...]``.
 
@@ -147,11 +166,16 @@ def after_violation(directory: Path) -> frozenset[str]:
     as a robot's stop; each is a tool no policy reads, which `valgebra_planning.proxy.Gate`
     holds when it is built.
     """
-    named = _document(directory / "tools.json", _TOOLS_KEYS).get("afterViolation", [])
-    if not isinstance(named, list) or not all(isinstance(tool, str) for tool in named):
-        message = f"tools.json: 'afterViolation' is a list of tool names, not {named!r}"
-        raise TypeError(message)
-    return frozenset(named)
+    return _named(directory, "afterViolation")
+
+
+def non_text_blocks(directory: Path) -> frozenset[str]:
+    """Return the tools a proxy answers with blocks other than text: ``"nonTextBlocks": [...]``.
+
+    A proxy answers a result with the checked value as its text, and keeps a block that is not
+    text, as a camera's image no check reads, only for these.
+    """
+    return _named(directory, "nonTextBlocks")
 
 
 def _goals(spec: Mapping[str, Any]) -> list[Any]:

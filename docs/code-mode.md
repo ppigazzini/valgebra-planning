@@ -114,7 +114,8 @@ each call as it comes. What it holds is of two kinds.
 - **Contract and policy checks hold against any author of the call.** The argument record
   against the tool's input set, each policy's step, and the result against the output set are
   decisions over the values themselves: an argument outside the input set is refused whatever
-  produced it, a model steered by injected text included.
+  produced it, a model steered by injected text included. A result is answered with the checked
+  value as its text, so no other text the server wrote beside it reaches the agent.
 - **Flow rules hold against no attacker that adapts.** A proxy sees values, not references, so
   it reads provenance by equality: an argument equal to a value an untrusted tool returned is
   taken as that tool's. A value the model upper-cases, encodes or cuts equals none it was

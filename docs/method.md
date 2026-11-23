@@ -315,7 +315,10 @@ program is a defect to report, and in an unproven one its own unproven link. A l
 a wrong mined type break no check a run can see. `valgebra_planning/proxy.py` holds the same checks
 as an MCP server in front of another, for an agent no program governs: each call is answered with a
 tool error naming the check it breaks, and each failure's path and code but never the value or a key
-the schemas do not declare, so a refused result reaches the agent through no error. The mcp client
+the schemas do not declare, so a refused result reaches the agent through no error. A result that
+passes is answered with the checked value as its text, its JSON where the server answered with
+structured content, and with a block other than text only for a tool `tools.json` names under
+`"nonTextBlocks"`, since a client hands a model the text and the gate checks the value. The mcp client
 checks a result against the output schema the server declares before the proxy does, and its refusal
 holds the value, so it is answered with a refusal naming the tool alone, as `run_on_server` ends the
 run on the `result` check naming it. A call a policy reads holds the gate from its check to its
@@ -334,6 +337,10 @@ ones.
 
 ## Limits
 
+- **A proxy reads no text a tool declaring no output schema answers.** Such a tool's result is
+  answered as the server wrote it, so its text reaches an agent held to no contract, and a
+  result field any string fills reaches it inside the checked value: patterns and enums on the
+  output schema bound what an agent reads, as they bound what a plan means.
 - **Types are the specification.** A slot whose schema admits any string, as an unasserted
   `format` does, takes any string, and a library with `"assertFormat": true` reads `format` as an
   assertion, so a `uuid` slot takes a UUID and free text reaches it only under a test; distinct schemas, patterns, enums and ranges are what make a

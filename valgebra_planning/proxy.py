@@ -104,9 +104,18 @@ class Gate:
     #: The tools a call may be made to after a result took a policy to a bad state, as a robot's
     #: stop: each is a tool no policy reads, so admitting it changes no policy's verdict.
     after_violation: frozenset[str] = frozenset()
+    #: The tools whose result is answered with its blocks other than text beside the checked
+    #: value, as a camera's image: no check reads them.
+    non_text_blocks: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
-        """Refuse a tool of ``after_violation`` the proxy does not hold, or a policy reads."""
+        """Refuse a tool named in ``after_violation`` or ``non_text_blocks`` the proxy lacks.
+
+        A tool of ``after_violation`` a policy reads is refused too.
+        """
+        for tool in sorted(self.non_text_blocks - self.contracts.keys()):
+            msg = f"{tool} answers blocks other than text, and the proxy holds no such tool"
+            raise ValueError(msg)
         for tool in sorted(self.after_violation):
             if tool not in self.contracts:
                 msg = f"{tool} is called after a violation, and the proxy holds no such tool"
@@ -129,6 +138,25 @@ class Gate:
             transition.reads(tool, contract.hints)
             for monitor in self.monitors
             for transition in monitor.policy.transitions
+        )
+
+    def answered(self, tool: str, result: types.CallToolResult, value: Any) -> types.CallToolResult:
+        """Return a result whose ``value`` passed every check as the agent reads it.
+
+        Its text is the checked value, its JSON where the tool answered with structured content,
+        and no other text the upstream wrote: a client hands a model the text, and the gate
+        checks the value. A block that is not text is kept only for a tool of
+        ``non_text_blocks``. A tool declaring no output schema answers text no check reads, and
+        is answered as the upstream wrote it.
+        """
+        if self.contracts[tool].returns is None:
+            return result
+        text = value if result.structured_content is None else json.dumps(value)
+        kept = [block for block in result.content if block.type != "text"]
+        blocks = kept if tool in self.non_text_blocks else []
+        return types.CallToolResult(
+            content=[types.TextContent(type="text", text=text), *blocks],
+            structured_content=result.structured_content,
         )
 
     def stopped(self, tool: str) -> str | None:
@@ -364,7 +392,9 @@ async def _checked(
     if value is None:
         value = "".join(getattr(block, "text", "") for block in result.content)
     refused = gate.after(params.name, value, arguments)
-    return _refusal(refused) if refused is not None else result
+    if refused is not None:
+        return _refusal(refused)
+    return gate.answered(params.name, result, value)
 
 
 def proxy(
@@ -375,6 +405,7 @@ def proxy(
     policies: Sequence[Policy] = (),
     flows: Sequence[Flow] = (),
     after_violation: Iterable[str] = (),
+    non_text_blocks: Iterable[str] = (),
 ) -> Server[Any]:
     """Return an MCP server answering ``listing`` through ``upstream``, every call checked.
 
@@ -387,13 +418,16 @@ def proxy(
     timeout, as `valgebra_planning.servers.connect` takes one.
 
     Once a result takes a policy to a bad state every later call is refused but one to a tool
-    of ``after_violation``, as a robot's stop; `Gate` refuses such a tool a policy reads.
+    of ``after_violation``, as a robot's stop; `Gate` refuses such a tool a policy reads. A
+    result's text is the checked value alone, and a block that is not text is kept only for a
+    tool of ``non_text_blocks`` (`Gate.answered`).
     """
     gate = Gate(
         contracts,
         [Monitor(policy) for policy in policies],
         flows,
         after_violation=frozenset(after_violation),
+        non_text_blocks=frozenset(non_text_blocks),
     )
     held = asyncio.Lock()
 
@@ -418,6 +452,7 @@ async def read_proxy(
     closed_results: bool = False,
     spell_out: bool = False,
     after_violation: Iterable[str] = (),
+    non_text_blocks: Iterable[str] = (),
 ) -> Server[Any]:
     """Return the proxy in front of the server ``upstream`` is connected to, every page listed.
 
@@ -426,7 +461,8 @@ async def read_proxy(
     reads the server's tools as the library does. With ``spell_out``, each tool is listed as
     `spelled_out` returns it, and one it returns None for is listed as published, with a
     `UserWarning` naming it; the gate holds every call to the published schemas. A call to a
-    tool of ``after_violation`` is admitted after a violation, as `proxy` reads it.
+    tool of ``after_violation`` is admitted after a violation, and a tool of
+    ``non_text_blocks`` answers its blocks other than text, as `proxy` reads both.
     """
     from valgebra_planning.servers import read_server  # noqa: PLC0415
 
@@ -450,6 +486,7 @@ async def read_proxy(
         policies=policies,
         flows=flows,
         after_violation=after_violation,
+        non_text_blocks=non_text_blocks,
     )
 
 
@@ -462,12 +499,13 @@ async def serve(
     closed_results: bool = False,
     spell_out: bool = False,
     after_violation: Iterable[str] = (),
+    non_text_blocks: Iterable[str] = (),
 ) -> None:
     """Serve the proxy over stdio in front of the server ``upstream`` is connected to.
 
     The proxy is `read_proxy`'s, its tools read with ``assert_format`` and ``closed_results``,
-    listed spelled out with ``spell_out``, and those of ``after_violation`` called after a
-    violation.
+    listed spelled out with ``spell_out``, those of ``after_violation`` called after a
+    violation, and those of ``non_text_blocks`` answering their blocks other than text.
     """
     from mcp.server.stdio import stdio_server  # noqa: PLC0415 - only a served proxy needs it
 
@@ -479,6 +517,7 @@ async def serve(
         closed_results=closed_results,
         spell_out=spell_out,
         after_violation=after_violation,
+        non_text_blocks=non_text_blocks,
     )
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())
