@@ -356,10 +356,17 @@ ones.
   where the read reports an effect absent that holds, the call is made twice: the assumption
   the proof names. On the path where the read rules the effect out, each policy is still read
   in the states of both sides, so a policy a second call would break there is reported possibly
-  broken. The planner writes no such block, as it reads no postcondition.
-- **The planner reads no postcondition.** Its search holds each value in cells of sets fixed
-  before it starts, among which no postcondition's `shows` is, so a program resting on one is
-  written, by hand or by a model in code mode, and proven by the critic.
+  broken.
+- **The planner writes the block for one key alone.** Where an acted postcondition's `shows`
+  requires one key, `{"required": ["label_id"]}`, a weak program answers the call's error with
+  the read retried on its own error, `if "label_id" in c1:`, the field it opens returned or
+  passed on, and on the other side the call made once more with a stop on its error; any other
+  `shows` gets no block, since the language writes no other test whose side valgebra proves
+  outside it.
+- **The planner reads no postcondition on a call that returned.** Its search holds each value
+  in cells of sets fixed before it starts, among which no postcondition's `shows` is, so a
+  program resting on one, a read after a walk that arrived, is written, by hand or by a model in
+  code mode, and proven by the critic.
 - **A stop is not a question.** Each weak plan of the parcel library stops on a value a tool
   returned, a parcel's state or country. Asking the user for one inside the set the next call
   takes would put a value they make up where the tool's must be: the integrity leak a flow rule

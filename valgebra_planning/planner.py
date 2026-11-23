@@ -29,6 +29,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from valgebra_planning._valgebra import (
+    ANNOTATIONS,
     Validator,
     anything,
     complement,
@@ -37,7 +38,16 @@ from valgebra_planning._valgebra import (
     union,
 )
 from valgebra_planning.cells import Abstraction, Predicate, abstract, gather
-from valgebra_planning.contracts import Contract, Slot, Task, fixes, listed, record_of
+from valgebra_planning.contracts import (
+    Contract,
+    Postcondition,
+    Slot,
+    Task,
+    field_slot,
+    fixes,
+    listed,
+    record_of,
+)
 from valgebra_planning.flows import Flow
 from valgebra_planning.mining import SlotKey, Types
 from valgebra_planning.policy import Policy
@@ -236,6 +246,8 @@ class _Search:
     #: The arguments the task reads fresh, as ``(tool, argument)``: no value held before the
     #: last call that may act fills one.
     fresh: frozenset[tuple[str, str]] = frozenset()
+    #: The library's postconditions: an acted one gets the block verifying before a retry.
+    postconditions: tuple[Postcondition, ...] = ()
 
     def bound(self, state: _State, ref: Ref) -> Validator[Any]:
         """Return the values a binding passes: a constant's own, or its reference's cells'."""
@@ -475,14 +487,100 @@ class _Search:
             return Call(contract.name, bindings, result)
         if contract.idempotent:
             return Call(contract.name, bindings, result, retry=True)
+        if weak and (checked := self.checked(state, contract, bindings, depth)) is not None:
+            return Call(contract.name, bindings, result, on_error=checked)
         without = state.but(made=state.made | {(contract.name, bindings)})
         fallback = self.solve(without, depth - 1, weak=weak)
-        held = [ref for _, ref in bindings if ref not in self.literals]
-        if fallback is None and weak and held and self.settled(state):
-            fallback = self.stopping(without, held[0], depth - 1)
+        if fallback is None and weak:
+            fallback = self.stopped(without, bindings, depth - 1)
         if fallback is None:
             return None
         return Call(contract.name, bindings, result, on_error=fallback)
+
+    def stopped(
+        self, state: _State, bindings: tuple[tuple[str, Ref], ...], depth: int
+    ) -> Block | None:
+        """Return a stop on a value a call was given, after its error, or None.
+
+        A path ends only where no policy holds an obligation open, and a stop names a value the
+        program holds, never a constant the task fixes.
+        """
+        held = [ref for _, ref in bindings if ref not in self.literals]
+        if not held or not self.settled(state):
+            return None
+        return self.stopping(state, held[0], depth)
+
+    def checked(
+        self,
+        state: _State,
+        contract: Contract,
+        bindings: tuple[tuple[str, Ref], ...],
+        depth: int,
+    ) -> Block | None:
+        """Return the block verifying a call's effect before it is made again, or None.
+
+        No retry is issued before a verifier reads the effect absent (Mansoor et al. 2026,
+        §4.1). Where an acted postcondition of the call requires one key in what its read
+        shows, the block reads it on the values the call was given, tests the key, and, where
+        the read lacks it, makes the call once more, a stop on its error, and plans the rest as
+        after a first success; where the read holds it, the field it opens is held, and a
+        program is searched from there. A read that may act gets no block.
+        """
+        if depth <= _GUARD:
+            return None
+        given = dict(bindings)
+        for post in self.postconditions:
+            key = _checked_key(post) if post.after == contract.name else None
+            reader = self.contracts.get(post.read)
+            if key is None or reader is None or any(t not in given for _, t in post.given):
+                continue
+            if "readOnlyHint" not in reader.hints:
+                # A read that may act shows nothing of the world before it.
+                continue
+            reading = tuple((mine, given[theirs]) for mine, theirs in post.given)
+            if any(s.required and s.path[0] not in dict(reading) for s in reader.arguments):
+                continue
+            policed = self.policed(state, reader, reading)
+            if policed is None:
+                continue
+            read = f"c{state.fresh}"
+            seen = self.after(state.but(policed=policed), reader, reading, read)
+            name = _result_name(field_slot(reader.result(), key))
+            then = None
+            if self.holds(name):
+                # The key test makes the field it opens a value the program holds.
+                opened = (Ref(read, (key,)), self.cells_of(name))
+                then = self.solve(seen.but(refs=(*seen.refs, opened)), depth - 2, weak=True)
+            if then is None and self.settled(seen) and bindings:
+                then = self.stopping(seen, bindings[0][1], depth - 2)
+            again = self.again(seen, contract, bindings, depth - 2)
+            if then is not None and again is not None:
+                test = Branch(Ref(read), "", "", then, again, key=key)
+                # A read-only read is retried on its error, as any read-only call is.
+                return Block((Call(reader.name, reading, read, retry=self.errors),), test)
+        return None
+
+    def again(
+        self,
+        state: _State,
+        contract: Contract,
+        bindings: tuple[tuple[str, Ref], ...],
+        depth: int,
+    ) -> Block | None:
+        """Return the call made once more on its values, a stop on its error, then the rest."""
+        policed = self.policed(state, contract, bindings)
+        if policed is None:
+            return None
+        result = f"c{state.fresh}"
+        either = tuple(a | b for a, b in zip(state.policed, policed, strict=True))
+        stop = self.stopped(state.but(policed=either), bindings, depth - 1)
+        if stop is None:
+            return None
+        after = self.after(state.but(policed=policed), contract, bindings, result)
+        rest = self.solve(after, depth - 1, weak=True)
+        if rest is None:
+            return None
+        return Block((Call(contract.name, bindings, result, on_error=stop), *rest.calls), rest.end)
 
     def stopping(self, state: _State, ref: Ref, depth: int) -> Block:
         """Return what a weak program does where it would stop on ``ref``.
@@ -809,7 +907,10 @@ def _readable(values: Validator[Any], consumers: Sequence[Validator[Any]]) -> bo
 
 
 def predicates(
-    contracts: Mapping[str, Contract], task: Task, policies: Sequence[Policy] = ()
+    contracts: Mapping[str, Contract],
+    task: Task,
+    policies: Sequence[Policy] = (),
+    postconditions: Sequence[Postcondition] = (),
 ) -> list[Predicate]:
     """Return every argument and the goal, and each result or input some of them may read.
 
@@ -818,7 +919,8 @@ def predicates(
     the order of their names, which fixes the cut: valgebra leaves some meets undecided, and
     which ones depends on the order the cut splits by and draws its members in, so a listing
     order of its own would make a library's count that order's. The members a policy's guard on
-    a result lists cut the cells too, so the field it reads is held and a test can split on it.
+    a result lists cut the cells too, so the field it reads is held and a test can split on it,
+    and so does the field a key test on an acted postcondition's read opens.
     """
     listings = [
         (f"guard:{tool}:{index}", guard.values)
@@ -832,7 +934,7 @@ def predicates(
     entries += [
         (_result_name(slot), slot.values, slot.schema, slot.root)
         for contract in contracts.values()
-        for slot in contract.results
+        for slot in (*contract.results, *_opened({contract.name: contract}, postconditions))
         if _readable(slot.values, consumers)
     ]
     entries += [
@@ -1184,6 +1286,42 @@ def _ending_uncovered(block: Block, search: _Search, where: str) -> list[Uncover
     return [Uncovered(where, str(end.ref), examples, search.abstraction.undecided(cells))]
 
 
+def _key_of(schema: object) -> str | None:
+    """Return the one key a schema requires and asserts nothing else of, or None.
+
+    ``{"required": ["label_id"]}`` is a test a program writes, ``if "label_id" in c3:``, whose
+    side lacking the key holds no value of the schema.
+    """
+    if not isinstance(schema, dict) or set(schema) - {"required", "type"} - ANNOTATIONS:
+        return None
+    if schema.get("type", "object") != "object":
+        return None
+    required = schema.get("required")
+    if isinstance(required, list) and len(required) == 1 and isinstance(required[0], str):
+        return required[0]
+    return None
+
+
+def _checked_key(post: Postcondition) -> str | None:
+    """Return the key the block verifying before a retry tests a read for, or None.
+
+    Only a postcondition of a call's acting says what a read after its error shows.
+    """
+    return _key_of(post.schemas[1]) if post.acted else None
+
+
+def _opened(
+    contracts: Mapping[str, Contract], postconditions: Sequence[Postcondition]
+) -> list[Slot]:
+    """Return the field of each acted postcondition's read its key test makes the program hold."""
+    opened = []
+    for post in postconditions:
+        key = _checked_key(post)
+        if key is not None and post.read in contracts and contracts[post.read].results:
+            opened.append(field_slot(contracts[post.read].result(), key))
+    return opened
+
+
 def plan(
     contracts: Mapping[str, Contract],
     task: Task,
@@ -1195,6 +1333,7 @@ def plan(
     policies: Sequence[Policy] = (),
     flows: Sequence[Flow] = (),
     types: Types | None = None,
+    postconditions: Sequence[Postcondition] = (),
 ) -> Plan:
     """Search a program for ``task`` over ``contracts``: strong first, then weak if asked.
 
@@ -1206,8 +1345,9 @@ def plan(
     pending state. A value reaches a flow
     rule's sink only as `valgebra_planning.verify.verify` holds it with the same rules. With
     mined ``types``, a value fills an argument only where their types agree, and the plan
-    names every binding that rests on one. Raises `ValueError` for a task naming an input as
-    a tool.
+    names every binding that rests on one. Where ``errors`` is set, a weak program answers an
+    error of a call an acted postcondition covers by reading its effect first (`_Search.checked`).
+    Raises `ValueError` for a task naming an input as a tool.
     """
     fixes(task, contracts)
     # The tools are tried in their names' order, so a server listing them in another order
@@ -1218,9 +1358,10 @@ def plan(
         for name, contract in contracts.items()
         if any(policy.hints() & contract.hints for policy in policies)
     )
+    kept |= frozenset(post.read for post in postconditions if _checked_key(post) is not None)
     contracts = _reachable(contracts, task, kept)
     guards = _guards(policies)
-    abstraction = abstract(predicates(contracts, task, policies), seed=seed)
+    abstraction = abstract(predicates(contracts, task, policies, postconditions), seed=seed)
     # A task naming goals in an order gets a search toward each, the first's stops filled from
     # the next's: one toward their union would return in whichever is shallowest.
     names = [f"{_GOAL}:{index}" for index in range(len(task.preferred))] or [_GOAL]
@@ -1245,7 +1386,7 @@ def plan(
     literals = {fixed[tool, argument]: value for tool, argument, value in task.constants}
     for one in searches:
         one.fixed, one.literals, one.guards = fixed, literals, guards
-        one.fresh = frozenset(task.fresh)
+        one.fresh, one.postconditions = frozenset(task.fresh), tuple(postconditions)
     for one, after in itertools.pairwise(searches):
         one.fallback = after
         after.stops = searches[0].stops

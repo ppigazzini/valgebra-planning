@@ -116,7 +116,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
   find_booking shows it did not act" where valgebra proves the read, under the tests on the way,
   outside `shows`, naming the declaration and that the read sees the effect at once, and stays
   a refuted retry anywhere else. An error of a non-idempotent call was a stop or a refuted
-  retry.
+  retry. With `errors`, `plan(..., postconditions=[...])` writes that block where `shows`
+  requires one key: the read retried, `if "label_id" in c1:`, the label returned on one side and
+  the call made once more on the other, its error a stop; `predicates` takes `postconditions`
+  for the field the key test opens.
 
 - The proxy lists each tool spelled out for a model's chat template on request,
   `proxy --spell-out` and `read_proxy(..., spell_out=True)`: each `const` of an input schema is

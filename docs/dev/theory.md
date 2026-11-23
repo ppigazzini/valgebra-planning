@@ -404,12 +404,14 @@ belief holding both sides, and a value outside that set rules out every state wh
 (Bertoli et al. 2006, §3). So a call made again on the same values is no repeat where valgebra
 proves every value the read may hold there, the tests on the way met, outside the set, until
 another call that may act or a new value under the read's name; it names the declaration and
-that the read sees the effect at once. The policy states stay those of both sides.
+that the read sees the effect at once. The policy states stay those of both sides. Where the
+set requires one key, the planner writes the block in the call's error block: the read on
+the call's values, a test of the key, and on its side lacking the key the call made once more.
 **[LOAD-BEARING: verify-before-retry]**
 
-IMPLEMENTED-BY: verify.py::_Walk.repeated
+IMPLEMENTED-BY: verify.py::_Walk.repeated, planner.py::_Search.checked
 
-HELD-BY: test_a_call_made_again_where_its_read_shows_it_did_not_act_is_no_retry, test_a_call_made_again_where_no_read_shows_it_did_not_act_is_a_retry, test_a_read_that_may_act_shows_nothing_of_the_call_before_it
+HELD-BY: test_the_planner_reads_the_effect_before_it_makes_a_call_again, test_a_call_made_again_where_its_read_shows_it_did_not_act_is_no_retry, test_a_call_made_again_where_no_read_shows_it_did_not_act_is_a_retry, test_a_read_that_may_act_shows_nothing_of_the_call_before_it
 
 ## The critic and code mode
 

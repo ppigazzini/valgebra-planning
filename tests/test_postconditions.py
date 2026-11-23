@@ -10,7 +10,9 @@ from valgebra_planning.cli import main
 from valgebra_planning.contracts import Contract, read_contract, read_postcondition, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.library import Library, read_library
+from valgebra_planning.planner import plan
 from valgebra_planning.policy import read_policy
+from valgebra_planning.program import render
 from valgebra_planning.run import ToolError, blame, run
 from valgebra_planning.vacuity import vacuities
 from valgebra_planning.verify import verify
@@ -606,3 +608,101 @@ def test_an_acted_postcondition_covers_no_read_after_a_call_that_returned() -> N
     inputs = {"parcel_id": "pcl_1", "names": []}
     ended = run(read_program(returned), BOOKING, SEND, inputs, tools, postconditions=[ACTED])
     assert ended.ok
+
+
+def test_the_planner_reads_the_effect_before_it_makes_a_call_again() -> None:
+    plain = plan(BOOKING, SEND, errors=True)
+    assert plain.program is not None
+    assert "find_booking" not in render(plain.program)
+    found = plan(BOOKING, SEND, errors=True, postconditions=[ACTED])
+    assert found.program is not None
+    text = render(found.program)
+    assert '    c1 = retry(find_booking(parcel_id=parcel_id))\n    if "label_id" in c1:\n' in text
+    assert "        return c1.label_id\n" in text
+    assert "            c2 = book(parcel_id=parcel_id)\n" in text
+    checked = verify(found.program, BOOKING, SEND, errors=True, postconditions=[ACTED])
+    assert all(link.verdict == "proven" for link in checked.links)
+    assert [gap.ref for gap in checked.gaps] == ["parcel_id"]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"shows": {"properties": {"label_id": LABEL}, "required": ["label_id"]}},
+        {"shows": {"required": ["label_id", "parcel_id"]}},
+        {"read": "note", "shows": {"required": ["noted"]}},
+        {"when": True},
+    ],
+    ids=["a-shows-the-language-tests-no-way", "two-keys", "a-read-that-may-act", "returned"],
+)
+def test_the_planner_writes_no_block_a_postcondition_does_not_license(
+    change: dict[str, Any],
+) -> None:
+    post = read_postcondition(BOOKED | change, BOOKING)
+    found = plan(BOOKING, SEND, errors=True, postconditions=[post])
+    plain = plan(BOOKING, SEND, errors=True)
+    assert found.program is not None
+    assert plain.program is not None
+    assert render(found.program) == render(plain.program)
+
+
+def test_the_planner_keeps_a_read_whose_result_meets_no_goal_for_its_block() -> None:
+    status = _spec("booking_status", {"parcel_id": PARCEL}, {"booked": {"type": "boolean"}}, SEEING)
+    tools = {**BOOKING, "booking_status": read_contract(status)}
+    post = read_postcondition(
+        BOOKED | {"read": "booking_status", "shows": {"required": ["booked"]}}, tools
+    )
+    found = plan(tools, SEND, errors=True, postconditions=[post])
+    assert found.program is not None
+    assert "booking_status(parcel_id=parcel_id)" in render(found.program)
+
+
+@pytest.mark.parametrize(
+    ("acted", "label"),
+    [(False, "lbl_2"), (True, "lbl_1")],
+    ids=["no-effect-made-again", "effect-read-back"],
+)
+def test_a_planned_block_runs_once_more_only_where_the_read_shows_no_effect(
+    *, acted: bool, label: str
+) -> None:
+    found = plan(BOOKING, SEND, errors=True, postconditions=[ACTED])
+    assert found.program is not None
+    world: dict[str, Any] = {"booked": [], "calls": 0}
+
+    def book(**_: Any) -> Any:
+        world["calls"] += 1
+        if world["calls"] == 1:
+            if acted:
+                world["booked"].append("lbl_1")
+            message = "no answer"
+            raise ToolError(message)
+        world["booked"].append(f"lbl_{world['calls']}")
+        return {"label_id": world["booked"][-1]}
+
+    def find_booking(**_: Any) -> Any:
+        return {"label_id": world["booked"][0]} if world["booked"] else {}
+
+    tools = {"book": book, "find_booking": find_booking, "note": lambda **_: {"noted": True}}
+    inputs = {"parcel_id": "pcl_1", "names": []}
+    ended = run(found.program, BOOKING, SEND, inputs, tools, postconditions=[ACTED])
+    assert ended.ok
+    assert ended.value == label
+    assert len(world["booked"]) == 1
+
+
+def test_the_planner_writes_no_stop_a_policy_s_obligation_is_open_at() -> None:
+    noted = read_policy(
+        {
+            "name": "a booking is noted",
+            "initial": "clear",
+            "bad": [],
+            "pending": ["owed"],
+            "transitions": [
+                {"from": "clear", "tool": "book", "to": "owed"},
+                {"from": "owed", "tool": "note", "to": "clear"},
+            ],
+        }
+    )
+    found = plan(BOOKING, SEND, errors=True, policies=[noted], postconditions=[ACTED])
+    # Each stop the block can write leaves the booking possibly unnoted: no program is found.
+    assert found.program is None
