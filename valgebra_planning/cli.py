@@ -290,10 +290,19 @@ def _proxy(server: str, directory: Path | None, timeout: float | None) -> int:
     library = None if directory is None else read_library(directory)
     policies = () if library is None else tuple(library.policies.values())
     flows = () if library is None else tuple(library.flows.values())
+    # The server's tools are read as the library reads its own listing.
+    asserted = directory is not None and asserts_format(directory)
+    closing = directory is not None and reads_closed(directory)
 
     async def served() -> None:
         async with connect(server, read_timeout_seconds=timeout) as upstream:
-            await serve(upstream, policies=policies, flows=flows)
+            await serve(
+                upstream,
+                policies=policies,
+                flows=flows,
+                assert_format=asserted,
+                closed_results=closing,
+            )
 
     asyncio.run(served())
     return 0

@@ -38,7 +38,7 @@ from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Monitor, Policy
 from valgebra_planning.servers import refused_by_client
 
-__all__ = ["Gate", "proxy", "serve"]
+__all__ = ["Gate", "proxy", "read_proxy", "serve"]
 
 
 def _leaves(value: Any) -> Iterable[Any]:
@@ -180,12 +180,20 @@ def proxy(
     return Server("valgebra-planning proxy", on_list_tools=listed, on_call_tool=called)
 
 
-async def serve(
-    upstream: Client, *, policies: Sequence[Policy] = (), flows: Sequence[Flow] = ()
-) -> None:
-    """Serve the proxy over stdio in front of the server ``upstream`` is connected to."""
-    from mcp.server.stdio import stdio_server  # noqa: PLC0415 - only a served proxy needs it
+async def read_proxy(
+    upstream: Client,
+    *,
+    policies: Sequence[Policy] = (),
+    flows: Sequence[Flow] = (),
+    assert_format: bool = False,
+    closed_results: bool = False,
+) -> Server[Any]:
+    """Return the proxy in front of the server ``upstream`` is connected to, every page listed.
 
+    Its tools are read with ``assert_format`` and ``closed_results`` as
+    `valgebra_planning.servers.read_server` reads them, so a proxy held to a library's rules
+    reads the server's tools as the library does.
+    """
     from valgebra_planning.servers import read_server  # noqa: PLC0415
 
     listing: list[types.Tool] = []
@@ -196,7 +204,32 @@ async def serve(
         cursor = page.next_cursor
         if cursor is None:
             break
-    contracts = await read_server(upstream)
-    server = proxy(upstream, listing, contracts, policies=policies, flows=flows)
+    contracts = await read_server(
+        upstream, assert_format=assert_format, closed_results=closed_results
+    )
+    return proxy(upstream, listing, contracts, policies=policies, flows=flows)
+
+
+async def serve(
+    upstream: Client,
+    *,
+    policies: Sequence[Policy] = (),
+    flows: Sequence[Flow] = (),
+    assert_format: bool = False,
+    closed_results: bool = False,
+) -> None:
+    """Serve the proxy over stdio in front of the server ``upstream`` is connected to.
+
+    The proxy is `read_proxy`'s, its tools read with ``assert_format`` and ``closed_results``.
+    """
+    from mcp.server.stdio import stdio_server  # noqa: PLC0415 - only a served proxy needs it
+
+    server = await read_proxy(
+        upstream,
+        policies=policies,
+        flows=flows,
+        assert_format=assert_format,
+        closed_results=closed_results,
+    )
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import shlex
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -182,3 +184,23 @@ def test_a_live_server_s_results_are_read_closed_where_the_library_says_so(tmp_p
     ran = _command(*argv, "--server", SERVER, "--json")
     assert ran.returncode == 0, ran.stderr
     assert json.loads(ran.stdout)["refused"] is None
+
+
+@pytest.mark.parametrize("closing", [False, True], ids=["as-declared", "read-closed"])
+def test_the_proxy_reads_its_server_s_tools_as_its_library_does(
+    tmp_path: Path, *, closing: bool
+) -> None:
+    from valgebra_planning.servers import connect  # noqa: PLC0415 - the mcp extra
+
+    listing = json.loads((Path(PARCELS) / "tools.json").read_text())
+    (tmp_path / "tools.json").write_text(json.dumps({**listing, "closedResults": closing}))
+    noting = shlex.join([sys.executable, str(Path(__file__).parent / "parcel_server.py"), "--note"])
+    entry = "from valgebra_planning.cli import main; raise SystemExit(main())"
+    command = [sys.executable, "-c", entry, "proxy", "--server", noting, "--library", str(tmp_path)]
+
+    async def called() -> Any:
+        async with connect(shlex.join(command)) as client:
+            return await client.call_tool("find_parcel", {"tracking": "AB123456789IT"})
+
+    result = asyncio.run(called())
+    assert result.is_error is closing

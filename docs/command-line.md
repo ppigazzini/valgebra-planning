@@ -130,7 +130,8 @@ serves an MCP server over stdio, in front of `--server`, that lists its tools as
 answers a call only after holding it to the tool's contract, to every policy and flow rule the
 library defines, and, the call made, its result to the output schema
 (`valgebra_planning/proxy.py`). A broken check answers the call with a tool error naming it, and
-the call never reaches the server, or its result the agent. The error names each failure's path
+the call never reaches the server, or its result the agent. The server's tools are read as the
+library reads its own listing, with its `assertFormat` and `closedResults`. The error names each failure's path
 and code, as `run_id: string_pattern_mismatch`, and never the value: a key the tool's schemas do
 not declare is written `*`, so no part of a refused result reaches the agent through the error.
 A result the proxy's client refuses against the output schema the server declares is refused

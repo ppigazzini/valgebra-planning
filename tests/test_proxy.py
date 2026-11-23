@@ -16,7 +16,7 @@ from mcp.server.lowlevel import Server
 from valgebra_planning.contracts import read_contract
 from valgebra_planning.flows import read_flow
 from valgebra_planning.policy import read_policy
-from valgebra_planning.proxy import Gate, proxy
+from valgebra_planning.proxy import Gate, proxy, read_proxy
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 LISTING = json.loads((EXAMPLE / "tools.json").read_text())["tools"]
@@ -414,3 +414,21 @@ def test_a_result_with_a_key_a_closed_reading_refuses_is_refused_naming_no_key()
     assert gate.after("find_parcel", {"parcel": PARCEL, "SECRET-key": 1}) == (
         "find_parcel returned a key its output schema does not declare, read closed"
     )
+
+
+@pytest.mark.parametrize("closing", [False, True], ids=["as-declared", "read-closed"])
+def test_a_proxy_reads_its_upstream_s_tools_as_its_library_does(*, closing: bool) -> None:
+    answers = ANSWERS | {"find_parcel": {"parcel": PARCEL, "note": "x"}}
+
+    async def session() -> Any:
+        async with Client(_upstream([], answers, LISTING)) as upstream:
+            front = await read_proxy(upstream, closed_results=closing)
+            async with Client(front) as client:
+                return await client.call_tool(*FINDING)
+
+    result = asyncio.run(session())
+    assert result.is_error is closing
+    if closing:
+        assert _refused(result) == (
+            "refused: find_parcel returned a key its output schema does not declare, read closed"
+        )

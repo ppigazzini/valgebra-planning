@@ -8,6 +8,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Security
 
+- A proxy reads its server's tools as its library reads its own listing. `proxy --library` read
+  them as declared whatever the library's `tools.json` said, so an argument a `format` types took
+  any string at the gate of a library with `"assertFormat": true`, and a result with a key its
+  schema does not declare passed one with `"closedResults": true`. `read_proxy` returns the
+  proxy in front of a connected server, its tools read with `assert_format` and
+  `closed_results`, which `serve` takes too.
+
 - A refusal names each failure's path and valgebra's code for it, never the value. The proxy's
   refusals and the runner's messages formatted up to 120 characters of the argument record,
   result or returned value they refused, so a result outside its contract reached the agent
