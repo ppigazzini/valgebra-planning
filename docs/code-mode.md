@@ -126,7 +126,9 @@ each call as it comes. What it holds is of two kinds.
 **One gate, whatever reaches it.** `proxy()` returns an MCP server, and `http_app()` serves it
 over Streamable HTTP to every client holding a token issued for it, as `proxy --http` does.
 Every client of one proxy calls through its one gate: a policy reads the calls of all of them in order, and a flow rule takes a
-value any of them was returned as returned. Two deployments in front of one robot differ there.
+value any of them was returned as returned. A call a policy reads holds the gate from its check to
+its result, so a second one waits for the first's result before it is checked; a call no policy
+reads waits on none. Two deployments in front of one robot differ there.
 
 | deployment | policy state | provenance |
 |---|---|---|

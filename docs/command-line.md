@@ -119,7 +119,8 @@ fails closed on any argument record, policy step or result outside its contract.
 run ended, and the cause of a break (the server, an assumption, or the program), and exits 1 unless
 it returned a value with no break. With `--timeout`, `run` and `proxy` give each call that many
 seconds to be answered, after which it fails as a tool error; with none, a call waits for its
-answer. `--depth` sets the calls and tests a path of the planned program may take, as for
+answer. A call a policy reads holds the proxy's gate until it is answered or fails, so the
+timeout bounds how long it keeps the next such call waiting. `--depth` sets the calls and tests a path of the planned program may take, as for
 `plan`. A canceled run sends no call after the cancel. `tests/parcel_server.py` serves the example's
 tools over stdio.
 

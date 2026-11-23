@@ -16,6 +16,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
   state a transition reading its result reaches from the states the call left, as a belief no
   observation narrows; a later call any of them takes to a bad state is refused. A tool error
   the server answers steps no transition reading a result, as before.
+- A proxy holds a call a policy reads from its check to its result. Two calls in flight through
+  one proxy were each checked against the states before the other's result: under a rule stepped
+  on a grasp's result, a walk sent while the grasp was in flight was admitted and made, and an
+  error was held against the states before the call observed last, so an errored release beside
+  a read-only call left the policy at `free`. Each policy now reads such calls in the order they
+  act, a second one checked once the first's result is read; a call no policy reads waits on
+  none and steps none. A call holds the gate while the upstream holds it, which `--timeout` and
+  `connect`'s read timeout bound.
 
 ## [0.0.6] - 2026-11-23
 

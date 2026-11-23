@@ -190,7 +190,10 @@ stepped on sets of states; a bad state is never left. At run time the same autom
 monitor stepping on concrete records. A call that answers with an error may have acted or not,
 so the walk reads its error block from either set of states, and the monitor holds both after
 it, refusing a call that takes any of them to a bad state. A transition may read the call's
-result: the monitor steps it when the result arrives. Where the proxy reads no outcome of a call
+result: the monitor steps it when the result arrives. An action's effect and its response travel
+apart, and a response may arrive after a later call is sent (Mansoor et al. 2026, §4.1), so the
+proxy holds a call a policy reads from its check to its result, and its monitor reads such calls
+in the order they act. Where the proxy reads no outcome of a call
 made, its result refused, the call canceled or answered by no result, no observation narrows
 the belief, so the monitor holds the call's whole image (Bertoli et al. 2006, Def. 3.4): the
 states before the call and every state a transition reading its result reaches from the states
@@ -204,9 +207,9 @@ one field and lists its members, `if c3.confirmed in (True,):`, and steps the au
 side's set as the walk does (Bertoli et al. 2006, Def. 3.6); any other guard it takes possibly at
 most. **[LOAD-BEARING: policy-automaton]**
 
-IMPLEMENTED-BY: policy.py, policy.py::Monitor.unread, verify.py::_Walk.call, verify.py::_Walk.reached, planner.py::_Search.split
+IMPLEMENTED-BY: policy.py, policy.py::Monitor.unread, proxy.py::proxy, verify.py::_Walk.call, verify.py::_Walk.reached, planner.py::_Search.split
 
-HELD-BY: test_the_monitor_reads_a_trace_call_by_call, test_a_bad_state_is_never_left, test_a_call_that_answered_with_an_error_holds_the_policy_in_either_state, test_a_call_whose_outcome_is_not_read_holds_the_call_s_whole_image, test_a_result_the_gate_refuses_holds_every_state_a_result_may_reach, test_a_call_whose_outcome_is_not_read_holds_every_state_it_may_have_reached, test_a_run_refuses_the_call_an_approval_that_answered_with_an_error_would_allow, test_a_call_the_server_answers_with_an_error_leaves_the_policy_in_either_state, test_a_transition_reading_the_result_is_taken_when_the_result_arrives, test_a_walk_splits_at_a_call_a_result_guard_reads_and_refutes_the_case_it_breaks, test_a_program_moving_only_under_the_answer_its_policy_reads_is_proven, test_the_gate_reads_a_result_a_transition_waits_on, test_a_guard_the_arguments_only_overlap_leaves_the_policy_undecided, test_a_program_planned_under_the_policy_approves_first_and_is_proven, test_a_program_planned_without_the_policy_is_refuted_on_its_freight_path_alone, test_the_planner_tests_the_answer_a_result_guard_reads
+HELD-BY: test_the_monitor_reads_a_trace_call_by_call, test_a_bad_state_is_never_left, test_a_call_that_answered_with_an_error_holds_the_policy_in_either_state, test_a_call_whose_outcome_is_not_read_holds_the_call_s_whole_image, test_a_result_the_gate_refuses_holds_every_state_a_result_may_reach, test_a_call_whose_outcome_is_not_read_holds_every_state_it_may_have_reached, test_a_call_a_policy_reads_waits_for_the_one_in_flight, test_an_error_is_held_against_its_own_call_beside_one_no_policy_reads, test_a_call_no_policy_reads_waits_on_none, test_a_run_refuses_the_call_an_approval_that_answered_with_an_error_would_allow, test_a_call_the_server_answers_with_an_error_leaves_the_policy_in_either_state, test_a_transition_reading_the_result_is_taken_when_the_result_arrives, test_a_walk_splits_at_a_call_a_result_guard_reads_and_refutes_the_case_it_breaks, test_a_program_moving_only_under_the_answer_its_policy_reads_is_proven, test_the_gate_reads_a_result_a_transition_waits_on, test_a_guard_the_arguments_only_overlap_leaves_the_policy_undecided, test_a_program_planned_under_the_policy_approves_first_and_is_proven, test_a_program_planned_without_the_policy_is_refuted_on_its_freight_path_alone, test_the_planner_tests_the_answer_a_result_guard_reads
 
 **An obligation is decided over the whole program.** A property that no continuation of a
 run's prefix makes true or false for good, as a notice owed after every booking, is not

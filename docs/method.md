@@ -318,7 +318,9 @@ tool error naming the check it breaks, and each failure's path and code but neve
 the schemas do not declare, so a refused result reaches the agent through no error. The mcp client
 checks a result against the output schema the server declares before the proxy does, and its refusal
 holds the value, so it is answered with a refusal naming the tool alone, as `run_on_server` ends the
-run on the `result` check naming it. A refused call steps no policy, a call the server answers with
+run on the `result` check naming it. A call a policy reads holds the gate from its check to its
+result, so each policy reads such calls in the order they act, and a call no policy reads waits on
+none. A refused call steps no policy, a call the server answers with
 an error leaves each policy in the states before and after it, and a call made whose outcome the
 gate does not read, its result refused, the call canceled or answered by no result, leaves each in
 every state the call may have reached, a transition reading its result taken possibly. A flow rule reads a value's

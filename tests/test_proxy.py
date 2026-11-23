@@ -781,3 +781,61 @@ def test_an_error_the_server_answers_steps_no_transition_reading_a_result() -> N
     made, second = _approved_twice(ERROR)
     assert not second.is_error
     assert made == ["approve_freight", "approve_freight"]
+
+
+def _delayed(answer: Any, seconds: float) -> Any:
+    async def later() -> Any:
+        await asyncio.sleep(seconds)
+        return answer
+
+    return later
+
+
+def _in_flight(answers: dict[str, Any], first: Any, second: Any, last: Any, **rules: Any) -> Any:
+    """Send ``first``, then ``second`` while it is in flight, then ``last``: what reached it."""
+    made: list[str] = []
+
+    async def session() -> Any:
+        async with Client(_upstream(made, ANSWERS | answers, LISTING)) as upstream:
+            front = proxy(upstream, (await upstream.list_tools()).tools, TOOLS, **rules)
+            async with Client(front) as client:
+                one = asyncio.create_task(client.call_tool(*first))
+                await asyncio.sleep(0.05)
+                two = await client.call_tool(*second)
+                done_before = one.done()
+                await one
+                three = await client.call_tool(*last) if last else None
+                return two, done_before, three
+
+    return made, asyncio.run(session())
+
+
+def test_a_call_a_policy_reads_waits_for_the_one_in_flight() -> None:
+    granted = _delayed({"approval_id": "apr_1"}, 0.3)
+    made, (second, _, _) = _in_flight(
+        {"approve_freight": granted}, APPROVAL, APPROVAL, None, policies=[ONCE]
+    )
+    assert _refused(second) == "refused: one granted approval: approve_freight reached violated"
+    assert made == ["approve_freight"]
+
+
+def test_an_error_is_held_against_its_own_call_beside_one_no_policy_reads() -> None:
+    finding = ("find_parcel", {"tracking": "AB123456789IT"})
+    made, (found, _, booked) = _in_flight(
+        {"approve_freight": _delayed(ERROR, 0.3)}, APPROVAL, finding, BOOKING, policies=[FREIGHT]
+    )
+    assert not found.is_error
+    assert _refused(booked) == (
+        "refused: freight approved first: book_freight_return reached violated"
+    )
+    assert made == ["approve_freight", "find_parcel"]
+
+
+def test_a_call_no_policy_reads_waits_on_none() -> None:
+    finding = ("find_parcel", {"tracking": "AB123456789IT"})
+    granted = _delayed({"approval_id": "apr_1"}, 0.3)
+    _, (found, done_before, _) = _in_flight(
+        {"approve_freight": granted}, APPROVAL, finding, None, policies=[ONCE]
+    )
+    assert not found.is_error
+    assert not done_before

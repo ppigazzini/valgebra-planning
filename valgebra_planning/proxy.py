@@ -20,13 +20,14 @@ equals none it was returned and passes: a flow rule here holds against no attack
 where the contract and policy checks hold against any. A proxy sees no task, so a value from a
 task input is from elsewhere. The proxy serves the agent that starts it over stdio, or, through
 `http_app`, every client holding a token issued for it over Streamable HTTP, all of them through
-its one gate. MCP 2026-07-28 has no session a client ends, so a policy's pending states are not
-read there. A call the upstream answers with a protocol error, or with a request for input, is
-answered with a tool error: the proxy gives no input and forwards no request for one, since a
-value it never checked would reach the call. A call made whose outcome the gate does not read,
-its result refused, the call canceled or answered by no result, may have acted and returned
-anything, so each policy holds every state the call may have reached. Requires the ``mcp``
-extra.
+its one gate, and a call a policy reads holds the gate from its check to its result, so each
+policy reads such calls in the order they act. MCP 2026-07-28 has no session a client ends, so a
+policy's pending states are not read there. A call the upstream answers with a protocol error,
+or with a request for input, is answered with a tool error: the proxy gives no input and
+forwards no request for one, since a value it never checked would reach the call. A call made
+whose outcome the gate does not read, its result refused, the call canceled or answered by no
+result, may have acted and returned anything, so each policy holds every state the call may have
+reached. Requires the ``mcp`` extra.
 """
 
 from __future__ import annotations
@@ -101,6 +102,17 @@ class Gate:
     flows: Sequence[Flow]
     seen: dict[object, set[str]] = field(default_factory=dict)
 
+    def policed(self, tool: str) -> bool:
+        """Return whether a policy reads a call to ``tool``, by its name or by its hints."""
+        contract = self.contracts.get(tool)
+        if contract is None:
+            return False
+        return any(
+            transition.reads(tool, contract.hints)
+            for monitor in self.monitors
+            for transition in monitor.policy.transitions
+        )
+
     def before(self, tool: str, arguments: dict[str, Any]) -> str | None:
         """Return why a call may not be made, or None."""
         contract = self.contracts.get(tool)
@@ -116,6 +128,10 @@ class Gate:
         flowing = self.flowing(tool, arguments)
         if flowing is not None:
             return flowing
+        if not self.policed(tool):
+            # No policy reads the call, so it steps none and leaves the states each held before
+            # the last call a policy reads, which that call's error reads.
+            return None
         # A refused call is never made, so no policy steps on it: the session goes on as before.
         states = [monitor.snapshot() for monitor in self.monitors]
         for monitor in self.monitors:
@@ -157,6 +173,8 @@ class Gate:
         or no result answered it. Every later call is refused where any such state reaches a bad
         one, and none is made once one is bad.
         """
+        if not self.policed(tool):
+            return
         hints = self.contracts[tool].hints
         for monitor in self.monitors:
             monitor.unread(tool, arguments, hints)
@@ -283,6 +301,42 @@ def _refusal(reason: str) -> types.CallToolResult:
     return types.CallToolResult(content=[text], is_error=True)
 
 
+async def _checked(
+    gate: Gate, upstream: Client, params: types.CallToolRequestParams
+) -> types.CallToolResult:
+    """Check a call, make it through ``upstream`` and check its result: the proxy's answer."""
+    arguments = dict(params.arguments or {})
+    refused = gate.before(params.name, arguments)
+    if refused is not None:
+        return _refusal(refused)
+    try:
+        result = await upstream.call_tool(params.name, arguments)
+    except asyncio.CancelledError:
+        # The client canceled the call while the upstream held it: it may have acted.
+        gate.unread(params.name, arguments)
+        raise
+    except (MCPError, InputRequiredRoundsExceededError) as error:
+        gate.unread(params.name, arguments)
+        text = types.TextContent(type="text", text=f"{params.name} did not answer: {error}")
+        return types.CallToolResult(content=[text], is_error=True)
+    except RuntimeError as error:
+        if not refused_by_client(error, params.name):
+            raise
+        gate.unread(params.name, arguments)
+        # The client's text holds the value, so the refusal names the tool alone.
+        refused = f"{params.name} returned a value outside its contract, refused by the client"
+        return _refusal(refused)
+    if result.is_error:
+        if gate.policed(params.name):
+            gate.errored()
+        return result
+    value = result.structured_content
+    if value is None:
+        value = "".join(getattr(block, "text", "") for block in result.content)
+    refused = gate.after(params.name, value, arguments)
+    return _refusal(refused) if refused is not None else result
+
+
 def proxy(
     upstream: Client,
     listing: Sequence[types.Tool],
@@ -291,42 +345,27 @@ def proxy(
     policies: Sequence[Policy] = (),
     flows: Sequence[Flow] = (),
 ) -> Server[Any]:
-    """Return an MCP server answering ``listing`` through ``upstream``, every call checked."""
+    """Return an MCP server answering ``listing`` through ``upstream``, every call checked.
+
+    A call a policy reads holds the gate from its check to its result: an action's effect and
+    its response travel apart, and a response may arrive after a later call is sent (Mansoor et
+    al. 2026, §4.1), so a policy reading two calls in flight would read a call against states
+    the other's result has not yet stepped, and an error against the states before the other.
+    Each policy reads such calls in the order they act. A call no policy reads waits on none.
+    A call holds the gate while the upstream holds it, so ``upstream`` is a client with a read
+    timeout, as `valgebra_planning.servers.connect` takes one.
+    """
     gate = Gate(contracts, [Monitor(policy) for policy in policies], flows)
+    held = asyncio.Lock()
 
     async def listed(_: Any, __: Any) -> types.ListToolsResult:
         return types.ListToolsResult(tools=list(listing))
 
     async def called(_: Any, params: types.CallToolRequestParams) -> types.CallToolResult:
-        arguments = dict(params.arguments or {})
-        refused = gate.before(params.name, arguments)
-        if refused is not None:
-            return _refusal(refused)
-        try:
-            result = await upstream.call_tool(params.name, arguments)
-        except asyncio.CancelledError:
-            # The client canceled the call while the upstream held it: it may have acted.
-            gate.unread(params.name, arguments)
-            raise
-        except (MCPError, InputRequiredRoundsExceededError) as error:
-            gate.unread(params.name, arguments)
-            text = types.TextContent(type="text", text=f"{params.name} did not answer: {error}")
-            return types.CallToolResult(content=[text], is_error=True)
-        except RuntimeError as error:
-            if not refused_by_client(error, params.name):
-                raise
-            gate.unread(params.name, arguments)
-            # The client's text holds the value, so the refusal names the tool alone.
-            refused = f"{params.name} returned a value outside its contract, refused by the client"
-            return _refusal(refused)
-        if result.is_error:
-            gate.errored()
-            return result
-        value = result.structured_content
-        if value is None:
-            value = "".join(getattr(block, "text", "") for block in result.content)
-        refused = gate.after(params.name, value, arguments)
-        return _refusal(refused) if refused is not None else result
+        if not gate.policed(params.name):
+            return await _checked(gate, upstream, params)
+        async with held:
+            return await _checked(gate, upstream, params)
 
     return Server("valgebra-planning proxy", on_list_tools=listed, on_call_tool=called)
 
