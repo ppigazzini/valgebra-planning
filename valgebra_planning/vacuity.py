@@ -89,8 +89,15 @@ def _tools(tools: dict[str, Contract]) -> list[Finding]:
         found += _found(f"tool {name}", "no argument record is accepted", accepted)
         if contract.returns is not None:
             whole = contract.result()
-            returned = _empty(contract.returns, _drawn(whole.schema, whole.root))
-            found += _found(f"tool {name}", "no result is returned", returned)
+            drawn = _drawn(whole.schema, whole.root)
+            returned = _empty(contract.returns, drawn)
+            if returned and contract.declared is not None and not _empty(contract.declared, drawn):
+                # The server's set is inhabited: the closed reading empties it, so every link
+                # over the result holds vacuously under the assumption alone.
+                said = "no result is returned read closed, though its output schema admits one"
+                found += _found(f"tool {name}", said, returned)
+            else:
+                found += _found(f"tool {name}", "no result is returned", returned)
     return found
 
 

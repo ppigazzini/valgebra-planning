@@ -48,8 +48,8 @@ All notable changes to valgebra-planning are recorded here. The format follows
   a test. The reason reads "whether a deeper search finds one is not known" where the bound cut a
   path, and names `confirm_with_user.action`, `confirm_with_user.purpose` and `grasp.hand`.
 
-- valgebra is required from 0.0.32 and valgebra-jsonschema from 0.0.5, the pair the report's
-  probes ran on. Under a test on another field, valgebra 0.0.32 proves a key of a record held
+- valgebra is required from 0.0.32 and valgebra-jsonschema from 0.0.6, whose `closed` reads a
+  result closed. Under a test on another field, valgebra 0.0.32 proves a key of a record held
   that 0.0.31 left open, so the walk reads the field with no link on its presence; the parcels
   and bench studies read no difference.
 
@@ -86,6 +86,18 @@ All notable changes to valgebra-planning are recorded here. The format follows
   critic reads and proves.
 
 ### Added
+
+- A library reads each whole result closed, `"closedResults": true` in `tools.json`, and
+  `read_contract(..., closed_results=True)`, `read_server(..., closed_results=True)` and
+  `reads_closed`. An output schema writing no `additionalProperties` is an open record, so a
+  detection's result filled a distance argument through keys it might carry. Read closed, a
+  result holds no key no keyword of its schema evaluates, a key an `allOf` or a `$ref` declares
+  included, through valgebra-jsonschema's `closed`; `Contract.declared` keeps the published set.
+  Each link and binding over such a result names the assumption, a result inside the declared
+  set and outside the closed one is refused as `closed` and blamed on it, by the runner and the
+  proxy, `check` reports a result the closing empties, and a tool given read open to a library
+  reading closed is a `ValueError`. An argument record's link names the assumptions of the values
+  it is made of, an inferred output schema among them.
 
 - A task reads an argument fresh, `fresh` in `tasks.json` or `read_task(..., fresh=[...])`. A
   result was a value for the whole run, so a grasp bound to a distance estimated before a walk

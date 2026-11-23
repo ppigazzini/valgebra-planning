@@ -264,6 +264,26 @@ IMPLEMENTED-BY: mining.py
 
 HELD-BY: test_slots_holding_one_observed_value_are_one_type, test_a_boolean_or_a_null_links_nothing, test_mined_types_route_the_notice_through_the_sanitizer_as_observed, test_the_verifier_reads_no_mined_type, test_a_planned_call_s_arguments_link_nothing, test_a_task_input_no_log_shows_fills_no_argument_a_tool_s_result_was_seen_in, test_a_task_input_a_log_shows_is_typed_as_any_slot
 
+## Results read closed
+
+**A result read closed is its declared set narrowed by an assumption about the server.** An open
+record type admits any value at a label no field names, and a closed one admits none (Castagna
+2023, §3.2). A schema that writes no `additionalProperties` is open, and a server's structured
+result conforms to its output schema as published (MCP 2026-07-28, Output Schema).
+`additionalProperties` reads only the `properties` and `patternProperties` beside it (Attouche
+et al. 2024, §3.2), so written false at the root of a result composed with `allOf` or a `$ref`
+it refuses every key the composition declares and empties the result;
+`unevaluatedProperties: false` refuses a key exactly where no keyword evaluated it, through a
+`$ref` as beside it (Attouche et al. 2024, §2.2). A library with `"closedResults": true` reads each whole result
+with it at the root, valgebra-jsonschema's `closed`. The cost: every link and binding resting
+on such a result names the assumption, a result inside the declared set and outside the closed
+one is blamed on it, a result the closing empties is vacuous, a nested record stays as written,
+and a result the companion cannot close is refused. **[DEVIATION: closed-results]**
+
+IMPLEMENTED-BY: contracts.py::read_contract
+
+HELD-BY: test_an_inherited_result_read_closed_admits_the_server_s_result, test_a_whole_result_read_closed_fills_no_argument_its_declared_keys_miss, test_an_argument_record_over_a_result_read_closed_names_the_assumption, test_a_result_with_a_key_its_schema_does_not_declare_is_the_closed_reading_s, test_a_result_the_closed_reading_empties_is_found, test_a_result_the_companion_cannot_close_is_refused_naming_its_tool
+
 ## Flows and privileges
 
 **A value from an untrusted source reaches a sink only inside its endorsed set.** A value's

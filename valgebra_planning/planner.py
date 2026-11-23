@@ -796,6 +796,8 @@ def _resting(
         found.append(f"{ref} -> {argument}")
     if source is not None and contracts[source].inferred:
         found.append(f"{ref} -> {argument}, from the output of {source} as observed")
+    if source is not None and contracts[source].declared is not None:
+        found.append(f"{ref} -> {argument}, from the output of {source} read closed")
     return found
 
 

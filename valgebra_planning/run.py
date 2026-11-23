@@ -92,8 +92,9 @@ class RefusedResultError(Exception):
 class Refusal:
     """Which check ended a run.
 
-    One of `inputs`, `arguments`, `policy`, `given`, `result`, `goal`, `error`, `raised`,
-    `read`, `ended` or `canceled`.
+    One of `inputs`, `arguments`, `policy`, `given`, `result`, `closed`, `goal`, `error`,
+    `raised`, `read`, `ended` or `canceled`: `closed` is a result inside the output schema its
+    server declares and outside its closed reading.
 
     ``tool`` is the tool the check was on, where it was on one.
     """
@@ -275,15 +276,18 @@ class _Runner:
             if inspect.iscoroutine(result):
                 # A coroutine handed back unawaited never runs: closed, it is never scheduled.
                 result.close()
+            check = "result"
             if contract.returns is None:
                 outside = "the JSON values"
+            elif contract.declared is not None and contract.declared.is_valid(result):
+                outside, check = "its output schema read closed", "closed"
             elif contract.inferred:
                 outside = "the output schema inferred from observed calls"
             else:
                 outside = "its contract"
             detail = failures(values, result, contract_names(contract))
             message = f"{call.tool} returned a value outside {outside} ({detail})"
-            refused = self.breaks(message, "result", call.tool)
+            refused = self.breaks(message, check, call.tool)
             if refused is not None:
                 return refused
         for monitor in self.monitors:
@@ -528,7 +532,8 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
 
     A proven program breaks at run time only where something it rests on fails: a tool's result
     outside the output schema its server declared is the server's, one outside a schema shaped
-    from observed calls is that assumption's, and an error a retry could not outlast is the
+    from observed calls is that assumption's, as one with a key its output schema does not
+    declare is the closed reading's, and an error a retry could not outlast is the
     fairness a retry assumes. An argument record, a policy or a returned value breaking in a
     proven program is a check the verification proved: a defect of this package or of valgebra.
     An unproven program's break is its own link's.
@@ -542,6 +547,8 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
         if contracts[tool].inferred:
             return f"the output schema of {tool} inferred from observed calls does not hold"
         return f"{tool} broke the output schema its server declares"
+    if check == "closed":
+        return f"{tool} returned a key its output schema does not declare: the closed reading"
     retried = f"an error of {tool} outlasted {ATTEMPTS} attempts: the fairness a retry assumes"
     named = {
         "inputs": "an input outside the task's input set: the caller's, before any call",

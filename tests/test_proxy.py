@@ -405,3 +405,12 @@ def test_a_proxy_per_client_holds_only_the_calls_made_through_it() -> None:
     assert not approved.is_error
     assert _refused(unapproved).startswith(f"refused: {FREIGHT.name}")
     assert made == ["approve_freight"]
+
+
+def test_a_result_with_a_key_a_closed_reading_refuses_is_refused_naming_no_key() -> None:
+    shut = {"find_parcel": read_contract(LISTING[0], closed_results=True)}
+    gate = Gate(shut, [], [])
+    assert gate.after("find_parcel", {"parcel": PARCEL}) is None
+    assert gate.after("find_parcel", {"parcel": PARCEL, "SECRET-key": 1}) == (
+        "find_parcel returned a key its output schema does not declare, read closed"
+    )

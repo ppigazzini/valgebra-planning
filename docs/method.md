@@ -31,6 +31,16 @@ starts with, read as a result's are, and the set its goal is. A value's source i
 name, as a flow rule names its sources by input or by tool alike, so a task names no input as
 a tool: `verify`, `critique`, `plan`, `run` and `read_library` raise `ValueError` on one.
 
+A library with `"closedResults": true` in its `tools.json` reads each whole result closed at its
+root, through the companion's `closed`: an output schema writing no `additionalProperties` is
+an open record, which takes any value at a key no field names, so a detection's result meets a
+distance argument wherever a detection may carry a distance's keys. Read closed, a result holds
+no key no keyword of its schema evaluates, a key an `allOf` or a `$ref` declares included, and
+a nested record stays as written. It is an assumption about the server, which MCP holds only to
+the published, open set: each link and binding over such a result names it, a result inside the
+declared set and outside the closed one is blamed on it, a result it empties is vacuous, and a
+result the companion cannot close is refused naming its tool.
+
 Where the input schema relates its arguments, through `oneOf`, `dependentRequired` or any
 keyword beside `type`, `properties`, `required` and `additionalProperties`, a call is accepted
 only once the whole argument record is proven inside the input set, each argument under its
@@ -231,7 +241,7 @@ proposal, until a program is accepted or the rounds run out, any callable being 
 A check that passes without testing what its author meant is vacuous (Kupferman and Vardi 1999),
 and `valgebra_planning/vacuity.py` finds each kind a library can hold, every one a set question:
 a goal no value meets or every value meets; an input, an argument record or a result no value
-meets; a policy transition naming no tool, or whose guard no argument record of its tool meets,
+meets, a result the closed reading empties named as such; a policy transition naming no tool, or whose guard no argument record of its tool meets,
 and a policy no transition that can fire takes to a bad state; a flow rule naming no tool or
 argument, or whose endorsed set meets nothing its sink takes, or holds all of it; a policy or rule
 no task is held to. Values drawn from a schema are tried first, a member found proving a set

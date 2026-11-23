@@ -38,7 +38,7 @@ from typing import Any
 from valgebra_planning.codemode import stubs
 from valgebra_planning.contracts import Contract
 from valgebra_planning.critic import ProgramError, critique
-from valgebra_planning.library import Library, Problem, asserts_format, read_library
+from valgebra_planning.library import Library, Problem, asserts_format, read_library, reads_closed
 from valgebra_planning.meaning import findings
 from valgebra_planning.planner import DEPTH, Plan, plan
 from valgebra_planning.privilege import describe, read_privileges, updates
@@ -166,7 +166,11 @@ def _served(server: str, directory: Path) -> Mapping[str, Contract]:
 
     async def listed() -> dict[str, Contract]:
         async with connect(server) as client:
-            return await read_server(client, assert_format=asserts_format(directory))
+            return await read_server(
+                client,
+                assert_format=asserts_format(directory),
+                closed_results=reads_closed(directory),
+            )
 
     return asyncio.run(listed())
 
@@ -186,7 +190,11 @@ def _run(
 
     async def ran() -> dict[str, Any]:
         async with connect(server, read_timeout_seconds=timeout) as client:
-            served = await read_server(client, assert_format=asserts_format(directory))
+            served = await read_server(
+                client,
+                assert_format=asserts_format(directory),
+                closed_results=reads_closed(directory),
+            )
             library = read_library(directory, served)
             problem = library.problem(name)
             row, found = _planned(library, problem, depth)

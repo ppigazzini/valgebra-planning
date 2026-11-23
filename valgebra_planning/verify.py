@@ -76,8 +76,9 @@ class Link:
     claim: str
     verdict: Verdict
     counterexample: tuple[Any, ...] = ()
-    #: What the verdict rests on beside the contracts: an output schema inferred from observed
-    #: calls, never a proof. The verdict is valgebra's over the contracts and these.
+    #: What the verdict rests on beside the contracts, never a proof: an output schema inferred
+    #: from observed calls or read closed, the annotation hints a policy or a retry reads. The
+    #: verdict is valgebra's over the contracts and these.
     assumed: tuple[str, ...] = ()
 
 
@@ -528,7 +529,8 @@ class _Walk:
                     break
             if not found and verdict == "refuted" and not _apart(env, refs.values()):
                 verdict = "undecided"
-        self.links.append(Link(where, claim, "refuted" if found else verdict, found))
+        assumed = tuple(dict.fromkeys(a for held in bound.values() for a in self.assumption(held)))
+        self.links.append(Link(where, claim, "refuted" if found else verdict, found, assumed))
 
     def jointly(
         self, env: dict[Ref, _Held], refs: Mapping[str, Ref | Const], record: Mapping[str, Any]
@@ -577,11 +579,20 @@ class _Walk:
         self.links.append(Link(where, claim, verdict, found, self.assumption(held)))
 
     def assumption(self, held: _Held) -> tuple[str, ...]:
-        """Return the assumption a held value rests on: its tool's output schema, if inferred."""
+        """Return what a held value rests on: its tool's output schema inferred, or read closed.
+
+        A field's set is the one its record declares, but a link it leaves open is asked of the
+        whole result, so every value a tool returns rests on how its whole result is read.
+        """
         contract = self.contracts.get(held.origin.tool)
-        if contract is None or not contract.inferred:
+        if contract is None:
             return ()
-        return (f"the output of {contract.name} as observed",)
+        named = []
+        if contract.inferred:
+            named.append(f"the output of {contract.name} as observed")
+        if contract.declared is not None:
+            named.append(f"the output of {contract.name} read closed")
+        return tuple(named)
 
     def resolve(self, env: dict[Ref, _Held], ref: Ref) -> _Read:
         """Read ``ref`` from the nearest value the program holds above it, a field at a time.

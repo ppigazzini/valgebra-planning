@@ -119,6 +119,8 @@ class Gate:
         """
         contract = self.contracts[tool]
         if contract.returns is not None and not contract.returns.is_valid(value):
+            if contract.declared is not None and contract.declared.is_valid(value):
+                return f"{tool} returned a key its output schema does not declare, read closed"
             detail = failures(contract.returns, value, contract_names(contract))
             return f"{tool} returned a value outside its contract ({detail})"
         for monitor in self.monitors:

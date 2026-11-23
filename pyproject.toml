@@ -26,7 +26,7 @@ dependencies = [
     "valgebra>=0.0.32",
     # JSON Schema and MCP tool listings read into valgebra's sets, from the release the studies
     # were read on, and with no ceiling for the same reason.
-    "valgebra-jsonschema>=0.0.5",
+    "valgebra-jsonschema>=0.0.6",
 ]
 
 [project.optional-dependencies]

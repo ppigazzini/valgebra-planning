@@ -504,7 +504,9 @@ the set it lies in:
 - **A closed result, and `type` beside each `const`.** A result record with
   `additionalProperties: false` holds the fields it names and no other. `{"type": "string",
   "const": "m"}` holds the one value `{"const": "m"}` does, and a template showing a model the
-  schema that drops `const` still shows it a string.
+  schema that drops `const` still shows it a string. A listing that cannot be changed is read
+  closed with `"closedResults": true` in `tools.json`, an assumption about the server each link
+  over a result names.
 - **A number with its unit, bounded.** A distance is a record, `{"unit": "m", "value": ...}`,
   whose value has bounds, and an argument in reach is a narrower set: a distance reaches it only
   under a test, `if c2.distance in grasp.distance:`, and a server answering in centimeters

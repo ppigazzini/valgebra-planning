@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from valgebra_planning._valgebra import (
@@ -23,6 +23,7 @@ from valgebra_planning._valgebra import (
     ValidationError,
     Validator,
     anything,
+    closed,
     compile_schema,
     intersection,
     older,
@@ -97,6 +98,10 @@ class Contract:
     #: Whether the output schema was shaped from observed results, the server declaring none:
     #: an assumption every link and binding resting on it names.
     inferred: bool = False
+    #: The output set the server declares, where the whole result is read closed: ``returns``
+    #: then holds the narrower set, an assumption every link and binding resting on a result
+    #: names. None where the result is read as declared.
+    declared: Validator[Any] | None = None
 
     def argument(self, name: str) -> Slot:
         """Return the argument slot called ``name``, or raise `KeyError`."""
@@ -277,12 +282,23 @@ def _idempotent(annotations: object) -> bool:
     return annotations.get("readOnlyHint") is True or annotations.get("idempotentHint") is True
 
 
-def read_contract(spec: Mapping[str, Any], *, assert_format: bool = False) -> Contract:
+def read_contract(
+    spec: Mapping[str, Any], *, assert_format: bool = False, closed_results: bool = False
+) -> Contract:
     """Read one entry of a server's tool list into its contract.
 
     With ``assert_format``, ``format`` is read as an assertion, as valgebra-jsonschema reads it
     on request, in every set the contract holds and every set read from its slots later.
-    Raises `Unsupported` for what valgebra-jsonschema refuses to read, and for an input
+    With ``closed_results``, the whole result is read closed, as valgebra-jsonschema's `closed`
+    reads it: an open record takes any value at a key no field names, and a closed one none
+    (Castagna 2023, §3.2). `unevaluatedProperties: false` at the root refuses a key exactly where
+    no keyword evaluated it, through a `$ref` as beside it (Attouche et al. 2024, §2.2), where
+    `additionalProperties` reads only the properties beside it (Attouche et al. 2024, §3.2). A
+    server's structured result conforms to its output schema as published (MCP 2026-07-28,
+    Output Schema), the open set, so the closed set assumes the server writes no key its schema
+    does not declare, and `Contract.declared` keeps the published one. A field keeps the set its
+    record declares, which a closing at the root leaves as written. Raises `Unsupported` for
+    what valgebra-jsonschema refuses to read, a closed result among them, and for an input
     schema whose properties it cannot list.
     """
     tool = read_tool(spec, assert_format=assert_format)
@@ -309,6 +325,7 @@ def read_contract(spec: Mapping[str, Any], *, assert_format: bool = False) -> Co
     )
     output = spec.get("outputSchema")
     results: tuple[Slot, ...] = ()
+    returns, declared = tool.result, None
     if output is not None and tool.result is not None:
         out_root = _root(output)
         whole = tool.result
@@ -319,15 +336,25 @@ def read_contract(spec: Mapping[str, Any], *, assert_format: bool = False) -> Co
             )
             if not slot.path or whole.relation_to(selecting(slot.path, slot.values)) == "subset"
         )
+        if closed_results:
+            shut = closed(output)
+            try:
+                returns = Compiler(shut, assert_format=assert_format).compile(shut)
+            except Unsupported as error:
+                msg = f"tool {tool.name!r}: its output schema read closed: {error}"
+                raise Unsupported(msg) from error
+            declared = whole
+            results = (replace(results[0], schema=shut, values=returns, root=shut), *results[1:])
     return Contract(
         name=tool.name,
         arguments=arguments,
         results=results,
         accepts=tool.arguments,
-        returns=tool.result,
+        returns=returns,
         plain=_plain(node),
         idempotent=_idempotent(spec.get("annotations")),
         hints=_hints(spec.get("annotations")),
+        declared=declared,
     )
 
 

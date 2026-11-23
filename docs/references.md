@@ -48,7 +48,13 @@ directions.
 
 - **Castagna 2023.** G. Castagna. Typing records, maps, and structs. Proc. ACM Program. Lang.
   7 (ICFP), 2023, article 196. [doi:10.1145/3607838](https://doi.org/10.1145/3607838).
-  Selection of a field the record's type proves defined, and the projection that types it.
+  Selection of a field the record's type proves defined, and the projection that types it;
+  open and closed record types.
+- **Attouche et al. 2024.** L. Attouche, M.-A. Baazizi, D. Colazzo, G. Ghelli, C. Sartiani,
+  S. Scherzinger. Validation of modern JSON Schema: formalization and complexity. Proc. ACM
+  Program. Lang. 8 (POPL), 2024, article 49.
+  [doi:10.1145/3632891](https://doi.org/10.1145/3632891). Which keys
+  `additionalProperties` and `unevaluatedProperties` read: a result read closed.
 
 ## Synthesis from typed components
 

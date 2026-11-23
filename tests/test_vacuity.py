@@ -132,3 +132,22 @@ def test_a_policy_holding_only_pending_states_is_live(tmp_path: Path) -> None:
         return policies
 
     assert _found(_planted(tmp_path, "policies.json", owed)) == set()
+
+
+def test_a_result_the_closed_reading_empties_is_found(tmp_path: Path) -> None:
+    unnamed = {
+        "name": "lookup",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+        "outputSchema": {"type": "object", "required": ["id"]},
+    }
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [unnamed]}))
+    assert _found(tmp_path) == set()
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [unnamed], "closedResults": True}))
+    said = "no result is returned read closed, though its output schema admits one"
+    assert _found(tmp_path) == {("tool lookup", said, "proven")}
+
+
+def test_the_parcel_library_read_closed_holds_no_vacuous_specification(tmp_path: Path) -> None:
+    library = _planted(tmp_path, "tools.json", lambda tools: {**tools, "closedResults": True})
+    assert all(c.declared is not None for c in read_library(library).tools.values())
+    assert _found(library) == set()

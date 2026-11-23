@@ -92,3 +92,33 @@ def test_an_argument_check_breaking_is_a_defect_if_proven_and_the_program_s_if_n
         blame(ran, TOOLS, proven=True)
         == "an argument record the verification proved broke: a defect to report"
     )
+
+
+PARCEL = {
+    "parcel_id": "pcl_1",
+    "state": "delivered",
+    "weight_g": 25000,
+    "country": "IT",
+    "contact": "ann@shop.example",
+}
+
+
+def test_a_result_with_a_key_its_schema_does_not_declare_is_the_closed_reading_s() -> None:
+    listing = json.loads((EXAMPLE / "tools.json").read_text())["tools"]
+    shut = {c.name: c for c in (read_contract(t, closed_results=True) for t in listing)}
+    task = TASKS["settle a parcel"]
+    program = plan(shut, task).program
+    assert program is not None
+    extra = {"find_parcel": lambda **_: {"parcel": PARCEL, "note": "x"}}
+    ran = run(program, shut, task, INPUTS, extra)
+    assert ran.why is not None
+    assert (ran.why.check, ran.why.tool) == ("closed", "find_parcel")
+    cause = blame(ran, shut, proven=True)
+    assert (
+        cause == "find_parcel returned a key its output schema does not declare: the closed reading"
+    )
+    # The same result outside the declared set is still the server's.
+    broken = run(program, shut, task, INPUTS, {"find_parcel": lambda **_: {"note": "x"}})
+    assert blame(broken, shut, proven=True) == (
+        "find_parcel broke the output schema its server declares"
+    )

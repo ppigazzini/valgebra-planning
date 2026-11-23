@@ -13,7 +13,7 @@ A library is a directory (`valgebra_planning/library.py` reads it):
 
 | file | holds |
 |---|---|
-| `tools.json` | a server's `tools/list` result: `{"tools": [...]}`, each tool its `name`, `inputSchema`, and the `outputSchema` and `annotations` it declares; `"trusted": true` where the server's annotations are trusted, and `"assertFormat": true` where `format` is read as an assertion, as valgebra-jsonschema reads it on request, in every contract, task, guard and endorsed set the library holds |
+| `tools.json` | a server's `tools/list` result: `{"tools": [...]}`, each tool its `name`, `inputSchema`, and the `outputSchema` and `annotations` it declares; `"trusted": true` where the server's annotations are trusted, `"assertFormat": true` where `format` is read as an assertion, as valgebra-jsonschema reads it on request, in every contract, task, guard and endorsed set the library holds, and `"closedResults": true` where each whole result is read closed, holding no key its schema does not declare, an assumption every link and binding over it names |
 | `tasks.json` | `{"tasks": [...]}`, each task a `name`, the JSON Schema of each value the agent starts with in `inputs`, the JSON Schema of the `goal`, or `goals`, a list of them in the order the task prefers them, and the rules it is held to: `errors` (any tool may fail), `policies` and `flows` by name, `types`, the file of observed calls its semantic types are mined from; `depth`, the calls and tests a path may take where the task sets its own bound; `stops`, for a tool or an input, the JSON Schema of the whole value a path may stop on there, an outcome the task accepts as an end; `constants`, for a `tool.argument`, the JSON value the task's intent fixes it to, which the planner writes there and the verifier holds every call to; and `fresh`, the `tool.argument`s whose value is read after the last call before them that may act |
 | `policies.json` | `{"policies": [...]}`, each an automaton over calls (`valgebra_planning/policy.py`): `initial`, the `bad` states no path may reach, the `pending` states no path may end in, and the `transitions` |
 | `flows.json` | `{"flows": [...]}`, each a flow rule (`valgebra_planning/flows.py`) |
@@ -149,5 +149,5 @@ changes.
 ## Limits
 
 - With `--server`, the tasks, policies, flow rules and observed calls are still the library's files,
-  and so are `trusted` and `assertFormat`: the server's tools are read with them, and a
+  and so are `trusted`, `assertFormat` and `closedResults`: the server's tools are read with them, and a
   `tools.json` holding them alone needs no listing.

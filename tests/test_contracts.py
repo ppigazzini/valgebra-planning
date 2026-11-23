@@ -9,7 +9,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from valgebra_planning._valgebra import Unsupported, anything, compile_schema
+from valgebra_planning._valgebra import Unsupported, anything, compile_schema, nothing
 from valgebra_planning.contracts import (
     RESULT_DEPTH,
     field_slot,
@@ -18,7 +18,7 @@ from valgebra_planning.contracts import (
     record_of,
 )
 from valgebra_planning.critic import critique, read_program
-from valgebra_planning.library import asserts_format, read_library
+from valgebra_planning.library import asserts_format, read_library, reads_closed
 from valgebra_planning.planner import plan
 from valgebra_planning.program import render
 from valgebra_planning.run import run
@@ -443,3 +443,146 @@ def test_a_live_server_s_tools_are_trusted_where_the_library_says_so(tmp_path: P
     assert not read_library(tmp_path, live).tools["find_order"].trusted
     (tmp_path / "tools.json").write_text(json.dumps({"trusted": True}))
     assert read_library(tmp_path, live).tools["find_order"].trusted
+
+
+DETECTED_ID = {"type": "string", "pattern": "^obj_[0-9]+$"}
+GRASPED_ID = {"type": "string", "pattern": "^grs_[0-9]+$"}
+METERS = {
+    "type": "object",
+    "properties": {
+        "unit": {"const": "m"},
+        "value": {"type": "number", "minimum": 0, "maximum": 20},
+    },
+    "required": ["unit", "value"],
+}
+
+
+def _listed(name: str, arguments: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": name,
+        "inputSchema": {"type": "object", "properties": arguments, "required": [*arguments]},
+        "outputSchema": {"type": "object", "properties": result, "required": [*result]},
+        "annotations": {"readOnlyHint": True},
+    }
+
+
+DETECTED = _listed(
+    "detect_object",
+    {"name": {"type": "string"}},
+    {"object_id": DETECTED_ID, "confidence": {"type": "number", "minimum": 0, "maximum": 1}},
+)
+POSE_SPEC = _listed("estimate_pose", {"object_id": DETECTED_ID}, {"distance": METERS})
+REACHED = {
+    **METERS,
+    "properties": {**METERS["properties"], "value": {"minimum": 0.2, "maximum": 0.6}},
+}
+PICKED = _listed("grasp", {"object_id": DETECTED_ID, "distance": REACHED}, {"grasp_id": GRASPED_ID})
+FOUND = {"object_id": "obj_1", "confidence": 0.5}
+
+
+def test_a_result_read_closed_holds_no_key_its_schema_does_not_declare() -> None:
+    shut = read_contract(DETECTED, closed_results=True)
+    assert shut.returns is not None
+    assert shut.declared is not None
+    assert shut.returns.is_valid(FOUND)
+    assert not shut.returns.is_valid({**FOUND, "unit": "m"})
+    assert shut.declared.is_valid({**FOUND, "unit": "m"})
+    assert shut.result().values.is_valid(FOUND)
+    assert not shut.result().values.is_valid({**FOUND, "unit": "m"})
+    # A field keeps the set its record declares.
+    assert shut.result("confidence").schema == read_contract(DETECTED).result("confidence").schema
+    assert read_contract(DETECTED).declared is None
+
+
+def test_an_inherited_result_read_closed_admits_the_server_s_result() -> None:
+    base = {"type": "object", "properties": {"object_id": DETECTED_ID}, "required": ["object_id"]}
+    inherited = {
+        "$defs": {"Base": base},
+        "allOf": [{"$ref": "#/$defs/Base"}],
+        "properties": {"confidence": {"type": "number"}},
+        "required": ["confidence"],
+    }
+    shut = read_contract({**DETECTED, "outputSchema": inherited}, closed_results=True)
+    assert shut.returns is not None
+    assert shut.returns.is_valid(FOUND)
+    assert not shut.returns.is_valid({**FOUND, "unit": "m"})
+    assert shut.returns.relation_to(nothing) == "not_subset"
+    # `additionalProperties` sees no property the `allOf` declares, and empties the result.
+    adjacent = compile_schema({**inherited, "additionalProperties": False})
+    assert adjacent.relation_to(nothing) == "subset"
+
+
+def test_a_whole_result_read_closed_fills_no_argument_its_declared_keys_miss() -> None:
+    task = read_task("pick", {"name": {"type": "string"}}, GRASPED_ID)
+    listing = [DETECTED, POSE_SPEC, PICKED]
+    loose = {c.name: c for c in map(read_contract, listing)}
+    found = plan(loose, task)
+    assert found.program is not None
+    assert "distance=c1)" in render(found.program)
+    shut = {c.name: c for c in (read_contract(t, closed_results=True) for t in listing)}
+    found = plan(shut, task)
+    assert found.program is not None
+    assert render(found.program) == (
+        "c1 = detect_object(name=name)\n"
+        "c2 = estimate_pose(object_id=c1.object_id)\n"
+        "if c2.distance in grasp.distance:\n"
+        "    c3 = grasp(object_id=c1.object_id, distance=c2.distance)\n"
+        "    return c3.grasp_id\n"
+        "else:\n"
+        "    stop(c2.distance)"
+    )
+    assert "c2.distance -> grasp.distance, from the output of estimate_pose read closed" in (
+        found.assumed
+    )
+    links = verify(found.program, shut, task).links
+    assert all(link.verdict == "proven" for link in links)
+    bound = [link for link in links if link.claim.startswith("c2.distance <=")]
+    assert bound
+    assert all(link.assumed == ("the output of estimate_pose read closed",) for link in bound)
+
+
+def test_a_library_reads_results_closed_where_it_says_so(tmp_path: Path) -> None:
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [DETECTED]}))
+    assert not reads_closed(tmp_path)
+    assert read_library(tmp_path).tools["detect_object"].declared is None
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [DETECTED], "closedResults": True}))
+    assert reads_closed(tmp_path)
+    assert read_library(tmp_path).tools["detect_object"].declared is not None
+    shut = {"detect_object": read_contract(DETECTED, closed_results=True)}
+    assert read_library(tmp_path, shut).tools["detect_object"].declared is not None
+    with pytest.raises(ValueError, match="these tools were read open: detect_object"):
+        read_library(tmp_path, {"detect_object": read_contract(DETECTED)})
+
+
+def test_a_result_the_companion_cannot_close_is_refused_naming_its_tool() -> None:
+    wide = {
+        "anyOf": [
+            {"type": "object", "properties": {f"k{i}": {"type": "integer"}}, "required": [f"k{i}"]}
+            for i in range(5)
+        ]
+    }
+    read_contract({**DETECTED, "outputSchema": wide})
+    with pytest.raises(Unsupported, match="tool 'detect_object': its output schema read closed"):
+        read_contract({**DETECTED, "outputSchema": wide}, closed_results=True)
+
+
+def test_an_argument_record_over_a_result_read_closed_names_the_assumption() -> None:
+    related = {
+        **PICKED,
+        "inputSchema": {**PICKED["inputSchema"], "dependentRequired": {"distance": ["object_id"]}},
+    }
+    task = read_task("pick", {"name": {"type": "string"}}, GRASPED_ID)
+    source = (
+        "c1 = detect_object(name=name)\n"
+        "c2 = estimate_pose(object_id=c1.object_id)\n"
+        "if c2.distance in grasp.distance:\n"
+        "    c3 = grasp(object_id=c1.object_id, distance=c2.distance)\n"
+        "    return c3.grasp_id\n"
+        "stop(c2.distance)\n"
+    )
+    for closing, assumed in ((False, ()), (True, ("the output of detect_object read closed",))):
+        listed = [read_contract(t, closed_results=closing) for t in (DETECTED, POSE_SPEC, related)]
+        links = verify(read_program(source), {c.name: c for c in listed}, task).links
+        (record,) = [link for link in links if link.claim.startswith("the arguments of grasp")]
+        assert record.verdict == "proven"
+        assert record.assumed[:1] == assumed

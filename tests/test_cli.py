@@ -165,3 +165,20 @@ def test_stubs_prints_python_a_model_writes_against(capsys: pytest.CaptureFixtur
     assert main(["stubs", PARCELS]) == 0
     out = capsys.readouterr().out
     assert "def find_parcel(*, tracking: str) -> dict[str, Any]:" in out
+
+
+def test_a_live_server_s_results_are_read_closed_where_the_library_says_so(tmp_path: Path) -> None:
+    for name in ("tools.json", "tasks.json", "policies.json", "flows.json"):
+        (tmp_path / name).write_text((Path(PARCELS) / name).read_text())
+    listing = json.loads((tmp_path / "tools.json").read_text())
+    (tmp_path / "tools.json").write_text(json.dumps({**listing, "closedResults": True}))
+    live = _command(
+        "plan", str(tmp_path), "--task", "return a parcel", "--server", SERVER, "--json"
+    )
+    assert live.returncode == 0, live.stderr
+    assert "from the output of find_parcel read closed" in live.stdout
+    inputs = '{"tracking": "AB123456789IT"}'
+    argv = ["run", str(tmp_path), "--task", "settle a parcel", "--inputs", inputs]
+    ran = _command(*argv, "--server", SERVER, "--json")
+    assert ran.returncode == 0, ran.stderr
+    assert json.loads(ran.stdout)["refused"] is None

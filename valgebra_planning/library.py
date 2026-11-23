@@ -1,7 +1,9 @@
 """A library on disk: a server's tool list, the tasks over it and the rules each is held to.
 
 A library is a directory. ``tools.json`` holds a server's ``tools/list`` result, ``{"tools":
-[...]}``, and ``"trusted": true`` where the server's annotations are trusted. ``tasks.json``
+[...]}``, ``"trusted": true`` where the server's annotations are trusted, and
+``"closedResults": true`` where each whole result is read closed, an assumption about the
+server (`valgebra_planning.contracts.read_contract`). ``tasks.json``
 holds ``{"tasks": [...]}``, each task its ``name``, the JSON Schema of each input in ``inputs``
 and of the ``goal``, the rules it names, ``errors`` (any tool may fail), ``policies`` and
 ``flows`` by name, and ``types``, the file of observed calls its types are mined from, and
@@ -33,7 +35,7 @@ from valgebra_planning.flows import Flow, read_flow
 from valgebra_planning.mining import Types, infer_outputs, mine
 from valgebra_planning.policy import Policy, read_policy
 
-__all__ = ["Library", "Problem", "asserts_format", "read_library"]
+__all__ = ["Library", "Problem", "asserts_format", "read_library", "reads_closed"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,7 +102,7 @@ def _listed(path: Path, key: str) -> list[Any]:
 
 
 #: The keys of ``tools.json``: the listing, and how the library reads its server's tools.
-_TOOLS_KEYS = frozenset({"tools", "trusted", "assertFormat"})
+_TOOLS_KEYS = frozenset({"tools", "trusted", "assertFormat", "closedResults"})
 
 
 def asserts_format(directory: Path) -> bool:
@@ -111,6 +113,15 @@ def asserts_format(directory: Path) -> bool:
     alike.
     """
     return flag(_document(directory / "tools.json", _TOOLS_KEYS), "assertFormat", "tools.json")
+
+
+def reads_closed(directory: Path) -> bool:
+    """Return whether a library reads each whole result closed: ``"closedResults": true``.
+
+    A caller reading a live server's tools for the library reads them with it, as
+    `valgebra_planning.servers.read_server` takes it.
+    """
+    return flag(_document(directory / "tools.json", _TOOLS_KEYS), "closedResults", "tools.json")
 
 
 def _goals(spec: Mapping[str, Any]) -> list[Any]:
@@ -132,7 +143,9 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
     """Read a library directory; a rule a task names and the directory lacks is a `KeyError`.
 
     ``tools``, read from a live server, replaces the listing of the directory's ``tools.json``,
-    whose ``trusted`` still marks them trusted; read them with `asserts_format`. With
+    whose ``trusted`` still marks them trusted; read them with `asserts_format` and
+    `reads_closed`, and a tool given read open where the library reads results closed is a
+    `ValueError`. With
     ``"assertFormat": true`` there, ``format`` is read as an assertion in every contract, task,
     policy guard and endorsed set the library reads. A task naming
     an input as a tool is a `ValueError`, and so is a key a reader does not read, in a file, a
@@ -150,6 +163,7 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
     document = _document(directory / "tools.json", _TOOLS_KEYS)
     trusted = flag(document, "trusted", "tools.json")
     asserted = flag(document, "assertFormat", "tools.json")
+    closing = flag(document, "closedResults", "tools.json")
     if tools is None:
         listing = document.get("tools", [])
         shaped = infer_outputs(observed, listing)
@@ -160,11 +174,21 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
                     if spec["name"] in shaped
                     else spec,
                     assert_format=asserted,
+                    closed_results=closing,
                 ),
                 inferred=spec["name"] in shaped,
             )
             for spec in listing
         }
+    elif closing and (
+        opened := sorted(
+            n for n, c in tools.items() if c.returns is not None and c.declared is None
+        )
+    ):
+        msg = (
+            f"tools.json reads results closed, and these tools were read open: {', '.join(opened)}"
+        )
+        raise ValueError(msg)
     tools = {name: replace(contract, trusted=trusted) for name, contract in tools.items()}
     policies = {
         p.name: p
