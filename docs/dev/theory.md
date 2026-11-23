@@ -388,12 +388,28 @@ another tool on the values it was given, made before any other call that may act
 value in another. The verifier meets such a read with that set, as a belief is met with an
 observation (Bertoli et al. 2006, Def. 3.4), only where valgebra proves every result the call
 may have returned there inside the condition, and each link over the read names the
-declaration; the runner refuses a read outside it. The planner reads none, and no read after
-an error is covered. **[LOAD-BEARING: postconditions]**
+declaration; the runner refuses a read outside it. The planner reads none, and a read after an
+error is narrowed by none: what it says of the call's acting is the next claim's.
+**[LOAD-BEARING: postconditions]**
 
 IMPLEMENTED-BY: contracts.py::Postcondition, verify.py::_Walk.shown
 
 HELD-BY: test_a_read_after_the_call_returned_in_when_is_read_in_what_it_shows, test_a_branch_the_read_s_shown_set_misses_is_no_path, test_a_read_no_postcondition_covers_is_read_as_its_contract_says, test_a_run_refuses_a_read_outside_what_a_postcondition_says_it_shows
+
+**A call made again where a read shows it did not act is no retry.** A system must not retry
+an action before a postcondition verifier says its effect is absent (Mansoor et al. 2026,
+§4.1). A library declares, with `"when": "acted"`, the set a read shows whenever a call acted
+at all, a partial effect included; after the call answers with an error the read observes a
+belief holding both sides, and a value outside that set rules out every state where it acted
+(Bertoli et al. 2006, §3). So a call made again on the same values is no repeat where valgebra
+proves every value the read may hold there, the tests on the way met, outside the set, until
+another call that may act or a new value under the read's name; it names the declaration and
+that the read sees the effect at once. The policy states stay those of both sides.
+**[LOAD-BEARING: verify-before-retry]**
+
+IMPLEMENTED-BY: verify.py::_Walk.repeated
+
+HELD-BY: test_a_call_made_again_where_its_read_shows_it_did_not_act_is_no_retry, test_a_call_made_again_where_no_read_shows_it_did_not_act_is_a_retry, test_a_read_that_may_act_shows_nothing_of_the_call_before_it
 
 ## The critic and code mode
 

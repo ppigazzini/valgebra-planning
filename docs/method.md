@@ -215,6 +215,16 @@ verifier, which adds a link for it.
   reads that is bound again in between leaves the read uncovered. The runner refuses a read
   outside `shows`, and `blame` lays it on the declaration; `check` notes a `when` meeting no
   result of its call, and a `shows` meeting no result of its read or holding every one.
+- **Verify before retry** (`"when": "acted"`). The postcondition then says what the read shows
+  whenever the call acted at all, an error answered or not, so `shows` is the weakest trace any
+  effect of it leaves, a partial one included, never the full effect a success leaves. After
+  the call answers with an error, a read on its values outside `shows` says it did not act, so
+  the call made again on the same values is no retry where valgebra proves the read, under the
+  tests on the way, outside `shows`, as `if "label_id" in c2:` and its else branch prove it:
+  "book is made again where find_booking shows it did not act", naming the declaration and that
+  the read sees the effect at once. Another call that may act, a new value under the read's
+  name, or the call made again a second time asks again: Mansoor et al. 2026's verify before
+  retry, no retry before a read says the effect is absent.
 - **Mined types** (`valgebra_planning/mining.py`). Slots holding one observed value are one
   semantic type (APIphany, Guo et al. 2022), and a value fills an argument only where their
   types agree. A call a planned program made, marked `"planned": true` in the log, shares a
@@ -341,10 +351,12 @@ ones.
   partition (`KINDS` in `valgebra_planning/cells.py`), and would need an abstraction over
   valgebra's whole universe, not a reader. Refused until a consumer calls tools with Python
   values under no published JSON Schema.
-- **No verify-before-retry.** A call made again on a value read again after its error is not
-  judged a retry: whether it repeats the first rests on what the read shows after an error, and
-  a postcondition covers a read only after a call that returned. So when a call that is not
-  idempotent fails, its path goes on without it, through another call or to a stop.
+- **Verify before retry reads the declaration, never the world.** Whether a call acted is never
+  seen, so the runner checks no `"when": "acted"` postcondition, and under delayed visibility,
+  where the read reports an effect absent that holds, the call is made twice: the assumption
+  the proof names. On the path where the read rules the effect out, each policy is still read
+  in the states of both sides, so a policy a second call would break there is reported possibly
+  broken. The planner writes no such block, as it reads no postcondition.
 - **The planner reads no postcondition.** Its search holds each value in cells of sets fixed
   before it starts, among which no postcondition's `shows` is, so a program resting on one is
   written, by hand or by a model in code mode, and proven by the critic.

@@ -110,6 +110,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
   a walk that arrived is proven where `shows` holds the reach, and was refuted at 12.5 m. The
   planner reads none.
 
+- A call made again where a read shows it did not act is no retry. A postcondition with
+  `"when": "acted"` says what its read shows whenever the call acted at all; after the call
+  answers with an error, the same call on the same values is proven "made again where
+  find_booking shows it did not act" where valgebra proves the read, under the tests on the way,
+  outside `shows`, naming the declaration and that the read sees the effect at once, and stays
+  a refuted retry anywhere else. An error of a non-idempotent call was a stop or a refuted
+  retry.
+
 - The proxy lists each tool spelled out for a model's chat template on request,
   `proxy --spell-out` and `read_proxy(..., spell_out=True)`: each `const` of an input schema is
   written as its value's `type`, a one-value `enum` and a `description`, and each `pattern` is

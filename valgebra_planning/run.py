@@ -280,13 +280,16 @@ class _Runner:
 
         A postcondition covers a call to its ``read`` on arguments equal, as JSON values, to
         those its ``after`` was given at each pair, where that ``after`` is the last call made
-        that may act and returned a result inside ``when``.
+        that may act and returned a result inside ``when``. One of ``after``'s acting covers
+        none here: a call that returned may not have acted, and whether it did is never seen.
         """
         if self.last is None:
             return None
         tool, given, returned = self.last
         for post in self.postconditions:
-            if post.read != call.tool or post.after != tool or not post.when.is_valid(returned):
+            if post.acted or post.read != call.tool or post.after != tool:
+                continue
+            if not post.when.is_valid(returned):
                 continue
             if any(
                 mine not in arguments

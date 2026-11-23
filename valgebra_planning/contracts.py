@@ -564,13 +564,16 @@ _POSTCONDITION_KEYS = frozenset({"after", "when", "read", "with", "shows"})
 
 @dataclass(frozen=True, slots=True)
 class Postcondition:
-    """What a library declares a call that returned leaves a later read showing.
+    """What a library declares a call leaves a later read showing.
 
     Whenever ``after`` returns a result in ``when``, a call to ``read`` made after it, before
     any other call that may act, on the values ``after`` was given at each pair of ``given``,
-    returns a value in ``shows``. It is the library's claim about the world, which no
-    contract states and none implies (Mansoor et al. 2026, §4.3): the verifier reads it as an
-    assumption, and the runner checks it on each read it covers.
+    returns a value in ``shows``. With ``acted`` the same holds whenever ``after`` acted at
+    all, answered with an error or not, so a read outside ``shows`` after its error says it
+    did not act: ``shows`` is then the weakest trace any effect of it leaves, a partial one
+    included. It is the library's claim about the world, which no contract states and none
+    implies (Mansoor et al. 2026, §4.3): the verifier reads it as an assumption, and the
+    runner checks one on a returned call on each read it covers.
     """
 
     after: str
@@ -583,6 +586,8 @@ class Postcondition:
     schemas: tuple[object, object]
     #: Whether ``format`` in them is read as an assertion, as the library asks.
     asserted: bool = False
+    #: Whether the claim holds whenever ``after`` acted, ``"when": "acted"``.
+    acted: bool = False
 
     def field(self, path: tuple[str, ...]) -> Validator[Any]:
         """Return the set the field at ``path`` of a read this covers lies in.
@@ -641,9 +646,9 @@ def read_postcondition(
     ``spec`` holds ``after`` and ``read``, two tools, ``with``, a non-empty object naming
     each argument of ``read`` the claim fixes and the argument of ``after`` whose value it
     takes, ``shows``, a JSON Schema over ``read``'s result, and optionally ``when``, a JSON
-    Schema over ``after``'s result, every result where absent. A key it does not read, a tool
-    not listed and a ``with`` naming no argument are a `ValueError`, and a ``when`` or
-    ``shows`` that is no schema a `TypeError`.
+    Schema over ``after``'s result, every result where absent, or ``"acted"``, every call of
+    ``after`` that acted. A key it does not read, a tool not listed and a ``with`` naming no
+    argument are a `ValueError`, and a ``when`` or ``shows`` that is no schema a `TypeError`.
     """
     what = f"postcondition of {spec.get('after')!r} on {spec.get('read')!r}"
     keys_read(spec, _POSTCONDITION_KEYS, what)
@@ -657,6 +662,9 @@ def read_postcondition(
         for mine, theirs in pairs.items()
     )
     when, shows = spec.get("when", True), spec.get("shows")
+    acted = when == "acted"
+    if acted:
+        when = True
     for key, schema in (("when", when), ("shows", shows)):
         if not isinstance(schema, dict | bool):
             msg = f"{what}: {key!r} is a JSON Schema, not {type(schema).__name__}"
@@ -669,6 +677,7 @@ def read_postcondition(
         compile_schema(shows, assert_format=assert_format),
         (when, shows),
         assert_format,
+        acted,
     )
 
 

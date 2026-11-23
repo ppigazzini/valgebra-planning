@@ -360,7 +360,7 @@ def test_a_postcondition_naming_what_its_tools_lack_is_refused(
 @pytest.mark.parametrize("key", ["when", "shows"])
 def test_a_postcondition_whose_sets_are_no_schemas_is_refused(key: str) -> None:
     with pytest.raises(TypeError, match=f"{key!r} is a JSON Schema, not str"):
-        read_postcondition(ARRIVED | {key: "acted"}, TOOLS)
+        read_postcondition(ARRIVED | {key: "always"}, TOOLS)
 
 
 def test_a_postcondition_with_no_when_covers_every_result() -> None:
@@ -425,3 +425,184 @@ def test_a_library_reads_its_postconditions_and_each_task_is_held_to_them(
     (tmp_path / "tools.json").write_text(json.dumps({"tools": SPECS, "postconditions": {}}))
     with pytest.raises(TypeError, match="'postconditions' is a list, not dict"):
         read_library(tmp_path)
+
+
+PARCEL = {"type": "string", "pattern": "^pcl_[0-9]+$"}
+LABEL = {"type": "string", "pattern": "^lbl_[0-9]+$"}
+BOOKING_SPECS: list[dict[str, Any]] = [
+    _spec("book", {"parcel_id": PARCEL}, {"label_id": LABEL}, {"destructiveHint": True}),
+    _spec("note", {"parcel_id": PARCEL}, {"noted": {"type": "boolean"}}, None),
+    _spec("check_address", {"parcel_id": PARCEL}, {"ok": {"type": "boolean"}}, SEEING),
+    {
+        "name": "find_booking",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"parcel_id": PARCEL},
+            "required": ["parcel_id"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {"label_id": LABEL},
+            "additionalProperties": False,
+        },
+        "annotations": SEEING,
+    },
+]
+BOOKING: dict[str, Contract] = {spec["name"]: read_contract(spec) for spec in BOOKING_SPECS}
+BOOKED = {
+    "after": "book",
+    "when": "acted",
+    "read": "find_booking",
+    "with": {"parcel_id": "parcel_id"},
+    "shows": {"required": ["label_id"]},
+}
+ACTED = read_postcondition(BOOKED, BOOKING)
+SEND = read_task(
+    "send",
+    {"parcel_id": PARCEL, "names": {"type": "array", "items": {"type": "string"}}},
+    LABEL,
+)
+RETRIED = "book is made again where find_booking shows it did not act"
+REPEATED = "book may be retried"
+CHECKED = (
+    "try:\n"
+    "    c1 = book(parcel_id=parcel_id)\n"
+    "except ToolError:\n"
+    "    c2 = find_booking(parcel_id=parcel_id)\n"
+    '    if "label_id" in c2:\n'
+    "        return c2.label_id\n"
+    "    try:\n"
+    "        c3 = book(parcel_id=parcel_id)\n"
+    "    except ToolError:\n"
+    "        stop(parcel_id)\n"
+    "    return c3.label_id\n"
+    "return c1.label_id\n"
+)
+
+
+def _retries(source: str, *posts: Any) -> list[tuple[str, str]]:
+    checked = verify(read_program(source), BOOKING, SEND, errors=True, postconditions=posts)
+    return [
+        (link.claim, link.verdict) for link in checked.links if link.claim in {RETRIED, REPEATED}
+    ]
+
+
+def test_an_acted_postcondition_is_read_from_its_when() -> None:
+    assert ACTED.acted
+    assert not POST.acted
+    assert ACTED.when.is_valid({"label_id": "lbl_1"})
+
+
+def test_a_call_made_again_where_its_read_shows_it_did_not_act_is_no_retry() -> None:
+    assert _retries(CHECKED) == [(REPEATED, "refuted")]
+    assert _retries(CHECKED, ACTED) == [(RETRIED, "proven")]
+    checked = verify(read_program(CHECKED), BOOKING, SEND, errors=True, postconditions=[ACTED])
+    (link,) = [link for link in checked.links if link.claim == RETRIED]
+    assert link.assumed == (
+        "the postcondition of book on find_booking",
+        "find_booking reads an effect of book at once",
+    )
+    assert all(link.verdict == "proven" for link in checked.links)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        (
+            "try:\n"
+            "    c1 = book(parcel_id=parcel_id)\n"
+            "except ToolError:\n"
+            "    try:\n"
+            '        c6 = book(parcel_id="pcl_2")\n'
+            "    except ToolError:\n"
+            "        c2 = find_booking(parcel_id=parcel_id)\n"
+            '        if "label_id" in c2:\n'
+            "            return c2.label_id\n"
+            "        try:\n"
+            '            c3 = book(parcel_id="pcl_2")\n'
+            "        except ToolError:\n"
+            "            stop(parcel_id)\n"
+            "        return c3.label_id\n"
+            "    return c6.label_id\n"
+            "return c1.label_id\n"
+        ),
+        CHECKED.replace(
+            "    try:\n        c3",
+            "    c2 = check_address(parcel_id=parcel_id)\n    try:\n        c3",
+        ),
+        CHECKED.replace(
+            "    except ToolError:\n        stop(parcel_id)\n",
+            "    except ToolError:\n        try:\n            c5 = book(parcel_id=parcel_id)\n"
+            "        except ToolError:\n            stop(parcel_id)\n"
+            "        return c5.label_id\n",
+        ),
+        CHECKED.replace('    if "label_id" in c2:\n        return c2.label_id\n', ""),
+        CHECKED.replace('if "label_id" in c2:', 'if "label_id" not in c2:'),
+        CHECKED.replace("find_booking(parcel_id=parcel_id)", 'find_booking(parcel_id="pcl_9")'),
+        CHECKED.replace(
+            "    try:\n        c3", "    c4 = note(parcel_id=parcel_id)\n    try:\n        c3"
+        ),
+        CHECKED.replace(
+            "    try:\n        c3",
+            "    c2 = find_booking(parcel_id=parcel_id)\n    try:\n        c3",
+        ).replace('    if "label_id" in c2:\n        return c2.label_id\n', ""),
+        CHECKED.replace(
+            "    try:\n        c3 = book(parcel_id=parcel_id)\n    except ToolError:\n"
+            "        stop(parcel_id)\n    return c3.label_id\n",
+            "    for n in names:\n        try:\n            c3 = book(parcel_id=parcel_id)\n"
+            "        except ToolError:\n            stop(parcel_id)\n    stop(parcel_id)\n",
+        ),
+    ],
+    ids=[
+        "a-read-of-another-call",
+        "bound-again-by-another-read",
+        "after-an-error-of-the-retry",
+        "untested",
+        "where-the-read-may-show-it",
+        "another-value",
+        "another-call-that-may-act",
+        "its-name-bound-again",
+        "in-a-loop-whose-body-acts",
+    ],
+)
+def test_a_call_made_again_where_no_read_shows_it_did_not_act_is_a_retry(source: str) -> None:
+    claims = _retries(source, ACTED)
+    assert claims[-1] == (REPEATED, "refuted")
+
+
+def test_a_read_that_may_act_shows_nothing_of_the_call_before_it() -> None:
+    noting = read_postcondition(
+        BOOKED | {"read": "note", "shows": {"required": ["noted"]}}, BOOKING
+    )
+    source = CHECKED.replace(
+        "c2 = find_booking(parcel_id=parcel_id)", "c2 = note(parcel_id=parcel_id)"
+    ).replace(
+        'if "label_id" in c2:\n        return c2.label_id',
+        'if "noted" in c2:\n        stop(parcel_id)',
+    )
+    assert _retries(source, noting) == [(REPEATED, "refuted")]
+
+
+def test_a_postcondition_on_a_call_that_returned_licenses_no_retry() -> None:
+    returned = read_postcondition(BOOKED | {"when": True}, BOOKING)
+    assert _retries(CHECKED, returned) == [(REPEATED, "refuted")]
+
+
+def test_an_acted_postcondition_covers_no_read_after_a_call_that_returned() -> None:
+    returned = (
+        "c1 = book(parcel_id=parcel_id)\n"
+        "c2 = find_booking(parcel_id=parcel_id)\n"
+        "return c1.label_id\n"
+    )
+    read = returned.replace("return c1.label_id", "return c2.label_id")
+    checked = verify(read_program(read), BOOKING, SEND, postconditions=[ACTED])
+    assert all(ACTED.name not in link.assumed for link in checked.links)
+    assert any(link.verdict != "proven" for link in checked.links)
+    tools = {
+        "book": lambda **_: {"label_id": "lbl_1"},
+        "find_booking": lambda **_: {},
+        "note": lambda **_: {"noted": True},
+    }
+    inputs = {"parcel_id": "pcl_1", "names": []}
+    ended = run(read_program(returned), BOOKING, SEND, inputs, tools, postconditions=[ACTED])
+    assert ended.ok
