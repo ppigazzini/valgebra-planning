@@ -1,0 +1,10 @@
+{
+  "tasks": [
+    {
+      "name": "book a return, tools may fail",
+      "inputs": {"parcel_id": {"type": "string", "pattern": "^pcl_[0-9]+$"}},
+      "goal": {"type": "string", "pattern": "^lbl_[0-9]+$"},
+      "errors": true
+    }
+  ]
+}

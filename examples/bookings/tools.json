@@ -1,0 +1,44 @@
+{
+  "tools": [
+    {
+      "name": "book",
+      "description": "Book a return label for a parcel. Not idempotent: each call that acts books once more.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {"parcel_id": {"type": "string", "pattern": "^pcl_[0-9]+$"}},
+        "required": ["parcel_id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {"label_id": {"type": "string", "pattern": "^lbl_[0-9]+$"}},
+        "required": ["label_id"],
+        "additionalProperties": false
+      },
+      "annotations": {"destructiveHint": true, "idempotentHint": false}
+    },
+    {
+      "name": "find_booking",
+      "description": "Read a parcel's booking: its label once one is booked, nothing before.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {"parcel_id": {"type": "string", "pattern": "^pcl_[0-9]+$"}},
+        "required": ["parcel_id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {"label_id": {"type": "string", "pattern": "^lbl_[0-9]+$"}},
+        "additionalProperties": false
+      },
+      "annotations": {"readOnlyHint": true}
+    }
+  ],
+  "postconditions": [
+    {
+      "after": "book",
+      "when": "acted",
+      "read": "find_booking",
+      "with": {"parcel_id": "parcel_id"},
+      "shows": {"required": ["label_id"]}
+    }
+  ]
+}

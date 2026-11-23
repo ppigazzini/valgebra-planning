@@ -99,6 +99,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A study of a booking under injected faults, `tools/faults.py examples/bookings --check
+  docs/studies/faults.json`, a step of the gate: the program planned with the library's acted
+  postcondition, the one planned without it and a blind retry, each run 400 seeded episodes per
+  fault mode and rate. Where a call acts or not and then answers with an error, the block stops
+  in 49 of 400 at a fault rate of 0.5 where the program without it stops in 191, and books no
+  parcel twice; under a stale read or a booking with no label it books twice as often as the
+  blind retry.
+
 - A library declares what a call that returned leaves a later read showing, `postconditions` in
   `tools.json` and `read_postcondition`: `{"after": "walk_to", "when": ..., "read":
   "estimate_pose", "with": {"object_id": "object_id"}, "shows": ...}`. The verifier meets a read
