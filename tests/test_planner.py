@@ -531,8 +531,9 @@ def test_a_plan_with_no_program_names_what_only_a_tested_input_fills() -> None:
     assert found.program is None
     assert found.reason is not None
     assert found.reason.endswith(
-        "; no tool returns a value for confirm_with_user.action, confirm_with_user.purpose, "
-        "grasp.hand, which a task input fills only under a test"
+        "; no tool's result guarantees a value for grasp.hand, which a task input fills only "
+        "under a test; nor for confirm_with_user.action, confirm_with_user.purpose, of tools only "
+        "a policy names, whose results lead to no goal"
     )
     assert "whether a deeper search finds one is not known" in found.reason
     given = read_task(
@@ -817,3 +818,30 @@ def test_the_planner_reads_again_after_a_call_that_may_act() -> None:
 def test_a_fresh_argument_naming_no_argument_is_refused() -> None:
     with pytest.raises(ValueError, match=r"reads grasp\.reach fresh, which is no argument"):
         plan(_walking(), read_task("pick", {}, GRASPED, fresh=["grasp.reach"]))
+
+
+def test_a_plan_with_no_program_names_a_field_that_meets_the_goal_outside_it() -> None:
+    said = read_contract(
+        {
+            "name": "say",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {"status": {"type": "string", "enum": ["spoken", "interrupted"]}},
+                "required": ["status"],
+                "additionalProperties": False,
+            },
+        }
+    )
+    task = read_task("say", {"text": {"type": "string"}}, {"const": "spoken"})
+    found = plan({"say": said}, task, depth=4)
+    assert found.program is None
+    assert found.reason is not None
+    assert found.reason.endswith(
+        "; say.status meets the goal and lies outside it, and the search tests no value into the "
+        "goal"
+    )

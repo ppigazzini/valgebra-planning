@@ -720,8 +720,20 @@ def _meets(one: Validator[Any], other: Validator[Any]) -> bool:
     return intersection(one, other).relation_to(nothing) != "subset"
 
 
-def _reason(cut: int, depth: int, contracts: Mapping[str, Contract], task: Task) -> str:
-    """Return why a search found no program: the bound, and what only a tested input fills."""
+def _reason(
+    cut: int,
+    depth: int,
+    contracts: Mapping[str, Contract],
+    task: Task,
+    mattering: frozenset[str],
+) -> str:
+    """Return why a search found no program: the bound, and what keeps the goal out of reach.
+
+    Beside the bound, it names each required argument of a tool on a path toward the goal
+    (``mattering``) that only a tested input fills, then those of a tool only a policy names,
+    and each result field listing its members that meets the goal and lies outside it, which
+    only a test into the goal would narrow.
+    """
     if cut:
         reason = (
             f"no program within the bound of {depth} calls and tests, which cut {cut} paths "
@@ -732,12 +744,40 @@ def _reason(cut: int, depth: int, contracts: Mapping[str, Contract], task: Task)
             f"no program: no path reached the bound of {depth}, so no deeper search finds one "
             f"from the first {MAX_BINDINGS} bindings of each call the search tries"
         )
-    if sourceless := _sourceless(contracts, task):
+    if sourceless := _sourceless(contracts, task, mattering):
         reason += (
-            f"; no tool returns a value for {', '.join(sourceless)}, which a task input fills "
-            "only under a test"
+            f"; no tool's result guarantees a value for {', '.join(sourceless)}, which a task "
+            "input fills only under a test"
         )
+    if beside := _sourceless(contracts, task, frozenset(contracts) - mattering):
+        reason += (
+            f"; nor for {', '.join(beside)}, of tools only a policy names, whose results "
+            "lead to no goal"
+        )
+    if near := _near_the_goal(contracts, task, mattering):
+        meets = (
+            f"{near[0]} meets the goal and lies outside it"
+            if len(near) == 1
+            else f"each of {', '.join(near)} meets the goal and lies outside it"
+        )
+        reason += f"; {meets}, and the search tests no value into the goal"
     return reason
+
+
+def _near_the_goal(
+    contracts: Mapping[str, Contract], task: Task, mattering: frozenset[str]
+) -> list[str]:
+    """Return each result field listing its members that meets the goal and lies outside it."""
+    return sorted(
+        slot.name
+        for name, contract in contracts.items()
+        if name in mattering
+        for slot in contract.results
+        if slot.path
+        and _listing(slot.schema) is not None
+        and _meets(slot.values, task.goal)
+        and slot.values.relation_to(task.goal) != "subset"
+    )
 
 
 def _literal(block: Block, literals: Mapping[Ref, Any]) -> Block:
@@ -773,20 +813,22 @@ def _literal(block: Block, literals: Mapping[Ref, Any]) -> Block:
     return Block(calls, end)
 
 
-def _sourceless(contracts: Mapping[str, Contract], task: Task) -> list[str]:
-    """Return each required argument a value reaches only by a test of a task input into it.
+def _sourceless(contracts: Mapping[str, Contract], task: Task, among: frozenset[str]) -> list[str]:
+    """Return each required argument of a tool of ``among`` only a tested task input reaches.
 
     The search fills an argument from a value the program holds, never a constant (`call`). An
-    argument no result of a tool the program may call meets, and no value held fills whole, is
-    filled only by testing a task input into it: a free-text name tested into `left|right`, which
-    names a constant the task does not give.
+    argument no result a tool guarantees meets, and no value held fills whole, is filled only by
+    testing a task input into it: a free-text name tested into `left|right`, which names a
+    constant the task does not give. A field a result declares and does not guarantee is no
+    value a program holds (`valgebra_planning.contracts.read_contract`).
     """
     held = [slot.values for slots in task.held.values() for slot in slots]
     results = [slot.values for contract in contracts.values() for slot in contract.results]
     fixed = {f"{tool}.{argument}" for tool, argument, _ in task.constants}
     return sorted(
         slot.name
-        for contract in contracts.values()
+        for name, contract in contracts.items()
+        if name in among
         for slot in contract.arguments
         if slot.required
         and slot.name not in fixed
@@ -1359,6 +1401,7 @@ def plan(
         if any(policy.hints() & contract.hints for policy in policies)
     )
     kept |= frozenset(post.read for post in postconditions if _checked_key(post) is not None)
+    mattering = frozenset(_reachable(contracts, task, frozenset()))
     contracts = _reachable(contracts, task, kept)
     guards = _guards(policies)
     abstraction = abstract(predicates(contracts, task, policies, postconditions), seed=seed)
@@ -1456,5 +1499,5 @@ def plan(
         uncovered=(),
         abstraction=abstraction,
         expanded=search.expanded,
-        reason=_reason(search.cut, depth, contracts, task),
+        reason=_reason(search.cut, depth, contracts, task, mattering),
     )

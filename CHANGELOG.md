@@ -42,6 +42,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- `Plan.reason` names what keeps the goal out of reach. It named every required argument no
+  tool returns a value for among every tool kept, those of a tool only a policy names beside the
+  rest, and not a result field that meets the goal and lies outside it: a say aimed at the status
+  `spoken` named a walk's argument, of a tool only a policy names, among those of tools on its
+  path, and not `say.status`. It
+  now names the arguments of tools on a path toward the goal that no result guarantees, then in a
+  clause of their own those of tools only a policy names, and each result field listing its
+  members that meets the goal and lies outside it.
 - A proxy's refusal on a policy names the calls that move the policy on. A refusal read "freight
   approved first: book_freight_return reached violated", the rule and the state, not the call
   that would admit the booking. `Monitor.ways_out` names each transition from a state the run
