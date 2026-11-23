@@ -99,6 +99,17 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A library declares what a call that returned leaves a later read showing, `postconditions` in
+  `tools.json` and `read_postcondition`: `{"after": "walk_to", "when": ..., "read":
+  "estimate_pose", "with": {"object_id": "object_id"}, "shows": ...}`. The verifier meets a read
+  of `estimate_pose` on the value `walk_to` was given with `shows`, where valgebra proves the
+  walk returned in `when` and no other call that may act came between, and each link over it
+  names the postcondition; `verify`, `critique`, `run`, `arun` and `run_on_server` take
+  `postconditions`, the runner refuses a read outside `shows` as the check `postcondition`, and
+  `check` notes one that covers nothing or narrows nothing. A grasp on the distance read after
+  a walk that arrived is proven where `shows` holds the reach, and was refuted at 12.5 m. The
+  planner reads none.
+
 - The proxy lists each tool spelled out for a model's chat template on request,
   `proxy --spell-out` and `read_proxy(..., spell_out=True)`: each `const` of an input schema is
   written as its value's `type`, a one-value `enum` and a `description`, and each `pattern` is

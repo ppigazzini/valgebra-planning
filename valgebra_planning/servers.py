@@ -28,7 +28,7 @@ from typing import Any
 
 from mcp import Client, InputRequiredRoundsExceededError, MCPError, StdioServerParameters
 
-from valgebra_planning.contracts import Contract, Task, read_contract
+from valgebra_planning.contracts import Contract, Postcondition, Task, read_contract
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block
 from valgebra_planning.run import RefusedResultError, Run, ToolError, run
@@ -103,10 +103,12 @@ async def run_on_server(
     *,
     policies: Sequence[Policy] = (),
     enforce: bool = True,
+    postconditions: Sequence[Postcondition] = (),
 ) -> Run:
     """Run ``program`` against the server ``client`` is connected to, failing closed.
 
-    Canceling the task that awaits it cancels the call in flight and sends no call after it.
+    The checks are `valgebra_planning.run.run`'s, ``postconditions`` among them. Canceling the
+    task that awaits it cancels the call in flight and sends no call after it.
     """
     loop = asyncio.get_running_loop()
     # The lock orders a call's send against the cancel: a call is sent before the cancel, and
@@ -144,7 +146,15 @@ async def run_on_server(
     tools = {name: caller(name) for name in contracts}
     try:
         return await asyncio.to_thread(
-            run, program, contracts, task, inputs, tools, policies=policies, enforce=enforce
+            run,
+            program,
+            contracts,
+            task,
+            inputs,
+            tools,
+            policies=policies,
+            enforce=enforce,
+            postconditions=postconditions,
         )
     except asyncio.CancelledError:
         with guard:

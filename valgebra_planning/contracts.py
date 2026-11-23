@@ -32,7 +32,15 @@ from valgebra_planning._valgebra import (
     upgrade,
 )
 
-__all__ = ["Contract", "Slot", "Task", "read_contract", "read_task"]
+__all__ = [
+    "Contract",
+    "Postcondition",
+    "Slot",
+    "Task",
+    "read_contract",
+    "read_postcondition",
+    "read_task",
+]
 
 #: How deep a result field is read for the fields it guarantees in turn. A value three
 #: objects down is still one an agent can pass on by its path.
@@ -548,6 +556,120 @@ _NAMING = frozenset({"properties", "dependentRequired", "dependentSchemas"})
 
 #: How many failures a refusal lists before it counts the rest.
 _FAILURES_SHOWN = 3
+
+
+#: The keys a postcondition reads.
+_POSTCONDITION_KEYS = frozenset({"after", "when", "read", "with", "shows"})
+
+
+@dataclass(frozen=True, slots=True)
+class Postcondition:
+    """What a library declares a call that returned leaves a later read showing.
+
+    Whenever ``after`` returns a result in ``when``, a call to ``read`` made after it, before
+    any other call that may act, on the values ``after`` was given at each pair of ``given``,
+    returns a value in ``shows``. It is the library's claim about the world, which no
+    contract states and none implies (Mansoor et al. 2026, §4.3): the verifier reads it as an
+    assumption, and the runner checks it on each read it covers.
+    """
+
+    after: str
+    when: Validator[Any]
+    read: str
+    #: Each argument of ``read`` and the argument of ``after`` whose value it takes.
+    given: tuple[tuple[str, str], ...]
+    shows: Validator[Any]
+    #: ``when`` and ``shows`` as written, the documents a refusal reads names from.
+    schemas: tuple[object, object]
+    #: Whether ``format`` in them is read as an assertion, as the library asks.
+    asserted: bool = False
+
+    def field(self, path: tuple[str, ...]) -> Validator[Any]:
+        """Return the set the field at ``path`` of a read this covers lies in.
+
+        A value inside ``shows`` carries each field inside the set the ``properties`` of
+        ``shows`` give it, read as `field_slot` reads a record's field; below an array's items
+        it takes any value.
+        """
+        slot = Slot(
+            self.read,
+            (),
+            self.schemas[1],
+            self.shows,
+            required=True,
+            root=self.schemas[1],
+            asserted=self.asserted,
+        )
+        for key in path:
+            if key == "[]":
+                return anything
+            slot = field_slot(slot, key)
+        return slot.values
+
+    @property
+    def name(self) -> str:
+        """Return the postcondition as a link names what it rests on."""
+        return f"the postcondition of {self.after} on {self.read}"
+
+
+def _tool_of(
+    spec: Mapping[str, Any], key: str, contracts: Mapping[str, Contract], what: str
+) -> str:
+    """Return the tool ``spec`` names at ``key`` where ``contracts`` lists it; else raise."""
+    tool = spec.get(key)
+    if not isinstance(tool, str) or tool not in contracts:
+        msg = f"{what}: {tool!r} is no tool listed"
+        raise ValueError(msg)
+    return tool
+
+
+def _argument_of(contracts: Mapping[str, Contract], tool: str, name: object, what: str) -> str:
+    """Return ``name`` where it is an argument of ``tool``; raise `ValueError` naming it."""
+    if not isinstance(name, str) or not any(
+        slot.path == (name,) for slot in contracts[tool].arguments
+    ):
+        msg = f"{what}: {name!r} is no argument of {tool}"
+        raise ValueError(msg)
+    return name
+
+
+def read_postcondition(
+    spec: Mapping[str, Any], contracts: Mapping[str, Contract], *, assert_format: bool = False
+) -> Postcondition:
+    """Read one postcondition of a library over the tools ``contracts`` lists.
+
+    ``spec`` holds ``after`` and ``read``, two tools, ``with``, a non-empty object naming
+    each argument of ``read`` the claim fixes and the argument of ``after`` whose value it
+    takes, ``shows``, a JSON Schema over ``read``'s result, and optionally ``when``, a JSON
+    Schema over ``after``'s result, every result where absent. A key it does not read, a tool
+    not listed and a ``with`` naming no argument are a `ValueError`, and a ``when`` or
+    ``shows`` that is no schema a `TypeError`.
+    """
+    what = f"postcondition of {spec.get('after')!r} on {spec.get('read')!r}"
+    keys_read(spec, _POSTCONDITION_KEYS, what)
+    after, read = _tool_of(spec, "after", contracts, what), _tool_of(spec, "read", contracts, what)
+    pairs = spec.get("with")
+    if not isinstance(pairs, dict) or not pairs:
+        msg = f"{what}: 'with' names each argument of {read} and the argument of {after} it takes"
+        raise ValueError(msg)
+    given = tuple(
+        (_argument_of(contracts, read, mine, what), _argument_of(contracts, after, theirs, what))
+        for mine, theirs in pairs.items()
+    )
+    when, shows = spec.get("when", True), spec.get("shows")
+    for key, schema in (("when", when), ("shows", shows)):
+        if not isinstance(schema, dict | bool):
+            msg = f"{what}: {key!r} is a JSON Schema, not {type(schema).__name__}"
+            raise TypeError(msg)
+    return Postcondition(
+        after,
+        compile_schema(when, assert_format=assert_format),
+        read,
+        given,
+        compile_schema(shows, assert_format=assert_format),
+        (when, shows),
+        assert_format,
+    )
 
 
 def declared(*roots: object) -> frozenset[str]:

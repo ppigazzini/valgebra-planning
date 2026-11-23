@@ -92,6 +92,7 @@ def _planned(
         errors=problem.errors,
         policies=problem.policies,
         flows=problem.flows,
+        postconditions=problem.postconditions,
     )
     return row | {
         "program": render(found.program),
@@ -142,6 +143,7 @@ def _critique(library: Library, name: str, source: Path, *, as_json: bool) -> in
             policies=problem.policies,
             flows=problem.flows,
             types=problem.types,
+            postconditions=problem.postconditions,
         )
     except ProgramError as error:
         print(f"{source}: {error}", file=sys.stderr)
@@ -212,6 +214,7 @@ def _run(
                 inputs,
                 client,
                 policies=problem.policies,
+                postconditions=problem.postconditions,
             )
             return row | {
                 "outcome": result.outcome,

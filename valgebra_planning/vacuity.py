@@ -4,7 +4,9 @@ A goal no value meets makes every task over it unsolvable, and one every value m
 program a solution; a policy transition whose guard no argument record of its tool meets never
 fires, and a policy whose bad and pending states no transition that can fire reaches is never
 violated; a flow rule whose endorsed set misses the sink's argument lets nothing through, and
-one that holds it refuses nothing. Each is a specification satisfied vacuously (Kupferman and
+one that holds it refuses nothing; a postcondition whose condition meets no result of its call
+covers no read, and one whose read's set meets no result, or holds every one, says nothing
+possible or nothing at all. Each is a specification satisfied vacuously (Kupferman and
 Vardi 1999, Def. 2), a check that passes without testing what its author meant, and each is a
 set question valgebra decides: emptiness, inclusion, a meet.
 
@@ -22,7 +24,7 @@ from typing import Any, Literal
 
 from valgebra_planning._valgebra import JSON, Sampler, Unsupported, Validator, intersection, nothing
 from valgebra_planning.cells import EDGES
-from valgebra_planning.contracts import Contract
+from valgebra_planning.contracts import Contract, Postcondition
 from valgebra_planning.flows import Flow
 from valgebra_planning.library import Library
 from valgebra_planning.policy import Policy, Transition
@@ -164,6 +166,25 @@ def _flow(flow: Flow, tools: dict[str, Contract], inputs: set[str]) -> list[Find
     return found
 
 
+def _postcondition(post: Postcondition, tools: dict[str, Contract]) -> list[Finding]:
+    """Return what holds vacuously in a postcondition: a claim never made, or made of nothing.
+
+    One whose ``when`` meets no result of its ``after`` covers no read, one whose ``shows``
+    meets no result of its ``read`` says no read is possible, and one whose ``shows`` holds
+    every such result narrows nothing (Kupferman and Vardi 1999, Def. 2).
+    """
+    where = f"postcondition of {post.after} on {post.read}"
+    after, read = tools[post.after], tools[post.read]
+    returned = JSON if after.returns is None else after.returns
+    read_back = JSON if read.returns is None else read.returns
+    covers = _empty(intersection(returned, post.when))
+    found = _found(where, f"its when meets no result of {post.after}", covers)
+    possible = _empty(intersection(read_back, post.shows))
+    found += _found(where, f"its shows meets no result of {post.read}", possible)
+    narrows = _below(read_back, post.shows)
+    return found + _found(where, f"its shows holds every result of {post.read}", narrows)
+
+
 def vacuities(library: Library) -> list[Finding]:
     """Return every specification of ``library`` that holds vacuously, or may."""
     tools = dict(library.tools)
@@ -189,4 +210,6 @@ def vacuities(library: Library) -> list[Finding]:
         if name not in named_flows:
             found.append(Finding(f"flow {name}", "no task is held to it", "proven"))
         found += _flow(flow, tools, inputs)
+    for post in library.postconditions:
+        found += _postcondition(post, tools)
     return found

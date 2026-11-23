@@ -238,13 +238,14 @@ HELD-BY: test_a_rule_about_one_parcel_reads_as_a_rule_about_any_two_calls, test_
 it satisfies it and some subformula does not affect its truth there (Kupferman and Vardi 1999,
 Def. 2). A goal no value meets, a goal every value meets, a guard no argument record of its
 tool meets, a policy no transition that can fire takes to a bad or pending state, and an
-endorsed set that admits nothing or everything of its sink are each such a specification, and
-each is a set question valgebra decides: emptiness, inclusion, a meet. One valgebra leaves
+endorsed set that admits nothing or everything of its sink, and a postcondition whose condition
+meets no result of its call or whose read's set meets none or holds every one, are each such a
+specification, and each is a set question valgebra decides: emptiness, inclusion, a meet. One valgebra leaves
 undecided is reported as undecided, never as vacuous. **[LOAD-BEARING: vacuity]**
 
-IMPLEMENTED-BY: vacuity.py
+IMPLEMENTED-BY: vacuity.py, vacuity.py::_postcondition
 
-HELD-BY: test_an_empty_goal_and_a_universal_goal_are_found, test_a_guard_no_record_meets_leaves_the_policy_unbreakable, test_an_endorsed_set_that_admits_nothing_or_everything_is_found, test_a_guard_valgebra_cannot_part_is_undecided_and_the_policy_kept_live, test_the_parcel_library_holds_no_vacuous_specification
+HELD-BY: test_an_empty_goal_and_a_universal_goal_are_found, test_a_guard_no_record_meets_leaves_the_policy_unbreakable, test_an_endorsed_set_that_admits_nothing_or_everything_is_found, test_a_guard_valgebra_cannot_part_is_undecided_and_the_policy_kept_live, test_the_parcel_library_holds_no_vacuous_specification, test_a_postcondition_covering_nothing_or_narrowing_nothing_is_found
 
 ## Mined types
 
@@ -379,6 +380,20 @@ server is trusted. **[LOAD-BEARING: fresh-reads]**
 IMPLEMENTED-BY: verify.py::_Walk.read_fresh, verify.py::_Walk.loop, planner.py::_Search.after
 
 HELD-BY: test_a_value_read_before_a_call_that_may_act_is_no_fresh_reading_after_it, test_a_value_read_before_a_loop_whose_body_may_act_is_stale_in_it_and_after_it, test_the_planner_reads_again_after_a_call_that_may_act
+
+**What a call that returned leaves a later read showing is the library's claim.** An action's
+postcondition encodes domain knowledge no system infers from the call alone (Mansoor et al.
+2026, §4.3), so a library declares one: whenever a call returns a result in a set, a read of
+another tool on the values it was given, made before any other call that may act, returns a
+value in another. The verifier meets such a read with that set, as a belief is met with an
+observation (Bertoli et al. 2006, Def. 3.4), only where valgebra proves every result the call
+may have returned there inside the condition, and each link over the read names the
+declaration; the runner refuses a read outside it. The planner reads none, and no read after
+an error is covered. **[LOAD-BEARING: postconditions]**
+
+IMPLEMENTED-BY: contracts.py::Postcondition, verify.py::_Walk.shown
+
+HELD-BY: test_a_read_after_the_call_returned_in_when_is_read_in_what_it_shows, test_a_branch_the_read_s_shown_set_misses_is_no_path, test_a_read_no_postcondition_covers_is_read_as_its_contract_says, test_a_run_refuses_a_read_outside_what_a_postcondition_says_it_shows
 
 ## The critic and code mode
 

@@ -201,8 +201,20 @@ verifier, which adds a link for it.
   no such value and makes a read-only call again after an action, so a pick that walks first
   estimates the pose after the walk. A loop whose body may act runs after its own action from
   its second item on, so each value held before the loop, the item among them, is held before
-  such a call in the body and after the loop. The annotations are the server's word, so a link proven over
-  them lists that assumption unless every server is trusted.
+  such a call in the body and after the loop. The annotations are the server's word, so a link
+  proven over them lists that assumption unless every server is trusted.
+- **Postconditions** (`postconditions` in `tools.json`). What a call leaves a later read
+  showing is no contract's and none implies it (Mansoor et al. 2026), so a library declares it:
+  `{"after": "walk_to", "when": {...}, "read": "estimate_pose", "with": {"object_id":
+  "object_id"}, "shows": {...}}` says that whenever `walk_to` returns a result in `when`, a call
+  to `estimate_pose` made after it, before any other call that may act, on the value `walk_to`
+  was given as `object_id`, returns a value in `shows`. The verifier meets that read with
+  `shows`, its fields with the sets `shows` gives them, only where valgebra proves every result
+  `walk_to` may have returned there inside `when`, and every link over the read names "the
+  postcondition of walk_to on estimate_pose". The pair is matched by reference, so a name it
+  reads that is bound again in between leaves the read uncovered. The runner refuses a read
+  outside `shows`, and `blame` lays it on the declaration; `check` notes a `when` meeting no
+  result of its call, and a `shows` meeting no result of its read or holding every one.
 - **Mined types** (`valgebra_planning/mining.py`). Slots holding one observed value are one
   semantic type (APIphany, Guo et al. 2022), and a value fills an argument only where their
   types agree. A call a planned program made, marked `"planned": true` in the log, shares a
@@ -330,10 +342,12 @@ ones.
   valgebra's whole universe, not a reader. Refused until a consumer calls tools with Python
   values under no published JSON Schema.
 - **No verify-before-retry.** A call made again on a value read again after its error is not
-  judged a retry: whether it repeats the first rests on what the read shows, which only a
-  postcondition the library declares could say (Mansoor et al. 2026), and none is read. So when
-  a call that is not idempotent fails, its path goes on without it, through another call or to
-  a stop.
+  judged a retry: whether it repeats the first rests on what the read shows after an error, and
+  a postcondition covers a read only after a call that returned. So when a call that is not
+  idempotent fails, its path goes on without it, through another call or to a stop.
+- **The planner reads no postcondition.** Its search holds each value in cells of sets fixed
+  before it starts, among which no postcondition's `shows` is, so a program resting on one is
+  written, by hand or by a model in code mode, and proven by the critic.
 - **A stop is not a question.** Each weak plan of the parcel library stops on a value a tool
   returned, a parcel's state or country. Asking the user for one inside the set the next call
   takes would put a value they make up where the tool's must be: the integrity leak a flow rule

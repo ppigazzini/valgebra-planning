@@ -64,7 +64,7 @@ extra.
 
 | module | names | needs |
 |---|---|---|
-| `valgebra_planning.contracts` | `Contract`, `Slot`, `Task`, `read_contract`, `read_task` | |
+| `valgebra_planning.contracts` | `Contract`, `Postcondition`, `Slot`, `Task`, `read_contract`, `read_postcondition`, `read_task` | |
 | `valgebra_planning.program` | `Block`, `Branch`, `Call`, `Const`, `For`, `Next`, `Ref`, `Return`, `Stop`, `render`, `steps` | |
 | `valgebra_planning.planner` | `DEPTH`, `Plan`, `Uncovered`, `plan`, `predicates` | |
 | `valgebra_planning.cells` | `Abstraction`, `Cell`, `Predicate`, `Status`, `abstract`, `gather` | |

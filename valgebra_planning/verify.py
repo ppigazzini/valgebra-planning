@@ -35,6 +35,7 @@ from valgebra_planning._valgebra import (
 )
 from valgebra_planning.contracts import (
     Contract,
+    Postcondition,
     Slot,
     Task,
     field_slot,
@@ -133,9 +134,11 @@ class _Held:
     origin: Slot
     #: Where the value is a loop's item: the array it is read from.
     loop: _Loop | None = field(default=None, compare=False)
-    #: Whether the value is a call's result narrowed to one case of a split on a policy's
-    #: result guard, so a branch none of its values reaches is no path.
+    #: Whether the value is a call's result narrowed, to one case of a split on a policy's
+    #: result guard or by a postcondition, so a branch none of its values reaches is no path.
     case: bool = field(default=False, compare=False)
+    #: The postconditions a call's result was narrowed by, each link over it naming them.
+    assumed: tuple[str, ...] = field(default=(), compare=False)
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -167,6 +170,7 @@ class _Walk:
     drawn: dict[int, tuple[_Held, list[Any]]] = field(default_factory=dict)
     builder: random.Random | None = None
     seed: int = 0
+    postconditions: tuple[Postcondition, ...] = ()
 
     def block(self, block: Block, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         for index, call in enumerate(block.calls):
@@ -243,7 +247,9 @@ class _Walk:
         inner[Ref(end.item)] = _Held(item.values, item, _Loop(end.ref, end.item, env))
         inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
         if _acts(end.body, self.contracts):
-            path = replace(path, stale=path.stale | {ref.variable for ref in inner})
+            path = replace(path, stale=path.stale | {ref.variable for ref in inner}, last=None)
+        elif path.last is not None and end.item in _named(path.last):
+            path = replace(path, last=None)
         states = path.states
         while self.policies:
             ends, _ = self.iterate(
@@ -395,15 +401,26 @@ class _Walk:
         # A tool that answered with an error may still have acted, so its block reads both.
         either = tuple(before | then for before, then in zip(states, after, strict=True))
         stale = path.stale - {call.result}
-        if "readOnlyHint" not in contract.hints:
+        acts = "readOnlyHint" not in contract.hints
+        if acts:
             # A call that may act may change what every value held so far read.
             stale |= {ref.variable for ref in env if ref.variable != call.result}
-        self.failure(call, contract, env, where, _Path(either, path.tested, failing, stale))
+        # A call that may act and answered with an error left an effect no postcondition reads.
+        unknown = None if acts else path.last
+        self.failure(
+            call, contract, env, where, _Path(either, path.tested, failing, stale, unknown)
+        )
+        shown = self.shown(call, env, path)
         defined = {ref: held for ref, held in env.items() if ref.variable != call.result}
         for slot in contract.results:
             defined[Ref(call.result, slot.path)] = _Held(slot.values, slot)
         left = _unread(acted, call.result) if acted else acted
-        whole = defined.get(Ref(call.result))
+        last = _left(path.last, call, acts=acts)
+        whole = (
+            self.narrowed(defined, call, contract, shown)
+            if shown
+            else defined.get(Ref(call.result))
+        )
         guards = [
             transition.result
             for policy in self.policies
@@ -411,15 +428,16 @@ class _Walk:
             if transition.result is not None and transition.reads(call.tool, contract.hints)
         ]
         if whole is None or not guards:
-            return [(defined, _Path(after, path.tested, left, stale))]
+            return [(defined, _Path(after, path.tested, left, stale, last))]
         cases = []
         for cell in _cells(whole.values, guards):
             stepped = tuple(
                 policy.step(held, call.tool, record, contract.hints, cell)
                 for policy, held in zip(self.policies, states, strict=True)
             )
-            narrowed = {**defined, Ref(call.result): _Held(cell, whole.origin, case=True)}
-            cases.append((narrowed, _Path(stepped, path.tested, left, stale)))
+            held = _Held(cell, whole.origin, case=True, assumed=whole.assumed)
+            narrowed = {**defined, Ref(call.result): held}
+            cases.append((narrowed, _Path(stepped, path.tested, left, stale, last)))
         return cases
 
     def repeated(self, call: Call, contract: Contract, where: str, acted: _Acted) -> _Acted:
@@ -437,6 +455,73 @@ class _Walk:
             assumed = annotated(contract) if contract.idempotent else ()
             self.links.append(Link(where, f"{call.tool} may be retried", verdict, (), assumed))
         return acted | {made} if call.on_error is not None else acted
+
+    def shown(self, call: Call, env: Mapping[Ref, _Held], path: _Path) -> list[Postcondition]:
+        """Return each postcondition the call's result is read under.
+
+        One is where the call is its ``read``, made on the values its ``after`` was given at
+        each pair, the last call on the path that may act is that ``after``, and valgebra
+        proves every result it may have returned here, met with each test on the way, inside
+        its ``when``. The declaration says the read shows its ``shows`` then, so the read's
+        belief is met with it, as a belief is with an observation (Bertoli et al. 2006, Def.
+        3.4); it is the library's claim (Mansoor et al. 2026, §4.3), named on each link over
+        the result.
+        """
+        if path.last is None or not self.postconditions:
+            return []
+        tool, bindings, result = path.last
+        if Ref(result) not in env:
+            return []
+        given, reading = dict(bindings), dict(call.bindings)
+        found = []
+        for post in self.postconditions:
+            if post.read != call.tool or post.after != tool:
+                continue
+            if any(
+                mine not in reading or reading[mine] != given.get(theirs)
+                for mine, theirs in post.given
+            ):
+                continue
+            if self.belief(env, result).relation_to(post.when) == "subset":
+                found.append(post)
+        return found
+
+    def narrowed(
+        self,
+        defined: dict[Ref, _Held],
+        call: Call,
+        contract: Contract,
+        shown: Sequence[Postcondition],
+    ) -> _Held | None:
+        """Meet the call's result with what ``shown`` says it shows; return the whole result.
+
+        Each field slot is met with the set ``shown`` gives that field, so a record built of
+        the result's fields is asked inside it as the whole is.
+        """
+        whole = defined.get(Ref(call.result))
+        if not shown or whole is None:
+            return whole
+        whole = _Held(
+            intersection(whole.values, *(post.shows for post in shown)),
+            whole.origin,
+            case=True,
+            assumed=tuple(post.name for post in shown),
+        )
+        defined[Ref(call.result)] = whole
+        for slot in contract.results:
+            if slot.path:
+                fields = (post.field(slot.path) for post in shown)
+                defined[Ref(call.result, slot.path)] = _Held(
+                    intersection(slot.values, *fields), slot
+                )
+        return whole
+
+    def resting(self, env: Mapping[Ref, _Held], ref: Ref | Const) -> tuple[str, ...]:
+        """Return the postconditions the value ``ref`` reads was narrowed by."""
+        if not self.postconditions or not isinstance(ref, Ref):
+            return ()
+        root = env.get(Ref(ref.variable))
+        return () if root is None else root.assumed
 
     def bind(self, call: Call, env: dict[Ref, _Held], where: str) -> dict[str, _Held]:
         """Add the link of each binding inside its argument; return the set each argument holds."""
@@ -536,7 +621,10 @@ class _Walk:
                     break
             if not found and verdict == "refuted" and not _apart(env, refs.values()):
                 verdict = "undecided"
-        assumed = tuple(dict.fromkeys(a for held in bound.values() for a in self.assumption(held)))
+        named = [a for held in bound.values() for a in self.assumption(held)]
+        if self.postconditions:
+            named += [a for _, ref in call.bindings for a in self.resting(env, ref)]
+        assumed = tuple(dict.fromkeys(named))
         self.links.append(Link(where, claim, "refuted" if found else verdict, found, assumed))
 
     def jointly(
@@ -583,7 +671,10 @@ class _Walk:
                 whole = None if ref.path else answer
                 answer = self.asked(env, ref.variable, within(ref.path, target), whole)
         verdict = "refuted" if found else _VERDICTS[answer]
-        self.links.append(Link(where, claim, verdict, found, self.assumption(held)))
+        assumed = self.assumption(held)
+        if rested := self.resting(env, ref):
+            assumed = tuple(dict.fromkeys((*assumed, *rested)))
+        self.links.append(Link(where, claim, verdict, found, assumed))
 
     def assumption(self, held: _Held) -> tuple[str, ...]:
         """Return what a held value rests on: its tool's output schema inferred, or read closed.
@@ -1038,6 +1129,29 @@ _States = tuple[frozenset[str], ...]
 _Acted = frozenset[tuple[str, frozenset[tuple[str, Ref | Const]]]]
 
 
+#: A call as a postcondition reads it: its tool, its bindings and its result's name.
+_Made = tuple[str, tuple[tuple[str, Ref | Const], ...], str]
+
+
+def _named(made: _Made) -> set[str]:
+    """Return every name a made call's bindings and its result are read under."""
+    _, bindings, result = made
+    return {ref.variable for _, ref in bindings if isinstance(ref, Ref)} | {result}
+
+
+def _left(last: _Made | None, call: Call, *, acts: bool) -> _Made | None:
+    """Return the last call that may act once ``call`` returned.
+
+    It is ``call`` where it may act. A read-only call leaves the one before, unless it binds a
+    name that one reads: the claim reads a value under that name, which now holds another.
+    """
+    if acts:
+        return (call.tool, call.bindings, call.result)
+    if last is not None and call.result in _named(last):
+        return None
+    return last
+
+
 def _acts(block: Block, contracts: Mapping[str, Contract]) -> bool:
     """Return whether a call ``block`` may make, at any depth, is one that may act.
 
@@ -1078,6 +1192,9 @@ class _Path:
     acted: _Acted = frozenset()
     #: The values held before the last call on the way here that may act, by variable.
     stale: frozenset[str] = frozenset()
+    #: The last call on the way here that may act, where it returned and no name it reads
+    #: has been bound again since: its tool, its bindings and its result's name.
+    last: _Made | None = None
 
 
 #: Whether a path may reach a bad state, read as a verdict on the policy holding.
@@ -1105,6 +1222,7 @@ def verify(
     errors: bool = False,
     policies: Sequence[Policy] = (),
     flows: Sequence[Flow] = (),
+    postconditions: Sequence[Postcondition] = (),
 ) -> Verification:
     """Ask every link of ``program`` of valgebra, for ``task`` over ``contracts``.
 
@@ -1117,14 +1235,16 @@ def verify(
     adds a link at the end of every path: proven where no bad state can be reached there,
     refuted where one surely is, undecided where one possibly is. Each flow rule adds a link
     for every value from one of its sources bound to its sink, and, where implicit flows are
-    read, for every call to the sink under a test on such a value. Raises `ValueError` for a
-    task naming an input as a tool, whose source no name could tell apart.
+    read, for every call to the sink under a test on such a value. A read a postcondition
+    covers is read in the set it declares the read shows, and each link over it names it
+    (`_Walk.shown`). Raises `ValueError` for a task naming an input as a tool, whose source no
+    name could tell apart.
     """
     unclashed(task, contracts)
     walk = _Walk(
         contracts, task, examples or {}, random.Random(seed), errors, tuple(policies), tuple(flows)
     )
-    walk.seed = seed
+    walk.seed, walk.postconditions = seed, tuple(postconditions)
     env = {
         Ref(var, slot.path): _Held(slot.values, slot)
         for var, slots in task.held.items()

@@ -27,7 +27,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from valgebra_planning.contracts import Contract, Task
+from valgebra_planning.contracts import Contract, Postcondition, Task
 from valgebra_planning.flows import Flow
 from valgebra_planning.mining import SlotKey, Types
 from valgebra_planning.policy import Policy
@@ -433,17 +433,25 @@ def critique(
     policies: Sequence[Policy] = (),
     flows: Sequence[Flow] = (),
     types: Types | None = None,
+    postconditions: Sequence[Postcondition] = (),
 ) -> Critique:
     """Read, verify and critique a program proposed for ``task`` under the rules it is held to.
 
-    ``errors``, ``policies`` and ``flows`` are held as `valgebra_planning.verify.verify` holds
-    them. Mined ``types`` decide nothing: a binding crossing two types the observed calls show is
-    a note, and the program is accepted or not on its links alone. Raises `ProgramError` for a
-    program the reader does not read.
+    ``errors``, ``policies``, ``flows`` and ``postconditions`` are held as
+    `valgebra_planning.verify.verify` holds them. Mined ``types`` decide nothing: a binding
+    crossing two types the observed calls show is a note, and the program is accepted or not on
+    its links alone. Raises `ProgramError` for a program the reader does not read.
     """
     program = read_program(source)
     checked = verify(
-        program, contracts, task, examples=examples, errors=errors, policies=policies, flows=flows
+        program,
+        contracts,
+        task,
+        examples=examples,
+        errors=errors,
+        policies=policies,
+        flows=flows,
+        postconditions=postconditions,
     )
     notes = []
     for link in checked.links:

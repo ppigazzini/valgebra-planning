@@ -24,11 +24,13 @@ from typing import Any
 
 from valgebra_planning.contracts import (
     Contract,
+    Postcondition,
     Task,
     fixes,
     flag,
     keys_read,
     read_contract,
+    read_postcondition,
     read_task,
 )
 from valgebra_planning.flows import Flow, read_flow
@@ -49,6 +51,8 @@ class Problem:
     types: Types | None = None
     #: The calls and tests a path may take where the task sets its own bound.
     depth: int | None = None
+    #: The library's postconditions, which every task's programs are verified and run under.
+    postconditions: tuple[Postcondition, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +64,8 @@ class Library:
     #: Every policy and flow rule the library defines, by name, whether a task names it or not.
     policies: Mapping[str, Policy] = field(default_factory=dict)
     flows: Mapping[str, Flow] = field(default_factory=dict)
+    #: The postconditions ``tools.json`` declares, in the order it lists them.
+    postconditions: tuple[Postcondition, ...] = ()
 
     def problem(self, name: str) -> Problem:
         """Return the problem whose task is ``name``; raise `KeyError` naming it otherwise."""
@@ -102,7 +108,7 @@ def _listed(path: Path, key: str) -> list[Any]:
 
 
 #: The keys of ``tools.json``: the listing, and how the library reads its server's tools.
-_TOOLS_KEYS = frozenset({"tools", "trusted", "assertFormat", "closedResults"})
+_TOOLS_KEYS = frozenset({"tools", "trusted", "assertFormat", "closedResults", "postconditions"})
 
 
 def asserts_format(directory: Path) -> bool:
@@ -150,6 +156,8 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
     policy guard and endorsed set the library reads. A task naming
     an input as a tool is a `ValueError`, and so is a key a reader does not read, in a file, a
     task, a policy, a transition or a flow rule; a flag that is no boolean is a `TypeError`.
+    ``tools.json``'s ``postconditions`` are read by
+    `valgebra_planning.contracts.read_postcondition` over the tools read.
     """
     specs = _listed(directory / "tasks.json", "tasks")
     for spec in specs:
@@ -190,6 +198,13 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
         )
         raise ValueError(msg)
     tools = {name: replace(contract, trusted=trusted) for name, contract in tools.items()}
+    declared = document.get("postconditions", [])
+    if not isinstance(declared, list):
+        msg = f"tools.json: 'postconditions' is a list, not {type(declared).__name__}"
+        raise TypeError(msg)
+    postconditions = tuple(
+        read_postcondition(spec, tools, assert_format=asserted) for spec in declared
+    )
     policies = {
         p.name: p
         for p in (
@@ -227,6 +242,7 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
                 flows=tuple(flows[name] for name in spec.get("flows", [])),
                 types=None if log is None else mine(_listed(directory / log, "calls"), tools),
                 depth=spec.get("depth"),
+                postconditions=postconditions,
             )
         )
-    return Library(tools, tuple(problems), policies, flows)
+    return Library(tools, tuple(problems), policies, flows, postconditions)

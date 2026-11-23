@@ -21,9 +21,10 @@ from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeVar
 
-from valgebra_planning._valgebra import JSON, Validator
+from valgebra_planning._valgebra import JSON, Validator, json_key
 from valgebra_planning.contracts import (
     Contract,
+    Postcondition,
     Task,
     contract_names,
     declared,
@@ -93,9 +94,10 @@ class RefusedResultError(Exception):
 class Refusal:
     """Which check ended a run.
 
-    One of `inputs`, `arguments`, `policy`, `given`, `result`, `closed`, `goal`, `error`,
-    `raised`, `read`, `ended` or `canceled`: `closed` is a result inside the output schema its
-    server declares and outside its closed reading.
+    One of `inputs`, `arguments`, `policy`, `given`, `result`, `closed`, `postcondition`,
+    `goal`, `error`, `raised`, `read`, `ended` or `canceled`: `closed` is a result inside the
+    output schema its server declares and outside its closed reading, and `postcondition` a
+    read outside what a postcondition of the library says it shows.
 
     ``tool`` is the tool the check was on, where it was on one.
     """
@@ -181,6 +183,9 @@ class _Runner:
     monitors: list[Monitor]
     enforce: bool
     broken: list[str] = field(default_factory=list)
+    postconditions: tuple[Postcondition, ...] = ()
+    #: The last call made that may act, where it returned: its tool, arguments and result.
+    last: tuple[str, dict[str, Any], Any] | None = None
 
     def breaks(self, message: str, check: str, tool: str | None = None) -> Run | None:
         """Record a broken check; return the run it ends when contracts are enforced."""
@@ -261,10 +266,42 @@ class _Runner:
         if made is None or isinstance(made, Run):
             return made
         result = made[0]
-        refused = self.returned(call, contract, arguments, result)
+        refused = self.returned(call, contract, arguments, result) or self.shows(
+            call, arguments, result
+        )
         if refused is not None:
             return refused
+        if "readOnlyHint" not in contract.hints:
+            self.last = (call.tool, arguments, result)
         return {**env, call.result: result}
+
+    def shows(self, call: Call, arguments: dict[str, Any], result: Any) -> Run | None:
+        """Check a read a postcondition covers: its result inside what the read shows.
+
+        A postcondition covers a call to its ``read`` on arguments equal, as JSON values, to
+        those its ``after`` was given at each pair, where that ``after`` is the last call made
+        that may act and returned a result inside ``when``.
+        """
+        if self.last is None:
+            return None
+        tool, given, returned = self.last
+        for post in self.postconditions:
+            if post.read != call.tool or post.after != tool or not post.when.is_valid(returned):
+                continue
+            if any(
+                mine not in arguments
+                or theirs not in given
+                or json_key(arguments[mine]) != json_key(given[theirs])
+                for mine, theirs in post.given
+            ):
+                continue
+            if not post.shows.is_valid(result):
+                detail = failures(post.shows, result, declared(*post.schemas))
+                message = f"{call.tool} returned a value outside {post.name} ({detail})"
+                refused = self.breaks(message, "postcondition", call.tool)
+                if refused is not None:
+                    return refused
+        return None
 
     def returned(
         self, call: Call, contract: Contract, arguments: dict[str, Any], result: Any
@@ -348,6 +385,9 @@ class _Runner:
         # the verifier walks it.
         for monitor in self.monitors:
             monitor.errored()
+        if "readOnlyHint" not in self.contracts[call.tool].hints:
+            # It may have acted with no result to read: no postcondition covers what follows.
+            self.last = None
         if call.on_error is not None:
             return (yield from self.block(call.on_error, env))
         self.broken.append(f"{call.tool} answered with an error nothing handles")
@@ -413,6 +453,7 @@ def run(
     *,
     policies: Sequence[Policy] = (),
     enforce: bool = True,
+    postconditions: Sequence[Postcondition] = (),
 ) -> Run:
     """Run ``program`` on ``inputs``, calling ``tools`` by name, checking every contract.
 
@@ -423,10 +464,13 @@ def run(
     the task names is held to its set, a broken check like the others. A tool raising anything
     but `ToolError` ends the run, its message naming the exception's class alone; a
     `BaseException` that is no `Exception` propagates. A call to a tool ``tools`` does not give
-    ends the run at that call. Raises `ValueError` for a task naming an input as a tool.
+    ends the run at that call. A read a postcondition covers is held to what it says the read
+    shows, a broken check like a broken contract. Raises `ValueError` for a task naming an
+    input as a tool.
     """
     unclashed(task, contracts)
     runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
+    runner.postconditions = tuple(postconditions)
     steps = _program(runner, program, inputs)
     try:
         tool, arguments = next(steps)
@@ -479,6 +523,7 @@ async def arun(
     *,
     policies: Sequence[Policy] = (),
     enforce: bool = True,
+    postconditions: Sequence[Postcondition] = (),
 ) -> Run:
     """Run ``program`` as `run` does, awaiting each call a tool answers with an awaitable.
 
@@ -491,6 +536,7 @@ async def arun(
     """
     unclashed(task, contracts)
     runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
+    runner.postconditions = tuple(postconditions)
     steps = _program(runner, program, inputs)
     try:
         tool, arguments = next(steps)
@@ -548,8 +594,9 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
     A proven program breaks at run time only where something it rests on fails: a tool's result
     outside the output schema its server declared is the server's, one outside a schema shaped
     from observed calls is that assumption's, as one with a key its output schema does not
-    declare is the closed reading's, and an error a retry could not outlast is the
-    fairness a retry assumes. An argument record, a policy or a returned value breaking in a
+    declare is the closed reading's, a read outside what a postcondition says it shows is
+    that declaration's, and an error a retry could not outlast is the fairness a retry
+    assumes. An argument record, a policy or a returned value breaking in a
     proven program is a check the verification proved: a defect of this package or of valgebra.
     An unproven program's break is its own link's.
     """
@@ -569,6 +616,8 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
         "inputs": "an input outside the task's input set: the caller's, before any call",
         "given": f"no tool {tool} was given to the run: the caller's",
         "raised": f"{tool} raised an exception, which no contract admits: the tool's",
+        "postcondition": f"{tool} read a value a postcondition of the library excludes: its"
+        " declaration",
         "error": retried
         if result.why.retried
         else f"an error of {tool} the program does not handle",
