@@ -165,7 +165,10 @@ verifier, which adds a link for it.
   round-trip request is the client's loop around one call and leaves the plan unchanged.
 - **Policies** (`valgebra_planning/policy.py`). An automaton over a program's calls whose guards
   are valgebra sets over the argument record. Along each path a guard is taken surely, possibly or
-  never, and a path surely reaching a bad state is refuted, possibly undecided. A loop's body may
+  never, and a path surely reaching a bad state is refuted, possibly undecided. A state's
+  transitions on one call are read in file order, the first whose guards hold taken, before the
+  run as at it: a transition is read on what the earlier ones leave, and one they leave no record
+  for is reported vacuous. A loop's body may
   run any number of times, so the states a policy may be in when it starts are taken to a
   fixpoint, the states being finite. A policy reads one program's calls in order and, before the
   run, carries no value from one call to another; with `per`, the runner holds one instance per

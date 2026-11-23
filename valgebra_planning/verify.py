@@ -1167,16 +1167,24 @@ def _tested(
 def _cells(values: Validator[Any], guards: Sequence[Validator[Any]]) -> list[Validator[Any]]:
     """Return ``values`` split by each guard and its complement, each part valgebra leaves open.
 
-    A part valgebra proves empty holds no result, so no case is walked for it.
+    A part valgebra proves empty holds no result, so no case is walked for it; a part is also
+    dropped where valgebra proves the inclusion its emptiness is, the cell inside the guard or
+    its complement, which it can decide where it leaves the emptiness open.
     """
     cells = [values]
     for guard in guards:
-        cells = [
-            part
-            for cell in cells
-            for part in (intersection(cell, guard), intersection(cell, complement(guard)))
-            if part.relation_to(nothing) != "subset"
-        ]
+        split = []
+        for cell in cells:
+            # valgebra may decide a part's emptiness only as the inclusion it is the same as.
+            inside = cell.relation_to(guard)
+            outside = cell.relation_to(complement(guard))
+            for part, empty in (
+                (intersection(cell, guard), outside == "subset"),
+                (intersection(cell, complement(guard)), inside == "subset"),
+            ):
+                if not empty and part.relation_to(nothing) != "subset":
+                    split.append(part)
+        cells = split
     return cells
 
 

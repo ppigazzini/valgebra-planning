@@ -6,6 +6,20 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The verifier and the planner read a policy's transitions as the monitor does, the first whose
+  guards hold. A state whose transitions on one call met in their guards was stepped to every
+  target they reach, while the monitor takes the first in file order: a rule written as a list,
+  a pose within a meter to `near` and any pose to `far` with a walk from `far` forbidden, left a
+  walk after a test into reach undecided and refuted though the runner admits it. A transition
+  is now read on what the earlier ones leave, the record outside each earlier guard on the call
+  and the result outside each earlier guard on the result whose guard on the call surely holds,
+  so the walk reads the deterministic automaton the list is and proves that walk. A call's split
+  at its result guards drops a case valgebra proves empty as an inclusion where it leaves the
+  emptiness open. `check` reports a transition the ones before it take every value of, which
+  never fires.
+
 ### Added
 
 - A library names the tools a proxy calls after a violation: `"afterViolation": [...]` in

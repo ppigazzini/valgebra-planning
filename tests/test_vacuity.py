@@ -151,3 +151,27 @@ def test_the_parcel_library_read_closed_holds_no_vacuous_specification(tmp_path:
     library = _planted(tmp_path, "tools.json", lambda tools: {**tools, "closedResults": True})
     assert all(c.declared is not None for c in read_library(library).tools.values())
     assert _found(library) == set()
+
+
+def _first(transition: dict[str, Any]) -> Any:
+    """Put ``transition`` first among the parcel policy's transitions."""
+
+    def change(policies: Any) -> Any:
+        policies["policies"][0]["transitions"].insert(0, transition)
+        return policies
+
+    return change
+
+
+def test_a_transition_the_ones_before_it_take_every_record_of_never_fires(tmp_path: Path) -> None:
+    every = {"from": "start", "tool": "book_freight_return", "to": "booked"}
+    found = _found(_planted(tmp_path, "policies.json", _first(every)))
+    assert any(
+        where.endswith("(start -> violated)")
+        and finding == "the transitions before it from start take every argument record it reads"
+        and certainty == "proven"
+        for where, finding, certainty in found
+    )
+    heavy = {**every, "arguments": {"properties": {"weight_g": {"minimum": 30000}}}}
+    narrower = _found(_planted(tmp_path / "narrower", "policies.json", _first(heavy)))
+    assert not any("take every" in finding for _, finding, _ in narrower)

@@ -2,13 +2,14 @@
 
 A goal no value meets makes every task over it unsolvable, and one every value meets makes any
 program a solution; a policy transition whose guard no argument record of its tool meets never
-fires, and a policy whose bad and pending states no transition that can fire reaches is never
-violated; a flow rule whose endorsed set misses the sink's argument lets nothing through, and
-one that holds it refuses nothing; a postcondition whose condition meets no result of its call
-covers no read, and one whose read's set meets no result, or holds every one, says nothing
-possible or nothing at all. Each is a specification satisfied vacuously (Kupferman and
-Vardi 1999, Def. 2), a check that passes without testing what its author meant, and each is a
-set question valgebra decides: emptiness, inclusion, a meet.
+fires, nor one the transitions before it from its state take every value of, the first whose
+guards hold being taken, and a policy whose bad and pending states no transition that can fire
+reaches is never violated; a flow rule whose endorsed set misses the sink's argument lets
+nothing through, and one that holds it refuses nothing; a postcondition whose condition meets no
+result of its call covers no read, and one whose read's set meets no result, or holds every one,
+says nothing possible or nothing at all. Each is a specification satisfied vacuously (Kupferman
+and Vardi 1999, Def. 2), a check that passes without testing what its author meant, and each is
+a set question valgebra decides: emptiness, inclusion, a meet.
 
 The cheap question is asked first: values drawn from a schema are tried for membership, and a
 member found is a proof the set is inhabited, so valgebra is asked only where none is. A question
@@ -22,7 +23,17 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from valgebra_planning._valgebra import JSON, Sampler, Unsupported, Validator, intersection, nothing
+from valgebra_planning._valgebra import (
+    JSON,
+    Sampler,
+    Unsupported,
+    Validator,
+    anything,
+    complement,
+    intersection,
+    nothing,
+    union,
+)
 from valgebra_planning.cells import EDGES
 from valgebra_planning.contracts import Contract, Postcondition
 from valgebra_planning.flows import Flow
@@ -117,6 +128,42 @@ def _reached(policy: Policy, live: list[Transition]) -> set[str]:
     return reached
 
 
+def _shadowed(policy: Policy, at: int, contract: Contract) -> Certainty | None:
+    """Return whether the transitions before the one at ``at`` take every value it reads.
+
+    A state's transitions on one call are taken first in file order, so one is read on what the
+    earlier ones leave: on the call, the records outside each earlier guard on the call; on the
+    result, the results outside each earlier guard on the result whose guard on the call holds
+    of every record this one reads. Where nothing is left, it never fires.
+    """
+    transition = policy.transitions[at]
+    reading = transition.result is not None
+    earlier = [
+        before
+        for before in policy.transitions[:at]
+        if before.source == transition.source
+        and before.reads(contract.name, contract.hints)
+        and (before.result is not None) == reading
+    ]
+    if not reading:
+        taken = [before.guard for before in earlier]
+        read = intersection(contract.accepts, transition.guard)
+        candidates = _records(contract)
+    else:
+        record = intersection(contract.accepts, transition.guard)
+        taken = [
+            before.result
+            for before in earlier
+            if before.result is not None and record.relation_to(before.guard) == "subset"
+        ]
+        results = contract.returns if contract.returns is not None else anything
+        read = intersection(results, transition.result)
+        candidates = []
+    if not taken:
+        return None
+    return _empty(intersection(read, complement(union(*taken))), candidates)
+
+
 def _policy(policy: Policy, tools: dict[str, Contract]) -> list[Finding]:
     where = f"policy {policy.name}"
     found, live = [], []
@@ -136,7 +183,14 @@ def _policy(policy: Policy, tools: dict[str, Contract]) -> list[Finding]:
             continue
         dead = _empty(intersection(contract.accepts, transition.guard), _records(contract))
         found += _found(step, f"no argument record of {transition.tool} meets its guard", dead)
-        if dead != "proven":
+        shadowed = None if dead == "proven" else _shadowed(policy, at, contract)
+        found += _found(
+            step,
+            f"the transitions before it from {transition.source} take every "
+            f"{'result' if transition.result is not None else 'argument record'} it reads",
+            shadowed,
+        )
+        if "proven" not in (dead, shadowed):
             live.append(transition)
     if not _reached(policy, live) & (policy.bad | policy.pending):
         found.append(

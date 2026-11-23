@@ -12,7 +12,10 @@ runs.
 
 Statically, a program's every path steps the automaton with the argument records it may pass: a
 guard is taken surely where valgebra proves the record inside it, never where it proves them
-disjoint, and possibly otherwise. A path ending in a bad or a pending state surely refutes the
+disjoint, and possibly otherwise. A state's transitions on one call are read in file order, each
+on what the earlier ones leave, as the monitor takes the first whose guards hold: the walk reads
+the deterministic automaton the list is, whose guards from one state meet in nothing (D'Antoni
+and Veanes 2017, §2). A path ending in a bad or a pending state surely refutes the
 program, possibly leaves it undecided, and no path ending in one proves it; a bad state never
 left makes ending in one the same as reaching one. Every path of a program ends, a loop's after
 any number of items, so an obligation is decided over the whole program before it runs, where a
@@ -43,7 +46,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeAlias
 
-from valgebra_planning._valgebra import Validator, compile_schema, intersection, json_key, nothing
+from valgebra_planning._valgebra import (
+    Validator,
+    compile_schema,
+    complement,
+    intersection,
+    json_key,
+    nothing,
+    union,
+)
 from valgebra_planning.contracts import keys_read
 
 __all__ = ["Monitor", "Policy", "Reach", "Snapshot", "Transition", "read_policy"]
@@ -117,10 +128,14 @@ class Policy:
 
         A transition taken surely leaves its source; one taken possibly adds its target and
         keeps the source, as does a call no guard of the state surely matches. A bad state is
-        never left. A transition reading the result is stepped after those reading the call,
-        from the states they leave: where ``result`` holds the set the result lies in, as in one
-        case of a split on it, its guard is read against that set; otherwise it is taken
-        possibly at most, no result being known.
+        never left. A state's transitions are read in file order, each on what the earlier ones
+        leave: the record outside each earlier guard on the call, and the result outside each
+        earlier guard on the result whose guard on the call surely holds, so the walk takes no
+        transition the monitor's first match would not (D'Antoni and Veanes 2017, §2). A
+        transition reading the result is stepped after those reading the call, from the states
+        they leave: where ``result`` holds the set the result lies in, as in one case of a split
+        on it, its guard is read against that set; otherwise it is taken possibly at most, no
+        result being known.
         """
         made = self._stepped(states, tool, record, hints, returned=False)
         return self._stepped(made, tool, record, hints, returned=True, result=result)
@@ -140,30 +155,63 @@ class Policy:
             if state in self.bad:
                 after.add(state)
                 continue
-            stays = True
-            for transition in self.transitions:
-                if (
-                    transition.source != state
-                    or not transition.reads(tool, hints)
-                    or (transition.result is not None) != returned
-                ):
-                    continue
-                taken = _taken(record, transition.guard)
-                if self.per and taken == "surely":
-                    # A call may be another value's event: no value's identity is held here.
-                    taken = "possibly"
-                if returned and transition.result is not None:
-                    taken = _both(
-                        taken,
-                        "possibly" if result is None else _taken(result, transition.result),
-                    )
-                if taken != "never":
-                    after.add(transition.target)
-                if taken == "surely":
-                    stays = False
+            reached, stays = self._from(
+                state, tool, record, hints, returned=returned, result=result
+            )
+            after |= reached
             if stays:
                 after.add(state)
         return frozenset(after)
+
+    def _from(
+        self,
+        state: str,
+        tool: str,
+        record: Validator[Any],
+        hints: frozenset[str],
+        *,
+        returned: bool,
+        result: Validator[Any] | None,
+    ) -> tuple[set[str], bool]:
+        """Return the states the transitions from ``state`` take on a call, and whether it stays.
+
+        The monitor takes the first transition in file order whose guards hold, so a later one is
+        taken only by what the earlier ones leave: the record outside each earlier guard on the
+        call, and, where an earlier transition's guard on the call surely holds, the result outside
+        its guard on the result. Where that guard only possibly holds, nothing is taken away,
+        which keeps every state the monitor may reach.
+        """
+        reached: set[str] = set()
+        stays = True
+        on_call: list[Validator[Any]] = []
+        on_result: list[Validator[Any]] = []
+        for transition in self.transitions:
+            if (
+                transition.source != state
+                or not transition.reads(tool, hints)
+                or (transition.result is not None) != returned
+            ):
+                continue
+            taken = _taken_after(record, on_call, transition.guard)
+            if returned and transition.result is not None:
+                met = (
+                    "possibly"
+                    if result is None
+                    else _taken_after(result, on_result, transition.result)
+                )
+                if taken == "surely" and result is not None:
+                    on_result.append(transition.result)
+                taken = _both(taken, met)
+            else:
+                on_call.append(transition.guard)
+            if self.per and taken == "surely":
+                # A call may be another value's event: no value's identity is held here.
+                taken = "possibly"
+            if taken != "never":
+                reached.add(transition.target)
+            if taken == "surely":
+                stays = False
+        return reached, stays
 
     def reach(self, states: frozenset[str], *, ended: bool = False) -> Reach:
         """Return whether a bad state is held, or a pending one where a path ends: surely if all.
@@ -183,7 +231,25 @@ def _both(one: Reach, other: Reach) -> Reach:
     return "surely" if one == other == "surely" else "possibly"
 
 
+def _taken_after(
+    values: Validator[Any], earlier: list[Validator[Any]], guard: Validator[Any]
+) -> Reach:
+    """Return whether ``guard`` is met by what the ``earlier`` guards leave of ``values``.
+
+    Where the earlier guards take every value, valgebra is asked the inclusion, which it decides
+    where it may leave the emptiness of the difference open, as of a fixpoint's complement.
+    """
+    if earlier:
+        taken = union(*earlier)
+        if values.relation_to(taken) == "subset":
+            return "never"
+        values = intersection(values, complement(taken))
+    return _taken(values, guard)
+
+
 def _taken(record: Validator[Any], guard: Validator[Any]) -> Reach:
+    if record.relation_to(nothing) == "subset":
+        return "never"
     if record.relation_to(guard) == "subset":
         return "surely"
     if intersection(record, guard).relation_to(nothing) == "subset":

@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
-from valgebra_planning._valgebra import Sampler
+from valgebra_planning._valgebra import Sampler, compile_schema
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.planner import plan
@@ -678,3 +680,139 @@ def test_a_run_refuses_a_grasp_of_an_object_no_confirmation_was_for(
 def test_a_policy_names_its_per_argument_by_name() -> None:
     with pytest.raises(TypeError, match="'per' is an argument's name"):
         read_policy({"name": "p", "initial": "a", "bad": [], "transitions": [], "per": 1})
+
+
+def _interval(low: int, width: int) -> dict[str, Any]:
+    """Return the records whose ``d`` lies in ``[low, low + width]``."""
+    return {
+        "type": "object",
+        "properties": {"d": {"type": "number", "minimum": low, "maximum": low + width}},
+        "required": ["d"],
+        "additionalProperties": False,
+    }
+
+
+INTERVALS = st.builds(_interval, st.integers(0, 5), st.integers(1, 3))
+#: A transition from `s0` on `f`, reading the call's record, its result, or both.
+TRANSITIONS = st.builds(
+    lambda target, arguments, result: {
+        "from": "s0",
+        "tool": "f",
+        "to": target,
+        **({"arguments": arguments} if arguments else {}),
+        **({"result": result} if result else {}),
+    },
+    st.sampled_from(["a", "b", "c"]),
+    st.one_of(st.none(), INTERVALS),
+    st.one_of(st.none(), INTERVALS),
+)
+POLICIES = st.lists(TRANSITIONS, min_size=2, max_size=4).map(
+    lambda transitions: read_policy(
+        {"name": "p", "initial": "s0", "bad": ["c"], "transitions": transitions}
+    )
+)
+GRID = [0, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8]
+
+
+def _first_match(policy: Any, value: float, outcome: float) -> str:
+    """Return the state the monitor takes ``s0`` to on ``f(d=value)`` returning ``outcome``."""
+    monitor = Monitor(policy)
+    made = monitor.stepped("s0", "f", {"d": value}, frozenset())
+    return monitor.stepped(made, "f", {"d": value}, frozenset(), {"d": outcome})
+
+
+@settings(max_examples=100, deadline=None)
+@given(POLICIES, st.sampled_from(GRID), st.sampled_from(GRID))
+def test_the_walk_on_one_value_holds_the_monitor_s_first_match_alone(
+    policy: Any, value: float, outcome: float
+) -> None:
+    record = compile_schema({"const": {"d": value}})
+    result = compile_schema({"const": {"d": outcome}})
+    walked = policy.step(frozenset({"s0"}), "f", record, result=result)
+    assert walked == {_first_match(policy, value, outcome)}
+
+
+@settings(max_examples=100, deadline=None)
+@given(POLICIES, INTERVALS, INTERVALS)
+def test_the_walk_on_a_set_holds_every_state_the_monitor_takes_a_value_of_it_to(
+    policy: Any, records: dict[str, Any], results: dict[str, Any]
+) -> None:
+    walked = policy.step(
+        frozenset({"s0"}), "f", compile_schema(records), result=compile_schema(results)
+    )
+    bounds = [
+        (schema["properties"]["d"]["minimum"], schema["properties"]["d"]["maximum"])
+        for schema in (records, results)
+    ]
+    for value in [v for v in GRID if bounds[0][0] <= v <= bounds[0][1]]:
+        for outcome in [w for w in GRID if bounds[1][0] <= w <= bounds[1][1]]:
+            assert _first_match(policy, value, outcome) in walked
+
+
+#: A walk is allowed near the object alone, the rule written first-match: a pose within a
+#: meter to `near`, any pose to `far`, and a walk from `far` a violation.
+NEAR_FIRST = read_policy(
+    {
+        "name": "walk only when near",
+        "initial": "start",
+        "bad": ["violated"],
+        "transitions": [
+            {
+                "from": "start",
+                "tool": "estimate_pose",
+                "result": {"properties": {"distance_m": {"maximum": 1}}},
+                "to": "near",
+            },
+            {"from": "start", "tool": "estimate_pose", "result": True, "to": "far"},
+            {"from": "far", "tool": "walk_to", "to": "violated"},
+        ],
+    }
+)
+
+
+def _robot_tool(name: str, inputs: dict[str, Any], outputs: dict[str, Any]) -> Any:
+    return read_contract(
+        {
+            "name": name,
+            "inputSchema": {
+                "type": "object",
+                "properties": inputs,
+                "required": sorted(inputs),
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": outputs,
+                "required": sorted(outputs),
+                "additionalProperties": False,
+            },
+        }
+    )
+
+
+def test_a_rule_written_first_match_is_proven_as_the_monitor_reads_it() -> None:
+    object_id = {"type": "string", "pattern": "^obj_[0-9]+$"}
+    reach = {"type": "number", "minimum": 0.2, "maximum": 0.6}
+    tools = {
+        "estimate_pose": _robot_tool(
+            "estimate_pose",
+            {"object_id": object_id},
+            {"distance_m": {"type": "number", "minimum": 0, "maximum": 10}},
+        ),
+        "grasp": _robot_tool("grasp", {"object_id": object_id, "distance_m": reach}, {}),
+        "walk_to": _robot_tool(
+            "walk_to", {"object_id": object_id}, {"arrived": {"type": "boolean"}}
+        ),
+    }
+    task = read_task(
+        "walk near", {"o": object_id}, {"type": "boolean"}, stops={"estimate_pose": True}
+    )
+    source = (
+        "c1 = estimate_pose(object_id=o)\n"
+        "if c1.distance_m in grasp.distance_m:\n"
+        "    c2 = walk_to(object_id=o)\n"
+        "    return c2.arrived\n"
+        "stop(c1.distance_m)\n"
+    )
+    checked = verify(read_program(source), tools, task, policies=[NEAR_FIRST])
+    assert all(link.verdict == "proven" for link in checked.links), checked.links

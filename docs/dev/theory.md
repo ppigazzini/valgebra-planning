@@ -186,8 +186,10 @@ tool's argument records, as a symbolic automaton's guard is a predicate of an ef
 algebra (D'Antoni and Veanes 2017, Def. 1). It states what a domain policy says in prose
 (Yao et al. 2024, §3). Statically a guard is taken surely where valgebra proves the record
 inside it, never where it proves them disjoint, and possibly otherwise, so the automaton is
-stepped on sets of states; a bad state is never left. At run time the same automaton is a
-monitor stepping on concrete records. A call that answers with an error may have acted or not,
+stepped on sets of states; a bad state is never left. A state's transitions on one call are read
+in file order, each on what the earlier ones leave, so the walk reads the deterministic automaton
+whose guards from one state meet in nothing (D'Antoni and Veanes 2017, §2), and at run time the
+same automaton is a monitor taking the first transition whose guards hold. A call that answers with an error may have acted or not,
 so the walk reads its error block from either set of states, and the monitor holds both after
 it, refusing a call that takes any of them to a bad state. A transition may read the call's
 result: the monitor steps it when the result arrives. An action's effect and its response travel
@@ -207,9 +209,9 @@ one field and lists its members, `if c3.confirmed in (True,):`, and steps the au
 side's set as the walk does (Bertoli et al. 2006, Def. 3.6); any other guard it takes possibly at
 most. **[LOAD-BEARING: policy-automaton]**
 
-IMPLEMENTED-BY: policy.py, policy.py::Monitor.unread, proxy.py::proxy, verify.py::_Walk.call, verify.py::_Walk.reached, planner.py::_Search.split
+IMPLEMENTED-BY: policy.py, policy.py::Policy.step, policy.py::Monitor.unread, proxy.py::proxy, verify.py::_Walk.call, verify.py::_Walk.reached, planner.py::_Search.split
 
-HELD-BY: test_the_monitor_reads_a_trace_call_by_call, test_a_bad_state_is_never_left, test_a_call_that_answered_with_an_error_holds_the_policy_in_either_state, test_a_call_whose_outcome_is_not_read_holds_the_call_s_whole_image, test_a_result_the_gate_refuses_holds_every_state_a_result_may_reach, test_a_call_whose_outcome_is_not_read_holds_every_state_it_may_have_reached, test_a_call_a_policy_reads_waits_for_the_one_in_flight, test_an_error_is_held_against_its_own_call_beside_one_no_policy_reads, test_a_call_no_policy_reads_waits_on_none, test_a_run_refuses_the_call_an_approval_that_answered_with_an_error_would_allow, test_a_call_the_server_answers_with_an_error_leaves_the_policy_in_either_state, test_a_transition_reading_the_result_is_taken_when_the_result_arrives, test_a_walk_splits_at_a_call_a_result_guard_reads_and_refutes_the_case_it_breaks, test_a_program_moving_only_under_the_answer_its_policy_reads_is_proven, test_the_gate_reads_a_result_a_transition_waits_on, test_a_guard_the_arguments_only_overlap_leaves_the_policy_undecided, test_a_program_planned_under_the_policy_approves_first_and_is_proven, test_a_program_planned_without_the_policy_is_refuted_on_its_freight_path_alone, test_the_planner_tests_the_answer_a_result_guard_reads
+HELD-BY: test_the_monitor_reads_a_trace_call_by_call, test_a_bad_state_is_never_left, test_a_call_that_answered_with_an_error_holds_the_policy_in_either_state, test_a_call_whose_outcome_is_not_read_holds_the_call_s_whole_image, test_a_result_the_gate_refuses_holds_every_state_a_result_may_reach, test_a_call_whose_outcome_is_not_read_holds_every_state_it_may_have_reached, test_a_call_a_policy_reads_waits_for_the_one_in_flight, test_an_error_is_held_against_its_own_call_beside_one_no_policy_reads, test_a_call_no_policy_reads_waits_on_none, test_the_walk_on_one_value_holds_the_monitor_s_first_match_alone, test_the_walk_on_a_set_holds_every_state_the_monitor_takes_a_value_of_it_to, test_a_rule_written_first_match_is_proven_as_the_monitor_reads_it, test_a_run_refuses_the_call_an_approval_that_answered_with_an_error_would_allow, test_a_call_the_server_answers_with_an_error_leaves_the_policy_in_either_state, test_a_transition_reading_the_result_is_taken_when_the_result_arrives, test_a_walk_splits_at_a_call_a_result_guard_reads_and_refutes_the_case_it_breaks, test_a_program_moving_only_under_the_answer_its_policy_reads_is_proven, test_the_gate_reads_a_result_a_transition_waits_on, test_a_guard_the_arguments_only_overlap_leaves_the_policy_undecided, test_a_program_planned_under_the_policy_approves_first_and_is_proven, test_a_program_planned_without_the_policy_is_refuted_on_its_freight_path_alone, test_the_planner_tests_the_answer_a_result_guard_reads
 
 **An obligation is decided over the whole program.** A property that no continuation of a
 run's prefix makes true or false for good, as a notice owed after every booking, is not
@@ -244,7 +246,7 @@ HELD-BY: test_a_rule_about_one_parcel_reads_as_a_rule_about_any_two_calls, test_
 **A specification may hold for a trivial reason.** A system satisfies a formula vacuously when
 it satisfies it and some subformula does not affect its truth there (Kupferman and Vardi 1999,
 Def. 2). A goal no value meets, a goal every value meets, a guard no argument record of its
-tool meets, a policy no transition that can fire takes to a bad or pending state, and an
+tool meets, a transition the ones before it from its state take every value of, a policy no transition that can fire takes to a bad or pending state, and an
 endorsed set that admits nothing or everything of its sink, and a postcondition whose condition
 meets no result of its call or whose read's set meets none or holds every one, are each such a
 specification, and each is a set question valgebra decides: emptiness, inclusion, a meet. One valgebra leaves
@@ -252,7 +254,7 @@ undecided is reported as undecided, never as vacuous. **[LOAD-BEARING: vacuity]*
 
 IMPLEMENTED-BY: vacuity.py, vacuity.py::_postcondition
 
-HELD-BY: test_an_empty_goal_and_a_universal_goal_are_found, test_a_guard_no_record_meets_leaves_the_policy_unbreakable, test_an_endorsed_set_that_admits_nothing_or_everything_is_found, test_a_guard_valgebra_cannot_part_is_undecided_and_the_policy_kept_live, test_the_parcel_library_holds_no_vacuous_specification, test_a_postcondition_covering_nothing_or_narrowing_nothing_is_found
+HELD-BY: test_an_empty_goal_and_a_universal_goal_are_found, test_a_guard_no_record_meets_leaves_the_policy_unbreakable, test_a_transition_the_ones_before_it_take_every_record_of_never_fires, test_an_endorsed_set_that_admits_nothing_or_everything_is_found, test_a_guard_valgebra_cannot_part_is_undecided_and_the_policy_kept_live, test_the_parcel_library_holds_no_vacuous_specification, test_a_postcondition_covering_nothing_or_narrowing_nothing_is_found
 
 ## Mined types
 
