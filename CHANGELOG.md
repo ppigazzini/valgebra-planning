@@ -47,6 +47,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- `Types.agree` takes `value` and `argument`, a value's slot and the argument it may fill, in
+  that order, in place of `one` and `other`, which it read alike: a task input never observed
+  agrees only with an argument whose type holds no result, and any other untyped slot with
+  every argument.
+
 - `Plan.reason` names each argument no tool returns a value for, which a task input fills only
   under a test, and no longer says that a deeper search may find a program. A pick whose grasp
   takes a `hand` enum and whose confirmation an `action` and a `purpose` enum, planned from an
