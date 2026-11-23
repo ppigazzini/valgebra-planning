@@ -123,9 +123,9 @@ each call as it comes. What it holds is of two kinds.
   A flow rule is a guarantee over a program the critic checked, where provenance is a
   reference, and a heuristic in the proxy.
 
-**One gate, whatever reaches it.** `proxy()` returns an MCP server, which the mcp package serves
-over Streamable HTTP as it is, through `streamable_http_app()`. Every client of one proxy calls
-through its one gate: a policy reads the calls of all of them in order, and a flow rule takes a
+**One gate, whatever reaches it.** `proxy()` returns an MCP server, and `http_app()` serves it
+over Streamable HTTP to every client holding a token issued for it, as `proxy --http` does.
+Every client of one proxy calls through its one gate: a policy reads the calls of all of them in order, and a flow rule takes a
 value any of them was returned as returned. Two deployments in front of one robot differ there.
 
 | deployment | policy state | provenance |
@@ -136,9 +136,8 @@ value any of them was returned as returned. Two deployments in front of one robo
 A policy about one actuator, as "no walking while an object is held", is held by the one proxy in
 front of it; one proxy per agent holds it for no agent, since each sees half the calls. What
 pooling costs is which client holds a value, and no rule here reads that: `only` states that a
-value was returned by a named tool, which holds whichever client it was returned to. The command
-line serves one agent over stdio, and a call its server answers by asking for input is answered
-with a tool error ([limits](method.md#limits)).
+value was returned by a named tool, which holds whichever client it was returned to. A call its
+server answers by asking for input is answered with a tool error ([limits](method.md#limits)).
 
 ## Limits
 

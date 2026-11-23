@@ -11,12 +11,13 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from mcp import Client, types
 from mcp.client.streamable_http import streamable_http_client
+from mcp.server.auth.provider import AccessToken
 from mcp.server.lowlevel import Server
 
 from valgebra_planning.contracts import read_contract
 from valgebra_planning.flows import read_flow
 from valgebra_planning.policy import read_policy
-from valgebra_planning.proxy import Gate, proxy, read_proxy
+from valgebra_planning.proxy import Gate, http_app, proxy, read_proxy
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 LISTING = json.loads((EXAMPLE / "tools.json").read_text())["tools"]
@@ -432,3 +433,138 @@ def test_a_proxy_reads_its_upstream_s_tools_as_its_library_does(*, closing: bool
         assert _refused(result) == (
             "refused: find_parcel returned a key its output schema does not declare, read closed"
         )
+
+
+RESOURCE = "http://127.0.0.1:8000/mcp"
+ISSUER = "https://auth.example/"
+METADATA = "http://127.0.0.1:8000/.well-known/oauth-protected-resource/mcp"
+
+
+class _Tokens:
+    """A token verifier reading a table: who each token was issued to, for what, until when."""
+
+    def __init__(self, table: dict[str, AccessToken]) -> None:
+        self.table = table
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        return self.table.get(token)
+
+
+def _issued(client: str, resource: str = RESOURCE, **rest: Any) -> AccessToken:
+    given = {"token": client, "client_id": client, "scopes": ["tools"], "resource": resource}
+    return AccessToken.model_validate(given | rest)
+
+
+TOKENS = _Tokens(
+    {
+        "agent": _issued("agent"),
+        "supervisor": _issued("supervisor"),
+        "elsewhere": _issued("elsewhere", "http://127.0.0.1:9000/mcp"),
+        "expired": _issued("expired", expires_at=1),
+        "unscoped": _issued("unscoped", scopes=[]),
+    }
+)
+
+
+def _authenticated(front: Server[Any], origins: tuple[str, ...] = ()) -> Any:
+    """Return the app serving ``front`` to holders of `TOKENS`, and a client factory into it."""
+    app = http_app(
+        front, resource=RESOURCE, issuer=ISSUER, verifier=TOKENS, scopes=["tools"], origins=origins
+    )
+
+    def client(token: str, base: str = "http://127.0.0.1:8000", **headers: str) -> Client:
+        held = {"Authorization": f"Bearer {token}", **headers}
+        http = httpx2.AsyncClient(transport=httpx2.ASGITransport(app), base_url=base, headers=held)
+        return Client(streamable_http_client(f"{base}/mcp", http_client=http))
+
+    return app, client
+
+
+def test_a_proxy_over_http_answers_no_request_without_a_token_issued_for_it() -> None:
+    async def session() -> Any:
+        async with Client(_upstream([], ANSWERS, LISTING)) as upstream:
+            front = await read_proxy(upstream)
+            app, client = _authenticated(front)
+            for token in ("unknown", "elsewhere", "expired"):
+                answer = await _async_post(app, {"Authorization": f"Bearer {token}"})
+                assert answer.status_code == 401, token
+            unscoped = await _async_post(app, {"Authorization": "Bearer unscoped"})
+            assert unscoped.status_code == 403
+            bare = await _async_post(app, {})
+            assert bare.status_code == 401
+            assert f'resource_metadata="{METADATA}"' in bare.headers["www-authenticate"]
+            async with app.router.lifespan_context(app), client("agent") as agent:
+                return await agent.call_tool(*FINDING)
+
+    assert not asyncio.run(session()).is_error
+
+
+async def _async_post(
+    app: Any, headers: dict[str, str], base: str = "http://127.0.0.1:8000"
+) -> Any:
+    async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app), base_url=base) as http:
+        body = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+        return await http.post("/mcp", json=body, headers=headers)
+
+
+def test_a_request_from_another_host_or_origin_is_refused() -> None:
+    async def session() -> list[int]:
+        async with Client(_upstream([], ANSWERS, LISTING)) as upstream:
+            front = await read_proxy(upstream)
+            app, _ = _authenticated(front, origins=("http://localhost:3000",))
+            held = {"Authorization": "Bearer agent"}
+            async with app.router.lifespan_context(app):
+                return [
+                    (await _async_post(app, held, "http://robot.example:8000")).status_code,
+                    (await _async_post(app, held | {"Origin": "http://evil.example"})).status_code,
+                    (
+                        await _async_post(app, held | {"Origin": "http://localhost:3000"})
+                    ).status_code,
+                ]
+
+    host, origin, allowed = asyncio.run(session())
+    assert (host, origin) == (421, 403)
+    assert allowed not in (401, 403, 421)
+
+
+def test_a_proxy_over_http_names_its_authorization_server() -> None:
+    async def fetched() -> Any:
+        async with Client(_upstream([], ANSWERS, LISTING)) as upstream:
+            app, _ = _authenticated(await read_proxy(upstream))
+            transport = httpx2.ASGITransport(app)
+            async with httpx2.AsyncClient(transport=transport, base_url=RESOURCE) as http:
+                return (await http.get(METADATA)).json()
+
+    metadata = asyncio.run(fetched())
+    assert metadata["resource"] == RESOURCE
+    assert metadata["authorization_servers"] == [ISSUER]
+
+
+def test_every_authenticated_client_of_one_proxy_calls_through_its_one_gate() -> None:
+    made: list[str] = []
+
+    async def session() -> list[Any]:
+        async with Client(_upstream(made, ANSWERS, LISTING)) as upstream:
+            front = await read_proxy(upstream, policies=[FREIGHT])
+            app, client = _authenticated(front)
+            async with (
+                app.router.lifespan_context(app),
+                client("agent") as agent,
+                client("supervisor") as supervisor,
+            ):
+                return [
+                    await supervisor.call_tool(*BOOKING),
+                    await agent.call_tool(*APPROVAL),
+                    await supervisor.call_tool(*BOOKING),
+                ]
+
+    unapproved, approved, booked = asyncio.run(session())
+    assert _refused(unapproved).startswith(f"refused: {FREIGHT.name}")
+    assert not approved.is_error
+    assert not booked.is_error
+    assert made == ["approve_freight", "book_freight_return"]
+
+
+def test_a_proxy_s_resource_is_an_http_url() -> None:
+    with pytest.raises(ValueError, match="resource is an HTTP URL"):
+        http_app(Server("x"), resource="robot", issuer=ISSUER, verifier=TOKENS)

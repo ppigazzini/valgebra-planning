@@ -2,16 +2,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
+import httpx2
 import pytest
+from mcp import Client
+from mcp.client.streamable_http import streamable_http_client
 
-from valgebra_planning.cli import main
+from valgebra_planning.cli import _address, _verifier, main
+from valgebra_planning.servers import connect
 
 PARCELS = str(Path(__file__).parent.parent / "examples" / "parcels")
 NAIVE = """\
@@ -190,8 +196,6 @@ def test_a_live_server_s_results_are_read_closed_where_the_library_says_so(tmp_p
 def test_the_proxy_reads_its_server_s_tools_as_its_library_does(
     tmp_path: Path, *, closing: bool
 ) -> None:
-    from valgebra_planning.servers import connect  # noqa: PLC0415 - the mcp extra
-
     listing = json.loads((Path(PARCELS) / "tools.json").read_text())
     (tmp_path / "tools.json").write_text(json.dumps({**listing, "closedResults": closing}))
     noting = shlex.join([sys.executable, str(Path(__file__).parent / "parcel_server.py"), "--note"])
@@ -204,3 +208,77 @@ def test_the_proxy_reads_its_server_s_tools_as_its_library_does(
 
     result = asyncio.run(called())
     assert result.is_error is closing
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--http", "127.0.0.1:8000"],
+        ["--http", "127.0.0.1:8000", "--resource", "http://127.0.0.1:8000/mcp"],
+        ["--resource", "http://127.0.0.1:8000/mcp"],
+        ["--origin", "http://localhost:3000"],
+    ],
+    ids=["http-alone", "http-without-issuer", "resource-without-http", "origin-without-http"],
+)
+def test_the_proxy_serves_http_to_authenticated_clients_alone(
+    argv: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as stopped:
+        main(["proxy", "--server", "unused", *argv])
+    assert stopped.value.code == 2
+    assert "--http serves authenticated clients alone" in capsys.readouterr().err
+
+
+def test_an_address_and_a_verifier_are_read_as_named() -> None:
+    assert _address("127.0.0.1:8000") == ("127.0.0.1", 8000)
+    assert _address("[::1]:8000") == ("::1", 8000)
+    with pytest.raises(ValueError, match="names `HOST:PORT`"):
+        _address("8000")
+    with pytest.raises(ValueError, match="names `module:name`"):
+        _verifier("tokens")
+    with pytest.raises(TypeError, match="is no token verifier"):
+        _verifier("json:loads")
+
+
+def test_the_proxy_serves_http_to_a_client_holding_a_token_issued_for_it() -> None:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    resource = f"http://127.0.0.1:{port}/mcp"
+    entry = "from valgebra_planning.cli import main; raise SystemExit(main())"
+    argv = ["proxy", "--server", SERVER, "--http", f"127.0.0.1:{port}", "--resource", resource]
+    argv += ["--issuer", "https://auth.example", "--verifier", "tokens:VERIFIER"]
+
+    async def session() -> tuple[int, Any]:
+        served = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            entry,
+            *argv,
+            cwd=Path(__file__).parent,
+            env={**os.environ, "PROXY_RESOURCE": resource},
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        try:
+            async with httpx2.AsyncClient() as bare:
+                for _ in range(200):
+                    try:
+                        status = (await bare.post(resource, json={})).status_code
+                        break
+                    except httpx2.TransportError:
+                        await asyncio.sleep(0.1)
+            held = {"Authorization": "Bearer agent"}
+            async with (
+                httpx2.AsyncClient(headers=held) as http,
+                Client(streamable_http_client(resource, http_client=http)) as client,
+            ):
+                found = await client.call_tool("find_parcel", {"tracking": "AB123456789IT"})
+        finally:
+            served.terminate()
+            await served.wait()
+        return status, found
+
+    status, found = asyncio.run(session())
+    assert status == 401
+    assert not found.is_error

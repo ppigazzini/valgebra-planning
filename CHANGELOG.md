@@ -94,6 +94,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- The proxy serves Streamable HTTP to every client holding a token issued for it,
+  `proxy --http HOST:PORT --resource URL --issuer URL --verifier MODULE:NAME`, and `http_app` and
+  `serve_http`. A gate served over HTTP is moved by any client reaching it, and the command line
+  served stdio alone. The proxy is an OAuth 2.1 resource server: a request carries a bearer token
+  the verifier reads, issued for `--resource` as its audience, unexpired and holding each
+  `--scope`, or is answered 401 or 403 naming the protected resource metadata it serves; a Host
+  other than the resource's is answered 421, and an Origin no `--origin` lists 403. `--http`
+  serves no client without `--resource`, `--issuer` and `--verifier`. Every client calls through
+  the one gate.
+
 - A library reads each whole result closed, `"closedResults": true` in `tools.json`, and
   `read_contract(..., closed_results=True)`, `read_server(..., closed_results=True)` and
   `reads_closed`. An output schema writing no `additionalProperties` is an open record, so a

@@ -147,6 +147,22 @@ task. A call the server answers by asking for input is answered with a tool erro
 request is not forwarded. An agent connects to the proxy as to any stdio server, and no agent
 changes.
 
+```bash
+uv run valgebra-planning proxy --server "uv run python tests/parcel_server.py" --library examples/parcels \
+    --http 127.0.0.1:8000 --resource http://127.0.0.1:8000/mcp --issuer https://auth.example \
+    --verifier deployment:VERIFIER
+```
+
+serves the same proxy over Streamable HTTP to every client holding a token issued for
+`--resource`, the proxy's URL, all of them through its one gate. `--http` takes `--resource`,
+`--issuer`, the authorization server a client is pointed at, and `--verifier`, named
+`module:name` and found from the working directory: here `VERIFIER` in a `deployment.py` of the
+deployment's own, an object with mcp's `verify_token` that reads a token that server issued. It
+serves no client without the three. A request without a valid token
+issued for `--resource`, or one missing a `--scope`, is answered 401 or 403, naming the
+protected resource metadata the proxy serves; a request whose Host is not `--resource`'s is
+answered 421, and one carrying an Origin no `--origin` lists 403.
+
 ## Limits
 
 - With `--server`, the tasks, policies, flow rules and observed calls are still the library's files,

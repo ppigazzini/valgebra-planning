@@ -352,14 +352,20 @@ and a value from a task input with it, since a proxy sees no task.
   error block takes or which ends the run. A value a user or a model supplied there would reach
   the call held to no contract the program was proven against, the leak a stop answered by a
   user would be.
-- **The command line serves one client, over stdio.** `valgebra-planning proxy` serves the agent
-  that starts it. The library's `proxy()` returns a server the mcp package serves over
-  Streamable HTTP as it is, and every client of it calls through one gate: policies read the
-  calls of all of them, and flow rules pool what each was returned
+- **A proxy over HTTP is one gate for every client holding a token.** `valgebra-planning proxy`
+  serves the agent that starts it over stdio, and with `--http` every client holding a token
+  issued for it over Streamable HTTP, through one gate: policies read the calls of all of them,
+  and flow rules pool what each was returned
   ([one gate](code-mode.md#the-proxy-for-an-agent-whose-program-is-not-seen)). No session keys
   either: MCP 2026-07-28 leaves state across calls to handles a server mints as tool arguments,
   which would change the signatures the proxy lists. A gate served to any client is moved by any
-  client, so serving HTTP is left to a deployment that authenticates who reaches it.
+  client, so the proxy serves HTTP only as an OAuth 2.1 resource server, as MCP 2026-07-28 has
+  an HTTP server authorize: a request carries a bearer token issued for the proxy's URL as its
+  audience, unexpired and holding the scopes asked, or is answered 401; a Host other than the
+  URL's is answered 421 and an Origin not listed 403. Reading a token is the verifier's the
+  deployment names, and issuing one its authorization server's; the proxy reaches its server on
+  a connection of its own, so no client's token goes upstream. Which client holds a value is
+  read by no rule, so a value one client was returned grounds another's call.
 - **Search bounds.** Six calls and tests a path by default, and the first 16 bindings of a call.
   `plan` takes another depth, and so do a task's `depth` and the command line's `--depth`. A plan
   with no program says why in `Plan.reason`: the bound cut a path short of the goal, and whether

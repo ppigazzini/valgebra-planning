@@ -8,6 +8,8 @@
     valgebra-planning privileges OLD NEW [--json]
     valgebra-planning stubs LIBRARY [--server SERVER]
     valgebra-planning proxy --server SERVER [--library LIBRARY] [--timeout S]
+        [--http HOST:PORT --resource URL --issuer URL --verifier MODULE:NAME [--scope S]...
+        [--origin ORIGIN]...]
 
 ``LIBRARY`` is a directory `valgebra_planning.library.read_library` reads. ``plan`` prints each
 task's program and its verification; it exits 1 when a task gets no program. ``critique`` reads a
@@ -17,7 +19,9 @@ live server, failing closed; it exits 1 when the run does not return a value ins
 ``check`` lists every specification that holds vacuously and exits 1 when it finds one.
 ``privileges`` compares two privilege policies in Progent's format and exits 1 unless the new one
 narrows the old for every tool it names. ``proxy`` serves an MCP server over stdio in front of
-``SERVER``, holding every call to the contracts and to the library's policies and flow rules.
+``SERVER``, holding every call to the contracts and to the library's policies and flow rules;
+with ``--http`` it serves Streamable HTTP to every client holding a token issued for
+``--resource`` by ``--issuer``, which the verifier ``MODULE:NAME`` reads.
 ``stubs`` prints the tools as typed Python stubs, their schemas in their docstrings, for a model
 to write a program against.
 ``SERVER`` is a URL or a command starting a stdio server; its tools replace ``tools.json``, and
@@ -29,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib
 import json
 import sys
 from collections.abc import Mapping, Sequence
@@ -282,10 +287,47 @@ def _privileges(old: Path, new: Path, *, as_json: bool) -> int:
     return 0 if all(u.change == "narrowing" for u in found) else 1
 
 
-def _proxy(server: str, directory: Path | None, timeout: float | None) -> int:
-    """Serve a proxy over stdio in front of a server, holding calls to a library's rules."""
-    from valgebra_planning.proxy import serve  # noqa: PLC0415 - the mcp extra
+def _verifier(named: str) -> Any:
+    """Return the token verifier ``module:name`` names, its module found from the working directory.
+
+    A verifier is an object with ``verify_token``, mcp's ``TokenVerifier``; reading a token
+    issued by the deployment's authorization server is its own.
+    """
+    module, colon, attribute = named.partition(":")
+    if not colon or not module or not attribute:
+        msg = f"--verifier names `module:name`, not {named!r}"
+        raise ValueError(msg)
+    here = str(Path.cwd())
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    found: Any = importlib.import_module(module)
+    for part in attribute.split("."):
+        found = getattr(found, part)
+    if not callable(getattr(found, "verify_token", None)):
+        msg = f"--verifier {named} has no `verify_token`: it is no token verifier"
+        raise TypeError(msg)
+    return found
+
+
+def _address(given: str) -> tuple[str, int]:
+    """Return the host and the port ``HOST:PORT`` names, a bracketed IPv6 host unbracketed."""
+    host, colon, port = given.rpartition(":")
+    if not colon or not host or not port.isdigit():
+        msg = f"--http names `HOST:PORT`, not {given!r}"
+        raise ValueError(msg)
+    return host.removeprefix("[").removesuffix("]"), int(port)
+
+
+def _proxy(args: argparse.Namespace) -> int:
+    """Serve a proxy in front of a server, holding calls to a library's rules.
+
+    It serves the agent starting it over stdio, or every client holding a token over HTTP.
+    """
+    from valgebra_planning.proxy import read_proxy, serve, serve_http  # noqa: PLC0415 - the mcp extra
     from valgebra_planning.servers import connect  # noqa: PLC0415
+
+    server, directory, timeout = args.server, args.library, args.timeout
+    http = None if args.http is None else (_address(args.http), _verifier(args.verifier))
 
     library = None if directory is None else read_library(directory)
     policies = () if library is None else tuple(library.policies.values())
@@ -296,16 +338,57 @@ def _proxy(server: str, directory: Path | None, timeout: float | None) -> int:
 
     async def served() -> None:
         async with connect(server, read_timeout_seconds=timeout) as upstream:
-            await serve(
+            if http is None:
+                await serve(
+                    upstream,
+                    policies=policies,
+                    flows=flows,
+                    assert_format=asserted,
+                    closed_results=closing,
+                )
+                return
+            front = await read_proxy(
                 upstream,
                 policies=policies,
                 flows=flows,
                 assert_format=asserted,
                 closed_results=closing,
             )
+            (host, port), verifier = http
+            await serve_http(
+                front,
+                host=host,
+                port=port,
+                resource=args.resource,
+                issuer=args.issuer,
+                verifier=verifier,
+                scopes=args.scope,
+                origins=args.origin,
+            )
 
     asyncio.run(served())
     return 0
+
+
+def _proxy_parser(commands: Any) -> argparse.ArgumentParser:
+    """Add the ``proxy`` command and the arguments it alone takes."""
+    proxied = commands.add_parser("proxy", help="serve an MCP proxy holding calls to the rules")
+    proxied.add_argument("--library", type=Path, help="a library whose policies and flows hold")
+    proxied.add_argument(
+        "--http", metavar="HOST:PORT", help="serve Streamable HTTP, every client authenticated"
+    )
+    proxied.add_argument("--resource", help="the proxy's URL, the audience of its tokens")
+    proxied.add_argument("--issuer", help="the URL of the authorization server issuing them")
+    proxied.add_argument(
+        "--verifier", metavar="MODULE:NAME", help="the token verifier, found from this directory"
+    )
+    proxied.add_argument(
+        "--scope", action="append", default=[], help="a scope every token holds; repeatable"
+    )
+    proxied.add_argument(
+        "--origin", action="append", default=[], help="an Origin a client may send; repeatable"
+    )
+    return proxied
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -335,8 +418,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     privileged.add_argument("--json", action="store_true")
     stubbed = commands.add_parser("stubs", help="print typed Python stubs of a library's tools")
     stubbed.add_argument("library", type=Path)
-    proxied = commands.add_parser("proxy", help="serve an MCP proxy holding calls to the rules")
-    proxied.add_argument("--library", type=Path, help="a library whose policies and flows hold")
+    proxied = _proxy_parser(commands)
     for command in (planning, critic, running, checking, stubbed, proxied):
         required = command in (running, proxied)
         command.add_argument("--server", required=required, help="a URL or a command")
@@ -352,7 +434,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "privileges":
         return _privileges(args.old, args.new, as_json=args.json)
     if args.command == "proxy":
-        return _proxy(args.server, args.library, args.timeout)
+        authority = (args.resource, args.issuer, args.verifier)
+        given = any(authority) or args.scope or args.origin
+        if (args.http is None and given) or (args.http is not None and not all(authority)):
+            proxied.error(
+                "--http serves authenticated clients alone, and takes --resource, --issuer and"
+                " --verifier, which, with --scope and --origin, serve --http alone"
+            )
+        return _proxy(args)
     try:
         return _on_library(args)
     except KeyError as missing:

@@ -16,9 +16,10 @@ assumptions: a value equal by chance to an untrusted one is refused with it, and
 chance to a retrieved one passes, and a value the agent transforms, upper-cased, encoded or cut,
 equals none it was returned and passes: a flow rule here holds against no attacker that adapts,
 where the contract and policy checks hold against any. A proxy sees no task, so a value from a
-task input is from elsewhere. The proxy serves one client over stdio for as long as its process
-runs, and MCP 2026-07-28 has no session a client ends, so a policy's pending states are not read
-there. A call the upstream answers with a protocol error, or with a request for input, is
+task input is from elsewhere. The proxy serves the agent that starts it over stdio, or, through
+`http_app`, every client holding a token issued for it over Streamable HTTP, all of them through
+its one gate. MCP 2026-07-28 has no session a client ends, so a policy's pending states are not
+read there. A call the upstream answers with a protocol error, or with a request for input, is
 answered with a tool error: the proxy gives no input and forwards no request for one, since a
 value it never checked would reach the call. Requires the ``mcp`` extra.
 """
@@ -27,10 +28,15 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
+import uvicorn
 from mcp import Client, InputRequiredRoundsExceededError, MCPError, types
+from mcp.server.auth.provider import TokenVerifier
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.lowlevel import Server
+from mcp.server.transport_security import TransportSecuritySettings
 
 from valgebra_planning._valgebra import json_key
 from valgebra_planning.contracts import Contract, contract_names, failures
@@ -38,7 +44,10 @@ from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Monitor, Policy
 from valgebra_planning.servers import refused_by_client
 
-__all__ = ["Gate", "proxy", "read_proxy", "serve"]
+if TYPE_CHECKING:
+    from starlette.applications import Starlette
+
+__all__ = ["Gate", "http_app", "proxy", "read_proxy", "serve", "serve_http"]
 
 
 def _leaves(value: Any) -> Iterable[Any]:
@@ -233,3 +242,71 @@ async def serve(
     )
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())
+
+
+def http_app(
+    server: Server[Any],
+    *,
+    resource: str,
+    issuer: str,
+    verifier: TokenVerifier,
+    scopes: Sequence[str] = (),
+    origins: Sequence[str] = (),
+) -> Starlette:
+    """Return an ASGI app serving ``server`` over Streamable HTTP to authenticated clients alone.
+
+    The app is an OAuth 2.1 resource server, as MCP 2026-07-28 has an HTTP server authorize:
+    every request carries a bearer token, which ``verifier`` reads, issued for ``resource``, the
+    proxy's canonical URL, as its audience, unexpired, and holding every scope of ``scopes``.
+    Any other request is answered 401, naming the protected resource metadata that points the
+    client at ``issuer``, the authorization server. A request whose Host is not the resource's is
+    answered 421, and one carrying an Origin not among ``origins`` 403, the check MCP asks of
+    every connection against DNS rebinding. A token reaches no upstream: the proxy reaches its
+    server on a connection of its own. Every client calls through the one gate ``server`` holds.
+    Raises `ValueError` for a resource that is no HTTP URL.
+    """
+    where = urlsplit(resource)
+    if where.scheme not in {"http", "https"} or not where.hostname:
+        msg = f"the proxy's resource is an HTTP URL, not {resource!r}"
+        raise ValueError(msg)
+    security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[where.netloc],
+        allowed_origins=list(origins),
+    )
+    auth = AuthSettings.model_validate(
+        {
+            "issuer_url": issuer,
+            "resource_server_url": resource,
+            "required_scopes": list(scopes) or None,
+            "validate_token_resource": True,
+        }
+    )
+    return server.streamable_http_app(
+        streamable_http_path=where.path or "/",
+        transport_security=security,
+        host=where.hostname,
+        auth=auth,
+        token_verifier=verifier,
+    )
+
+
+async def serve_http(
+    server: Server[Any],
+    *,
+    host: str,
+    port: int,
+    resource: str,
+    issuer: str,
+    verifier: TokenVerifier,
+    scopes: Sequence[str] = (),
+    origins: Sequence[str] = (),
+) -> None:
+    """Serve ``server``, a proxy `read_proxy` returns, on ``host`` and ``port`` as `http_app` does.
+
+    It serves until its process is stopped.
+    """
+    app = http_app(
+        server, resource=resource, issuer=issuer, verifier=verifier, scopes=scopes, origins=origins
+    )
+    await uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning")).serve()
