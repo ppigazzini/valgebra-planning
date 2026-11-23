@@ -29,6 +29,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- The planner tests a call's result into the goal. A field whose declared set lists its members,
+  an `enum` or a `const`, and meets the goal without lying inside it, is tested on the members it
+  lists that the goal holds: the `then` branch returns it, and the other takes a strong program
+  from there or stops. A say aimed at the status `spoken` found no program at depth 6, 8 or 10; it
+  now finds the call and the test, the stop on `interrupted` its one uncovered case. No task input,
+  constant or field listing no members is tested into the goal, so a free-text value equal to the
+  goal's member returns nothing.
 - A flow rule with `only` may read when and for what a value was returned. With `fresh`, a value
   its sources returned before a call that may act reaches the sink no more: the verifier refutes
   it, the planner binds the sink no such value, and the proxy withdraws every value its sources
@@ -73,8 +80,8 @@ All notable changes to valgebra-planning are recorded here. The format follows
   `spoken` named a walk's argument, of a tool only a policy names, among those of tools on its
   path, and not `say.status`. It
   now names the arguments of tools on a path toward the goal that no result guarantees, then in a
-  clause of their own those of tools only a policy names, and each result field listing its
-  members that meets the goal and lies outside it.
+  clause of their own those of tools only a policy names, and each result field that meets the
+  goal, lies outside it and lists no members, which the planner tests into the goal on none.
 - A proxy's refusal on a policy names the calls that move the policy on. A refusal read "freight
   approved first: book_freight_return reached violated", the rule and the state, not the call
   that would admit the booking. `Monitor.ways_out` names each transition from a state the run

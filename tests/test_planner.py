@@ -15,7 +15,7 @@ from valgebra_planning.flows import read_flow
 from valgebra_planning.mining import mine
 from valgebra_planning.planner import plan, predicates
 from valgebra_planning.policy import read_policy
-from valgebra_planning.program import Branch, Return, render, steps
+from valgebra_planning.program import Branch, Ref, Return, render, steps
 from valgebra_planning.verify import verify
 
 ORDER_ID = {"type": "string", "pattern": "^ord_[0-9]+$"}
@@ -284,7 +284,8 @@ def test_a_plan_with_no_program_says_whether_the_bound_cut_a_path() -> None:
     assert unreachable.program is None
     assert unreachable.reason == (
         "no program: no path reached the bound of 6, so no deeper search finds one from the "
-        "first 16 bindings of each call the search tries"
+        "first 16 bindings of each call the search tries; each of ask.v, other.v meets the goal "
+        "and lies outside it, and lists no members a test into the goal could name"
     )
     assert plan(tools, ACTED).reason is None
 
@@ -820,28 +821,76 @@ def test_a_fresh_argument_naming_no_argument_is_refused() -> None:
         plan(_walking(), read_task("pick", {}, GRASPED, fresh=["grasp.reach"]))
 
 
-def test_a_plan_with_no_program_names_a_field_that_meets_the_goal_outside_it() -> None:
-    said = read_contract(
-        {
-            "name": "say",
-            "inputSchema": {
-                "type": "object",
-                "properties": {"text": {"type": "string"}},
-                "required": ["text"],
-            },
-            "outputSchema": {
-                "type": "object",
-                "properties": {"status": {"type": "string", "enum": ["spoken", "interrupted"]}},
-                "required": ["status"],
-                "additionalProperties": False,
-            },
-        }
+def _said(status: object) -> dict[str, Contract]:
+    """Return a say whose status is ``status`` and a transcribe returning free text."""
+
+    def tool(name: str, inputs: dict[str, Any], outputs: dict[str, Any]) -> Contract:
+        return read_contract(
+            {
+                "name": name,
+                "inputSchema": {"type": "object", "properties": inputs, "required": [*inputs]},
+                "outputSchema": {
+                    "type": "object",
+                    "properties": outputs,
+                    "required": [*outputs],
+                    "additionalProperties": False,
+                },
+            }
+        )
+
+    return {
+        "say": tool("say", {"text": {"type": "string"}}, {"status": status}),
+        "transcribe": tool("transcribe", {}, {"text": {"type": "string"}}),
+    }
+
+
+SAYING = {"type": "string", "enum": ["spoken", "interrupted"]}
+
+
+@pytest.mark.parametrize(
+    ("goal", "tested"),
+    [
+        ({"const": "spoken"}, ("spoken",)),
+        ({"type": "string", "pattern": "^sp"}, ("spoken",)),
+        ({"enum": ["spoken", "heard"]}, ("spoken",)),
+        ({"enum": ["spoken", "interrupted"]}, None),
+    ],
+    ids=["a-member", "a-pattern", "members-the-field-lacks", "every-member"],
+)
+def test_a_listed_field_is_tested_into_the_goal_on_the_members_it_lists(
+    goal: object, tested: tuple[str, ...] | None
+) -> None:
+    task = read_task("say", {"text": {"type": "string"}}, goal)
+    found = plan({"say": _said(SAYING)["say"]}, task, depth=4)
+    assert found.program is not None
+    test = found.program.end
+    if tested is None:
+        # A field inside the goal is returned, not tested.
+        assert found.strong
+        assert render(found.program) == "c1 = say(text=text)\nreturn c1.status"
+        return
+    assert not found.strong
+    assert isinstance(test, Branch)
+    assert (test.ref, test.values) == (Ref("c1", ("status",)), tested)
+    # The other side stops: a search on past it would call only to test again.
+    assert render(found.program) == (
+        "c1 = say(text=text)\n"
+        "if c1.status in ('spoken',):\n"
+        "    return c1.status\n"
+        "else:\n"
+        "    stop(c1.status)"
     )
-    task = read_task("say", {"text": {"type": "string"}}, {"const": "spoken"})
-    found = plan({"say": said}, task, depth=4)
+    assert [u.examples for u in found.uncovered] == [("interrupted",)]
+    checked = verify(found.program, {"say": _said(SAYING)["say"]}, task)
+    assert all(link.verdict == "proven" for link in checked.links)
+
+
+def test_no_input_and_no_field_listing_no_members_is_tested_into_the_goal() -> None:
+    task = read_task("forge", {"text": {"type": "string"}}, {"const": "spoken"})
+    found = plan({"transcribe": _said(SAYING)["transcribe"]}, task, depth=4)
     assert found.program is None
     assert found.reason is not None
     assert found.reason.endswith(
-        "; say.status meets the goal and lies outside it, and the search tests no value into the "
-        "goal"
+        "; transcribe.text meets the goal and lies outside it, and lists no members a test into "
+        "the goal could name"
     )

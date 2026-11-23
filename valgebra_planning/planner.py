@@ -116,6 +116,12 @@ def _listing(schema: object) -> tuple[tuple[str, ...], tuple[Any, ...]] | None:
     return None
 
 
+def _members(schema: object) -> tuple[Any, ...] | None:
+    """Return the members a schema lists, an ``enum`` or a ``const`` beside a ``type``, or None."""
+    listing = _listing(schema)
+    return None if listing is None or listing[0] else listing[1]
+
+
 def _guards(policies: Sequence[Policy]) -> dict[str, tuple[_Guard, ...]]:
     """Return, by tool, each guard a policy's transition reads off its result and a test can."""
     found: dict[str, list[_Guard]] = {}
@@ -250,6 +256,8 @@ class _Search:
     fresh: frozenset[tuple[str, str]] = frozenset()
     #: The library's postconditions: an acted one gets the block verifying before a retry.
     postconditions: tuple[Postcondition, ...] = ()
+    #: The goal's set, which a member a result field lists is read against (`observed`).
+    goal_values: Validator[Any] = anything
 
     def bound(self, state: _State, ref: Ref) -> Validator[Any]:
         """Return the values a binding passes: a constant's own, or its reference's cells'."""
@@ -406,9 +414,15 @@ class _Search:
                 continue
             stepped = state.but(policed=policed)
             after = self.after(stepped, contract, bindings, result)
-            rest = self.solve(after, depth - 1, weak=weak)
+            # A weak search tests the result into the goal first: searching on past the call
+            # reaches the same test deeper, after calls no path needs.
+            rest = self.observed(after, contract, result, depth, weak=True) if weak else None
+            if rest is None:
+                rest = self.solve(after, depth - 1, weak=weak)
             if rest is None:
                 rest = self.split(state, after, contract, bindings, result, depth, weak=weak)
+            if rest is None and not weak:
+                rest = self.observed(after, contract, result, depth, weak=False)
             if rest is not None:
                 return Block((call, *rest.calls), rest.end)
         return None
@@ -470,6 +484,50 @@ class _Search:
                 otherwise = self.stopping(outside, ref, depth - 2)
             if otherwise is not None:
                 return Block((), Branch(ref, "", "", then, otherwise, guard.values))
+        return None
+
+    def observed(
+        self, after: _State, contract: Contract, result: str, depth: int, *, weak: bool
+    ) -> Block | None:
+        """Return a test of a field of the call's result into the goal, and a program each side.
+
+        A field whose declared set lists its members, an ``enum`` or a ``const``, and meets the
+        goal without lying inside it, is tested on the members it lists that the goal holds, an
+        observation splitting the belief (Bertoli et al. 2006, Def. 3.6): its ``then`` side
+        returns the field, and its other side takes a program reaching the goal on every path,
+        or, in a weak search, stops, the case a weak plan leaves uncovered (Cimatti et al.
+        2003, Def. 2.10). A weak program there would call on only to test again, so it is
+        searched only where a policy holds an obligation the stop may not leave open. The
+        members are the tool's own, so the test narrows what the tool returned and writes none
+        the goal holds of itself; a task input, a constant and a field listing no members are
+        never tested into the goal.
+        """
+        if depth < _GUARD:
+            return None
+        held = dict(after.refs)
+        for slot in contract.results:
+            ref = Ref(result, slot.path)
+            members = _members(slot.schema)
+            if ref not in held or members is None or held[ref] <= self.goal:
+                continue
+            values = tuple(v for v in members if self.goal_values.is_valid(v))
+            cells = held[ref]
+            tested = frozenset(i for i in cells if values and self._inside(i, values))
+            if not tested:
+                continue
+            then = self.solve(after.narrowed(ref, tested), depth - 2, weak=weak)
+            if then is None:
+                continue
+            outside = after.narrowed(ref, cells - tested)
+            otherwise = self.solve(outside, depth - 2, weak=False)
+            if otherwise is None and weak:
+                otherwise = (
+                    self.stopping(outside, ref, depth - 2)
+                    if self.settled(outside)
+                    else self.solve(outside, depth - 2, weak=True)
+                )
+            if otherwise is not None:
+                return Block((), Branch(ref, "", "", then, otherwise, values))
         return None
 
     def _inside(self, cell: int, values: tuple[Any, ...]) -> bool:
@@ -764,8 +822,8 @@ def _reason(
 
     Beside the bound, it names each required argument of a tool on a path toward the goal
     (``mattering``) that only a tested input fills, then those of a tool only a policy names,
-    and each result field listing its members that meets the goal and lies outside it, which
-    only a test into the goal would narrow.
+    and each result field that meets the goal and lies outside it and lists no members, which
+    the search tests into the goal on none (`_Search.observed`).
     """
     if cut:
         reason = (
@@ -788,26 +846,25 @@ def _reason(
             "lead to no goal"
         )
     if near := _near_the_goal(contracts, task, mattering):
-        meets = (
-            f"{near[0]} meets the goal and lies outside it"
-            if len(near) == 1
-            else f"each of {', '.join(near)} meets the goal and lies outside it"
+        meets = near[0] if len(near) == 1 else f"each of {', '.join(near)}"
+        reason += (
+            f"; {meets} meets the goal and lies outside it, and lists no members a test into "
+            "the goal could name"
         )
-        reason += f"; {meets}, and the search tests no value into the goal"
     return reason
 
 
 def _near_the_goal(
     contracts: Mapping[str, Contract], task: Task, mattering: frozenset[str]
 ) -> list[str]:
-    """Return each result field listing its members that meets the goal and lies outside it."""
+    """Return each result field listing no members that meets the goal and lies outside it."""
     return sorted(
         slot.name
         for name, contract in contracts.items()
         if name in mattering
         for slot in contract.results
         if slot.path
-        and _listing(slot.schema) is not None
+        and _members(slot.schema) is None
         and _meets(slot.values, task.goal)
         and slot.values.relation_to(task.goal) != "subset"
     )
@@ -1460,9 +1517,11 @@ def plan(
         for index, (tool, argument, _) in enumerate(task.constants)
     }
     literals = {fixed[tool, argument]: value for tool, argument, value in task.constants}
-    for one in searches:
+    goals = [values for values, _ in task.preferred] or [task.goal]
+    for one, goal in zip(searches, goals, strict=True):
         one.fixed, one.literals, one.guards = fixed, literals, guards
         one.fresh, one.postconditions = frozenset(task.fresh), tuple(postconditions)
+        one.goal_values = goal
     for one, after in itertools.pairwise(searches):
         one.fallback = after
         after.stops = searches[0].stops

@@ -127,6 +127,12 @@ A state maps each value the agent holds to its cells (`valgebra_planning/planner
 enabled when each required argument has a value whose cells lie inside the argument's. A guarded
 call branches on a value that only overlaps an argument, calls the tool on the narrowed value in
 one branch and goes on in the other; a second overlapping argument is guarded inside it. A
+field of a call's result whose declared set lists its members, an `enum` or a `const`, and meets
+the goal without lying inside it, is tested on the members it lists that the goal holds: the
+`then` branch returns it, and the other takes a strong program from there or stops. A weak
+search writes that test before searching past the call. No task input, constant or field listing
+no members is tested into the goal, since a free-text value equal to the goal's member is no
+outcome a tool reported, and a plan with no program names each such field that meets the goal. A
 program is strong when every path returns a value whose cells lie inside the goal's: strong
 planning under nondeterministic outcomes (Cimatti et al. 2003), a branch being an observation
 (Bertoli et al. 2006). The search deepens on the calls and tests along a

@@ -62,11 +62,17 @@ strong program for the first, else a weak one whose stops a program toward the n
 verifies the whole against the union. A call the search makes before a test that only one
 branch needs moves into that branch, since one action can always be postponed to observing
 (Bertoli et al. 2006, §6.2); the program is verified again, and the move kept only where every
-link and every stop read as before. **[LOAD-BEARING: strong-programs]**
+link and every stop read as before. A field of a call's result whose declared set lists its
+members and meets the goal without lying inside it is tested on the members it lists that the
+goal holds, an observation splitting the belief (Bertoli et al. 2006, Def. 3.6): one side
+returns, the other takes a strong program or stops, as a weak plan may (Cimatti et al. 2003,
+Def. 2.10). The members are the tool's own, so the test narrows what a call returned; a task
+input or a free-text field is never tested into the goal, since a value equal to the goal's
+member is then no outcome any call reported. **[LOAD-BEARING: strong-programs]**
 
-IMPLEMENTED-BY: planner.py, planner.py::_ranked, planner.py::_Search.stopping, planner.py::_test_first
+IMPLEMENTED-BY: planner.py, planner.py::_ranked, planner.py::_Search.stopping, planner.py::_test_first, planner.py::_Search.observed
 
-HELD-BY: test_a_strong_program_branches_on_every_status_and_verifies, test_a_weak_program_names_the_status_no_tool_settles, test_a_strong_program_breaks_no_contract_whatever_the_tools_return, test_the_depth_bounds_the_calls_and_tests_on_a_path, test_the_program_is_the_same_whatever_order_the_tools_are_listed_in, test_the_weak_program_leaving_the_fewest_cells_uncovered_is_returned, test_a_preferred_goal_is_returned_where_it_can_be_and_the_next_fills_its_stops, test_where_no_program_reaches_the_preferred_goal_the_plan_returns_in_the_next, test_a_call_one_branch_alone_needs_is_made_after_the_test_that_decides_it, test_a_call_every_path_needs_stays_before_the_test
+HELD-BY: test_a_strong_program_branches_on_every_status_and_verifies, test_a_weak_program_names_the_status_no_tool_settles, test_a_strong_program_breaks_no_contract_whatever_the_tools_return, test_the_depth_bounds_the_calls_and_tests_on_a_path, test_the_program_is_the_same_whatever_order_the_tools_are_listed_in, test_the_weak_program_leaving_the_fewest_cells_uncovered_is_returned, test_a_preferred_goal_is_returned_where_it_can_be_and_the_next_fills_its_stops, test_where_no_program_reaches_the_preferred_goal_the_plan_returns_in_the_next, test_a_call_one_branch_alone_needs_is_made_after_the_test_that_decides_it, test_a_call_every_path_needs_stays_before_the_test, test_a_listed_field_is_tested_into_the_goal_on_the_members_it_lists, test_no_input_and_no_field_listing_no_members_is_tested_into_the_goal
 
 **The verifier reads a program as belief execution.** The set a reference lies in at a point of
 a program is its belief there: a call's result enters as its output set, replacing every belief
