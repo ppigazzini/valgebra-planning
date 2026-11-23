@@ -40,6 +40,15 @@ All notable changes to valgebra-planning are recorded here. The format follows
   an agent inside the checked value, where no contract bounds the text a model reads. The parcels
   library holds none.
 
+### Changed
+
+- A proxy's refusal on a policy names the calls that move the policy on. A refusal read "freight
+  approved first: book_freight_return reached violated", the rule and the state, not the call
+  that would admit the booking. `Monitor.ways_out` names each transition from a state the run
+  may be in to one that is not bad, on a call other than the one refused, and the gate adds them:
+  "...; from start, approve_freight leads to approved". The runner's `Run.refused` reads as
+  before.
+
 ### Security
 
 - A proxy answers a result with the checked value as its text. The gate checks a result's

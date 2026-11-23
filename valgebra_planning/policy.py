@@ -464,6 +464,31 @@ class Monitor:
         """Step on a call's result; return whether it may reach a bad state, never left."""
         return self.step(tool, arguments, hints, result)
 
+    def ways_out(self, tool: str, hints: frozenset[str] = frozenset()) -> list[str]:
+        """Return each call that moves the run on from where a refused call to ``tool`` leaves it.
+
+        Each is a transition from a state the run may be in to one that is not bad, on a call
+        other than ``tool``'s, as `from start, approve_freight leads to approved`: the calls the
+        policy waits for. A transition reading a result is named by its tool and its result, and
+        one reading a hint by the hint; each is named once, in the order the policy lists them.
+        """
+        held = self.held() - self.policy.bad
+        named: list[str] = []
+        for transition in self.policy.transitions:
+            if (
+                transition.source not in held
+                or transition.target in self.policy.bad
+                or transition.reads(tool, hints)
+            ):
+                continue
+            call = transition.tool or f"a call setting {transition.hint}"
+            if transition.result is not None:
+                call += ", by its result,"
+            way = f"from {transition.source}, {call} leads to {transition.target}"
+            if way not in named:
+                named.append(way)
+        return named
+
     def errored(self) -> None:
         """Hold the states before the call observed last too: it answered with an error."""
         for instance in self.touched or [self]:

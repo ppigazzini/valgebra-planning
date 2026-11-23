@@ -319,7 +319,8 @@ outlasting a retry's attempts; an argument record, a policy or a returned value 
 program is a defect to report, and in an unproven one its own unproven link. A lying annotation and
 a wrong mined type break no check a run can see. `valgebra_planning/proxy.py` holds the same checks
 as an MCP server in front of another, for an agent no program governs: each call is answered with a
-tool error naming the check it breaks, and each failure's path and code but never the value or a key
+tool error naming the check it breaks, a policy's refusal with the calls that move it on from where
+it leaves the run, and each failure's path and code but never the value or a key
 the schemas do not declare, so a refused result reaches the agent through no error. A result that
 passes is answered with the checked value as its text, its JSON where the server answered with
 structured content, and with a block other than text only for a tool `tools.json` names under

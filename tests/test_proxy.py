@@ -145,7 +145,10 @@ def test_a_result_the_client_refuses_is_a_refusal_naming_the_tool_and_never_the_
 def test_a_refused_call_leaves_the_policy_where_it_was() -> None:
     approval = ("approve_freight", {"parcel_id": "pcl_1"})
     made, (early, approved, booked) = _session([BOOKING, approval, BOOKING], policies=[FREIGHT])
-    violated = "refused: freight approved first: book_freight_return reached violated"
+    violated = (
+        "refused: freight approved first: book_freight_return reached violated; "
+        "from start, approve_freight leads to approved"
+    )
     assert _refused(early) == violated
     assert not approved.is_error
     assert not booked.is_error
@@ -157,7 +160,10 @@ def test_a_call_the_server_answers_with_an_error_leaves_the_policy_in_either_sta
     answers = ANSWERS | {"approve_freight": ERROR}
     made, (errored, booked) = _session([approval, BOOKING], answers, policies=[FREIGHT])
     assert errored.is_error
-    violated = "refused: freight approved first: book_freight_return reached violated"
+    violated = (
+        "refused: freight approved first: book_freight_return reached violated; "
+        "from start, approve_freight leads to approved"
+    )
     assert _refused(booked) == violated
     assert made == ["approve_freight"]
 
@@ -828,7 +834,8 @@ def test_an_error_is_held_against_its_own_call_beside_one_no_policy_reads() -> N
     )
     assert not found.is_error
     assert _refused(booked) == (
-        "refused: freight approved first: book_freight_return reached violated"
+        "refused: freight approved first: book_freight_return reached violated; "
+        "from start, approve_freight leads to approved"
     )
     assert made == ["approve_freight", "find_parcel"]
 

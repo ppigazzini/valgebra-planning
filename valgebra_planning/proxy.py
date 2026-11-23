@@ -216,7 +216,10 @@ class Gate:
             if monitor.observe(tool, arguments, contract.hints):
                 for kept, snapshot in zip(self.monitors, states, strict=True):
                     kept.restore(snapshot)
-                return monitor.violations[-1]
+                # Name the calls that move the policy on from where the refusal leaves it, so an
+                # agent reads what admits the call, not the state alone.
+                ways = monitor.ways_out(tool, contract.hints)
+                return "; ".join([monitor.violations[-1], *ways])
         return None
 
     def flowing(self, tool: str, arguments: dict[str, Any]) -> str | None:

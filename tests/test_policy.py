@@ -816,3 +816,27 @@ def test_a_rule_written_first_match_is_proven_as_the_monitor_reads_it() -> None:
     )
     checked = verify(read_program(source), tools, task, policies=[NEAR_FIRST])
     assert all(link.verdict == "proven" for link in checked.links), checked.links
+
+
+def test_a_refusal_names_the_calls_that_move_the_policy_on() -> None:
+    monitor = Monitor(FREIGHT)
+    assert monitor.ways_out("book_freight_return") == [
+        "from start, approve_freight leads to approved"
+    ]
+    # The refused call is no way out of the state it was refused in.
+    assert monitor.ways_out("approve_freight") == []
+    consent = read_policy(
+        {
+            "name": "a motion follows a yes",
+            "initial": "start",
+            "bad": ["violated"],
+            "transitions": [
+                {"from": "start", "tool": "confirm", "result": {"const": True}, "to": "ok"},
+                {"from": "start", "hint": "destructiveHint", "to": "violated"},
+                {"from": "ok", "hint": "destructiveHint", "to": "start"},
+            ],
+        }
+    )
+    assert Monitor(consent).ways_out("walk_to", frozenset({"destructiveHint"})) == [
+        "from start, confirm, by its result, leads to ok"
+    ]
