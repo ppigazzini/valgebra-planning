@@ -318,7 +318,10 @@ tool error naming the check it breaks, and each failure's path and code but neve
 the schemas do not declare, so a refused result reaches the agent through no error. A result that
 passes is answered with the checked value as its text, its JSON where the server answered with
 structured content, and with a block other than text only for a tool `tools.json` names under
-`"nonTextBlocks"`, since a client hands a model the text and the gate checks the value. The mcp client
+`"nonTextBlocks"`, since a client hands a model the text and the gate checks the value. An error
+the server answers reaches the agent with a fixed text naming the tool, or as written where its
+text lies in the set `tools.json` names for the tool under `"errorTexts"`, and a protocol error
+with the tool and the error's code, never its message. The mcp client
 checks a result against the output schema the server declares before the proxy does, and its refusal
 holds the value, so it is answered with a refusal naming the tool alone, as `run_on_server` ends the
 run on the `result` check naming it. A call a policy reads holds the gate from its check to its

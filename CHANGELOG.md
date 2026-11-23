@@ -27,6 +27,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
   `proxy`, `read_proxy` and `serve`). A tool declaring no output schema is answered as the server
   wrote it, which the method's Limits state. SECURITY.md's second class names text passed beside
   a checked value.
+- A proxy answers an error with a fixed text naming the tool. An error result passed on as the
+  server wrote it, and a protocol error as the tool's name and the error's message: text no
+  contract bounds, read by the agent to recover. `Gate.erred` passes an error's text on where it
+  lies in the JSON Schema `tools.json` names for the tool under `"errorTexts"` (`error_texts=` on
+  `proxy`, `read_proxy` and `serve`), as an enum of the failures the tool reports, and answers any
+  other with "TOOL answered with an error"; a protocol error is answered with the tool and its
+  code, and a request for input with the tool alone.
 - A proxy holds every state a call may have reached where it reads no outcome of it. A result the
   gate or the mcp client refuses, a call the client in front cancels, and a call no result
   answers stepped no policy, though the call was made: under a rule stepped on a grasp's result,

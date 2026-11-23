@@ -5,7 +5,8 @@ A library is a directory. ``tools.json`` holds a server's ``tools/list`` result,
 ``"closedResults": true`` where each whole result is read closed, an assumption about the
 server (`valgebra_planning.contracts.read_contract`), and ``"afterViolation"``, the tools a proxy
 calls after a violation (`after_violation`), and ``"nonTextBlocks"``, the tools whose blocks
-other than text a proxy keeps (`non_text_blocks`). ``tasks.json``
+other than text a proxy keeps (`non_text_blocks`), and ``"errorTexts"``, the set each tool's
+error text lies in to be passed on (`error_texts`). ``tasks.json``
 holds ``{"tasks": [...]}``, each task its ``name``, the JSON Schema of each input in ``inputs``
 and of the ``goal``, the rules it names, ``errors`` (any tool may fail), ``policies`` and
 ``flows`` by name, and ``types``, the file of observed calls its types are mined from, and
@@ -44,6 +45,7 @@ __all__ = [
     "Problem",
     "after_violation",
     "asserts_format",
+    "error_texts",
     "non_text_blocks",
     "read_library",
     "reads_closed",
@@ -127,6 +129,7 @@ _TOOLS_KEYS = frozenset(
         "postconditions",
         "afterViolation",
         "nonTextBlocks",
+        "errorTexts",
     }
 )
 
@@ -176,6 +179,21 @@ def non_text_blocks(directory: Path) -> frozenset[str]:
     text, as a camera's image no check reads, only for these.
     """
     return _named(directory, "nonTextBlocks")
+
+
+def error_texts(directory: Path) -> dict[str, Any]:
+    """Return the set each tool's error text lies in: ``"errorTexts": {tool: schema}``.
+
+    A proxy passes on an error a tool answers where its text lies in the JSON Schema named for
+    the tool, as an enum of the failures it reports, and answers any other with a fixed text.
+    """
+    named = _document(directory / "tools.json", _TOOLS_KEYS).get("errorTexts", {})
+    if not isinstance(named, dict) or not all(
+        isinstance(schema, (dict, bool)) for schema in named.values()
+    ):
+        message = f"tools.json: 'errorTexts' maps a tool's name to a JSON Schema, not {named!r}"
+        raise TypeError(message)
+    return dict(named)
 
 
 def _goals(spec: Mapping[str, Any]) -> list[Any]:

@@ -950,6 +950,40 @@ def test_a_tool_declaring_no_output_schema_is_answered_as_written() -> None:
     assert [block.text for block in answer.content] == [STEERING]
 
 
-def test_a_tool_the_proxy_does_not_hold_is_not_named_for_blocks() -> None:
+@pytest.mark.parametrize(
+    "named",
+    [{"non_text_blocks": frozenset({"camera"})}, {"error_texts": {"camera": None}}],
+    ids=["blocks", "error-texts"],
+)
+def test_a_tool_the_proxy_does_not_hold_is_not_named_for_its_answers(named: Any) -> None:
     with pytest.raises(ValueError, match="the proxy holds no such tool"):
-        Gate(TOOLS, [], [], non_text_blocks=frozenset({"camera"}))
+        Gate(TOOLS, [], [], **named)
+
+
+#: The failures an approval reports, the set its error text must lie in to reach the agent.
+FAILURES = {"approve_freight": {"enum": ["not approved", "parcel unknown"]}}
+
+
+@pytest.mark.parametrize(
+    ("text", "error_texts", "read"),
+    [
+        (STEERING, None, "approve_freight answered with an error"),
+        (STEERING, FAILURES, "approve_freight answered with an error"),
+        ("not approved", FAILURES, "not approved"),
+    ],
+    ids=["no-set", "outside-its-set", "inside-its-set"],
+)
+def test_an_error_s_text_reaches_the_agent_only_inside_its_tool_s_set(
+    text: str, error_texts: Any, read: str
+) -> None:
+    error = types.CallToolResult(content=[types.TextContent(type="text", text=text)], is_error=True)
+    answer = _answered(error, error_texts=error_texts)
+    assert answer.is_error
+    assert [block.text for block in answer.content] == [read]
+
+
+def test_a_protocol_error_names_its_code_and_none_of_its_message() -> None:
+    answer = _answered(_no_answer)
+    assert [block.text for block in answer.content] == [
+        "approve_freight did not answer: error -32603"
+    ]

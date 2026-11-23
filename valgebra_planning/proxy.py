@@ -47,7 +47,7 @@ from mcp.server.auth.settings import AuthSettings
 from mcp.server.lowlevel import Server
 from mcp.server.transport_security import TransportSecuritySettings
 
-from valgebra_planning._valgebra import Unsupported, json_key, read_tool
+from valgebra_planning._valgebra import Unsupported, Validator, compile_schema, json_key, read_tool
 from valgebra_planning.contracts import Contract, contract_names, failures
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Monitor, Policy
@@ -107,14 +107,19 @@ class Gate:
     #: The tools whose result is answered with its blocks other than text beside the checked
     #: value, as a camera's image: no check reads them.
     non_text_blocks: frozenset[str] = frozenset()
+    #: The set each tool's error text must lie in to be passed on as the server wrote it.
+    error_texts: Mapping[str, Validator[Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Refuse a tool named in ``after_violation`` or ``non_text_blocks`` the proxy lacks.
+        """Refuse a tool named for its answers or its calls that the proxy lacks, or a policy reads.
 
-        A tool of ``after_violation`` a policy reads is refused too.
+        Each of ``after_violation``, ``non_text_blocks`` and ``error_texts`` names tools the proxy
+        holds, and a tool of ``after_violation`` is one no policy reads.
         """
-        for tool in sorted(self.non_text_blocks - self.contracts.keys()):
-            msg = f"{tool} answers blocks other than text, and the proxy holds no such tool"
+        for tool in sorted(
+            (self.non_text_blocks | self.error_texts.keys()) - self.contracts.keys()
+        ):
+            msg = f"{tool} is named for its answers, and the proxy holds no such tool"
             raise ValueError(msg)
         for tool in sorted(self.after_violation):
             if tool not in self.contracts:
@@ -157,6 +162,21 @@ class Gate:
         return types.CallToolResult(
             content=[types.TextContent(type="text", text=text), *blocks],
             structured_content=result.structured_content,
+        )
+
+    def erred(self, tool: str, result: types.CallToolResult) -> types.CallToolResult:
+        """Return an error the server answered, as the agent reads it.
+
+        Its text is passed on where it lies in the set ``error_texts`` holds for the tool, as an
+        enum of the failures a tool reports, and is otherwise a fixed text naming the tool: no
+        contract bounds what a server writes in an error, and a model reads it to recover.
+        """
+        text = "".join(block.text for block in result.content if block.type == "text")
+        allowed = self.error_texts.get(tool)
+        if allowed is None or not allowed.is_valid(text):
+            text = f"{tool} answered with an error"
+        return types.CallToolResult(
+            content=[types.TextContent(type="text", text=text)], is_error=True
         )
 
     def stopped(self, tool: str) -> str | None:
@@ -375,7 +395,13 @@ async def _checked(
         raise
     except (MCPError, InputRequiredRoundsExceededError) as error:
         gate.unread(params.name, arguments)
-        text = types.TextContent(type="text", text=f"{params.name} did not answer: {error}")
+        # The message is the server's or the client's, text no contract bounds: name the code.
+        said = (
+            f"error {error.error.code}"
+            if isinstance(error, MCPError)
+            else "it asked for input, which the proxy gives none of"
+        )
+        text = types.TextContent(type="text", text=f"{params.name} did not answer: {said}")
         return types.CallToolResult(content=[text], is_error=True)
     except RuntimeError as error:
         if not refused_by_client(error, params.name):
@@ -387,7 +413,7 @@ async def _checked(
     if result.is_error:
         if gate.policed(params.name):
             gate.errored()
-        return result
+        return gate.erred(params.name, result)
     value = result.structured_content
     if value is None:
         value = "".join(getattr(block, "text", "") for block in result.content)
@@ -406,6 +432,7 @@ def proxy(
     flows: Sequence[Flow] = (),
     after_violation: Iterable[str] = (),
     non_text_blocks: Iterable[str] = (),
+    error_texts: Mapping[str, object] | None = None,
 ) -> Server[Any]:
     """Return an MCP server answering ``listing`` through ``upstream``, every call checked.
 
@@ -420,7 +447,9 @@ def proxy(
     Once a result takes a policy to a bad state every later call is refused but one to a tool
     of ``after_violation``, as a robot's stop; `Gate` refuses such a tool a policy reads. A
     result's text is the checked value alone, and a block that is not text is kept only for a
-    tool of ``non_text_blocks`` (`Gate.answered`).
+    tool of ``non_text_blocks`` (`Gate.answered`). An error's text is passed on where it lies
+    in the JSON Schema ``error_texts`` gives its tool, and is otherwise a fixed text naming the
+    tool (`Gate.erred`).
     """
     gate = Gate(
         contracts,
@@ -428,6 +457,7 @@ def proxy(
         flows,
         after_violation=frozenset(after_violation),
         non_text_blocks=frozenset(non_text_blocks),
+        error_texts={tool: compile_schema(schema) for tool, schema in (error_texts or {}).items()},
     )
     held = asyncio.Lock()
 
@@ -453,6 +483,7 @@ async def read_proxy(
     spell_out: bool = False,
     after_violation: Iterable[str] = (),
     non_text_blocks: Iterable[str] = (),
+    error_texts: Mapping[str, object] | None = None,
 ) -> Server[Any]:
     """Return the proxy in front of the server ``upstream`` is connected to, every page listed.
 
@@ -462,7 +493,8 @@ async def read_proxy(
     `spelled_out` returns it, and one it returns None for is listed as published, with a
     `UserWarning` naming it; the gate holds every call to the published schemas. A call to a
     tool of ``after_violation`` is admitted after a violation, and a tool of
-    ``non_text_blocks`` answers its blocks other than text, as `proxy` reads both.
+    ``non_text_blocks`` answers its blocks other than text, and an error's text is held to
+    ``error_texts``, as `proxy` reads them.
     """
     from valgebra_planning.servers import read_server  # noqa: PLC0415
 
@@ -487,6 +519,7 @@ async def read_proxy(
         flows=flows,
         after_violation=after_violation,
         non_text_blocks=non_text_blocks,
+        error_texts=error_texts,
     )
 
 
@@ -500,12 +533,14 @@ async def serve(
     spell_out: bool = False,
     after_violation: Iterable[str] = (),
     non_text_blocks: Iterable[str] = (),
+    error_texts: Mapping[str, object] | None = None,
 ) -> None:
     """Serve the proxy over stdio in front of the server ``upstream`` is connected to.
 
     The proxy is `read_proxy`'s, its tools read with ``assert_format`` and ``closed_results``,
     listed spelled out with ``spell_out``, those of ``after_violation`` called after a
-    violation, and those of ``non_text_blocks`` answering their blocks other than text.
+    violation, those of ``non_text_blocks`` answering their blocks other than text, and each
+    error's text held to ``error_texts``.
     """
     from mcp.server.stdio import stdio_server  # noqa: PLC0415 - only a served proxy needs it
 
@@ -518,6 +553,7 @@ async def serve(
         spell_out=spell_out,
         after_violation=after_violation,
         non_text_blocks=non_text_blocks,
+        error_texts=error_texts,
     )
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())

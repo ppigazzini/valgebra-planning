@@ -17,7 +17,7 @@ from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 
 from valgebra_planning.cli import _address, _verifier, main
-from valgebra_planning.library import after_violation, non_text_blocks
+from valgebra_planning.library import after_violation, error_texts, non_text_blocks
 from valgebra_planning.servers import connect
 
 PARCELS = str(Path(__file__).parent.parent / "examples" / "parcels")
@@ -223,6 +223,20 @@ def test_a_library_names_the_tools_called_after_a_violation_in_a_list(
             reader(tmp_path)
         (tmp_path / "tools.json").write_text(json.dumps({"tools": [], key: ["stop"]}))
         assert reader(tmp_path) == {"stop"}
+
+
+@pytest.mark.parametrize(
+    "named", ["not approved", {"approve_freight": 1}], ids=["a-text", "a-number"]
+)
+def test_a_library_maps_a_tool_to_the_set_its_error_text_lies_in(
+    tmp_path: Path, named: object
+) -> None:
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [], "errorTexts": named}))
+    with pytest.raises(TypeError, match="'errorTexts' maps a tool's name to a JSON Schema"):
+        error_texts(tmp_path)
+    failures = {"approve_freight": {"enum": ["not approved"]}}
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [], "errorTexts": failures}))
+    assert error_texts(tmp_path) == failures
 
 
 @pytest.mark.parametrize("named", [False, True], ids=["unnamed", "named"])

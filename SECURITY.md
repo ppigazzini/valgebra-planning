@@ -20,7 +20,8 @@ fail closed. Please report, privately:
 - **A check passed on.** With `enforce` left on, the runner makes a call, binds a result or
   returns a value whose check broke; or the proxy forwards a call, or returns a result, that
   breaks a contract, a policy step or a flow rule, or answers a result whose output schema it
-  checked with text, or a block other than text its library does not name, beside the value.
+  checked with text, or a block other than text its library does not name, beside the value, or
+  an error with text outside the set its library names for the tool.
 - **A crash or unbounded cost within the bounds.** Reading a library, planning within its search
   bounds or verifying a program that crashes the interpreter, raises past Python's recursion
   limit, or takes time or memory without bound.
