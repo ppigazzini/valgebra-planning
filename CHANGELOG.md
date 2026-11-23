@@ -94,6 +94,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- The proxy lists each tool spelled out for a model's chat template on request,
+  `proxy --spell-out` and `read_proxy(..., spell_out=True)`: each `const` of an input schema is
+  written as its value's `type`, a one-value `enum` and a `description`, and each `pattern` is
+  named in the `description`, an upstream description kept. A tool is listed so only where
+  valgebra proves the two input sets equal both ways, and any other is listed as published
+  with a `UserWarning` naming it; the gate holds every call to the published schemas.
+  `spelled_out(tool)` returns the spelled-out tool, or None where the two are not proven equal.
+
 - The proxy serves Streamable HTTP to every client holding a token issued for it,
   `proxy --http HOST:PORT --resource URL --issuer URL --verifier MODULE:NAME`, and `http_app` and
   `serve_http`. A gate served over HTTP is moved by any client reaching it, and the command line

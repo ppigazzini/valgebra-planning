@@ -17,7 +17,7 @@ from mcp.server.lowlevel import Server
 from valgebra_planning.contracts import read_contract
 from valgebra_planning.flows import read_flow
 from valgebra_planning.policy import read_policy
-from valgebra_planning.proxy import Gate, http_app, proxy, read_proxy
+from valgebra_planning.proxy import Gate, http_app, proxy, read_proxy, spelled_out
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 LISTING = json.loads((EXAMPLE / "tools.json").read_text())["tools"]
@@ -568,3 +568,132 @@ def test_every_authenticated_client_of_one_proxy_calls_through_its_one_gate() ->
 def test_a_proxy_s_resource_is_an_http_url() -> None:
     with pytest.raises(ValueError, match="resource is an HTTP URL"):
         http_app(Server("x"), resource="robot", issuer=ISSUER, verifier=TOKENS)
+
+
+POSE = {
+    "name": "estimate_pose",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "status": {"const": "found"},
+            "object_id": {"type": "string", "pattern": "^obj_[0-9]+$", "description": "the object"},
+            "frames": {"type": "array", "items": {"const": 1}},
+            "unit": {"anyOf": [{"const": "m"}, {"const": "cm", "type": "string"}]},
+            "mode": {"const": "fast", "enum": ["fast", "slow"]},
+        },
+        "required": ["status", "object_id"],
+    },
+}
+
+
+def test_each_const_is_spelled_out_and_each_pattern_named_at_every_depth() -> None:
+    spelled = spelled_out(types.Tool.model_validate(POSE))
+    assert spelled is not None
+    assert spelled.input_schema["properties"] == {
+        "status": {"type": "string", "enum": ["found"], "description": 'always "found"'},
+        "object_id": {
+            "type": "string",
+            "pattern": "^obj_[0-9]+$",
+            "description": "the object; matches ^obj_[0-9]+$",
+        },
+        "frames": {
+            "type": "array",
+            "items": {"type": "integer", "enum": [1], "description": "always 1"},
+        },
+        "unit": {
+            "anyOf": [
+                {"type": "string", "enum": ["m"], "description": 'always "m"'},
+                {"type": "string", "enum": ["cm"], "description": 'always "cm"'},
+            ]
+        },
+        "mode": {"const": "fast", "enum": ["fast", "slow"]},
+    }
+
+
+def test_a_tool_holding_no_const_and_no_pattern_is_listed_as_it_is() -> None:
+    tool = types.Tool.model_validate(
+        {"name": "customs_form", "inputSchema": LISTING[6]["inputSchema"]}
+    )
+    assert spelled_out(tool) is tool
+
+
+JSON_VALUES = st.recursive(
+    st.none()
+    | st.booleans()
+    | st.integers()
+    | st.floats(allow_nan=False, allow_infinity=False)
+    | st.text(max_size=6),
+    lambda inner: (
+        st.lists(inner, max_size=3) | st.dictionaries(st.text(max_size=4), inner, max_size=3)
+    ),
+    max_leaves=6,
+)
+
+
+@settings(max_examples=60, deadline=None)
+@given(JSON_VALUES)
+def test_a_const_of_any_json_value_spelled_out_is_proven_equal_to_it(value: Any) -> None:
+    schema = {"type": "object", "properties": {"v": {"const": value}}, "required": ["v"]}
+    spelled = spelled_out(types.Tool.model_validate({"name": "t", "inputSchema": schema}))
+    assert spelled is not None
+    assert spelled.input_schema["properties"]["v"]["enum"] == [value]
+
+
+def _unpatterned(schema: Any) -> Any:
+    """Return ``schema`` with every ``pattern`` dropped: a spelling admitting more arguments."""
+    if isinstance(schema, dict):
+        return {key: _unpatterned(value) for key, value in schema.items() if key != "pattern"}
+    return [_unpatterned(item) for item in schema] if isinstance(schema, list) else schema
+
+
+def _bounded(schema: Any) -> Any:
+    """Return ``schema`` with every patterned string bounded: a spelling admitting fewer."""
+    if isinstance(schema, dict):
+        bounded = {key: _bounded(value) for key, value in schema.items()}
+        return bounded | {"maxLength": 0} if "pattern" in schema else bounded
+    return [_bounded(item) for item in schema] if isinstance(schema, list) else schema
+
+
+def _listed_through(**options: Any) -> tuple[list[types.Tool], list[Any]]:
+    """Return what a proxy in front of the parcel server lists, and the answers to two calls."""
+    calls = [
+        ("book_return", {"parcel_id": "pcl_1", "state": "lost", "weight_g": 500}),
+        ("find_parcel", {"tracking": "no tracking"}),
+    ]
+
+    async def session() -> tuple[list[types.Tool], list[Any]]:
+        async with Client(_upstream([], ANSWERS, LISTING)) as upstream:
+            front = await read_proxy(upstream, **options)
+            async with Client(front) as client:
+                listed = (await client.list_tools()).tools
+                return listed, [await client.call_tool(*call) for call in calls]
+
+    return asyncio.run(session())
+
+
+@pytest.mark.parametrize("spelling", [False, True], ids=["as-published", "spelled-out"])
+def test_a_proxy_listing_its_tools_spelled_out_holds_calls_to_the_published_schemas(
+    *, spelling: bool
+) -> None:
+    listed, answers = _listed_through(spell_out=spelling)
+    state = {tool.name: tool for tool in listed}["book_return"].input_schema["properties"]["state"]
+    assert state == (
+        {"type": "string", "enum": ["delivered"], "description": 'always "delivered"'}
+        if spelling
+        else {"const": "delivered", "type": "string"}
+    )
+    assert all(_refused(answer).startswith("refused: ") for answer in answers)
+
+
+@pytest.mark.parametrize("wrong", [_unpatterned, _bounded], ids=["wider", "narrower"])
+def test_a_spelling_valgebra_does_not_prove_equal_is_listed_as_published_and_named(
+    monkeypatch: pytest.MonkeyPatch, wrong: Any
+) -> None:
+    monkeypatch.setattr("valgebra_planning.proxy._spelled", wrong)
+    with pytest.warns(UserWarning, match="is listed as published") as caught:
+        listed, answers = _listed_through(spell_out=True)
+    named = {str(warning.message).split(" ", 1)[0] for warning in caught}
+    assert named == {tool["name"] for tool in LISTING} - {"customs_form"}
+    published = [types.Tool.model_validate(tool) for tool in LISTING]
+    assert [tool.input_schema for tool in listed] == [tool.input_schema for tool in published]
+    assert all(answer.is_error for answer in answers)

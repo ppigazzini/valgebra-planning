@@ -80,7 +80,7 @@ extra.
 | `valgebra_planning.vacuity` | `Certainty`, `Finding`, `vacuities` | |
 | `valgebra_planning.meaning` | `findings` | |
 | `valgebra_planning.servers` | `connect`, `read_server`, `refused_by_client`, `run_on_server` | the `mcp` extra |
-| `valgebra_planning.proxy` | `Gate`, `http_app`, `proxy`, `read_proxy`, `serve`, `serve_http` | the `mcp` extra |
+| `valgebra_planning.proxy` | `Gate`, `http_app`, `proxy`, `read_proxy`, `serve`, `serve_http`, `spelled_out` | the `mcp` extra |
 
 A module's `__all__` holds what a caller calls, the types those calls take and return, and the
 defaults a caller passes, `DEPTH` among them. Every other name a module defines serves the

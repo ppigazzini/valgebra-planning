@@ -345,6 +345,7 @@ def _proxy(args: argparse.Namespace) -> int:
                     flows=flows,
                     assert_format=asserted,
                     closed_results=closing,
+                    spell_out=args.spell_out,
                 )
                 return
             front = await read_proxy(
@@ -353,6 +354,7 @@ def _proxy(args: argparse.Namespace) -> int:
                 flows=flows,
                 assert_format=asserted,
                 closed_results=closing,
+                spell_out=args.spell_out,
             )
             (host, port), verifier = http
             await serve_http(
@@ -374,6 +376,11 @@ def _proxy_parser(commands: Any) -> argparse.ArgumentParser:
     """Add the ``proxy`` command and the arguments it alone takes."""
     proxied = commands.add_parser("proxy", help="serve an MCP proxy holding calls to the rules")
     proxied.add_argument("--library", type=Path, help="a library whose policies and flows hold")
+    proxied.add_argument(
+        "--spell-out",
+        action="store_true",
+        help="list each const and pattern spelled out for a model, where proven equal",
+    )
     proxied.add_argument(
         "--http", metavar="HOST:PORT", help="serve Streamable HTTP, every client authenticated"
     )

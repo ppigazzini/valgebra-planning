@@ -210,6 +210,19 @@ def test_the_proxy_reads_its_server_s_tools_as_its_library_does(
     assert result.is_error is closing
 
 
+@pytest.mark.parametrize("spelling", [False, True], ids=["as-published", "spelled-out"])
+def test_the_proxy_lists_its_server_s_tools_spelled_out_on_request(*, spelling: bool) -> None:
+    entry = "from valgebra_planning.cli import main; raise SystemExit(main())"
+    argv = ["proxy", "--server", SERVER, *(["--spell-out"] if spelling else [])]
+
+    async def listed() -> Any:
+        async with connect(shlex.join([sys.executable, "-c", entry, *argv])) as client:
+            return {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    state = asyncio.run(listed())["open_claim"].input_schema["properties"]["state"]
+    assert ("enum" in state) is spelling
+
+
 @pytest.mark.parametrize(
     "argv",
     [

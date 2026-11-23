@@ -504,7 +504,9 @@ the set it lies in:
 - **A closed result, and `type` beside each `const`.** A result record with
   `additionalProperties: false` holds the fields it names and no other. `{"type": "string",
   "const": "m"}` holds the one value `{"const": "m"}` does, and a template showing a model the
-  schema that drops `const` still shows it a string. A listing that cannot be changed is read
+  schema that drops `const` still shows it a string. A listing that cannot be changed is shown
+  to a model through `proxy --spell-out`, which writes each `const` as `type` and a one-value
+  `enum` where valgebra proves the two equal, and is read
   closed with `"closedResults": true` in `tools.json`, an assumption about the server each link
   over a result names, and `check` notes, where it is not set, a result meeting an argument only
   through keys its schema does not declare.

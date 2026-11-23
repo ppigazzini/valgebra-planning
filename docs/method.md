@@ -293,7 +293,11 @@ run on the `result` check naming it. A refused call steps no policy, a call the 
 an error leaves each policy in the states before and after it, and a flow rule reads a value's
 source from equality with what a source tool returned, an assumption. With `only` that is the
 grounding gate of Sah et al. 2026: an argument equal to no value its sources returned is refused,
-and a value from a task input with it, since a proxy sees no task.
+and a value from a task input with it, since a proxy sees no task. Its listing is the server's,
+or, with `spell_out`, each input schema written with `type` and a one-value `enum` for each
+`const` and a description for each `pattern`, for a chat template that drops either: a tool is
+listed so only where valgebra proves the two input sets equal, and the gate reads the published
+ones.
 
 ## Limits
 

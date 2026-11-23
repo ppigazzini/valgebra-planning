@@ -134,6 +134,13 @@ the call never reaches the server, or its result the agent. The server's tools a
 library reads its own listing, with its `assertFormat` and `closedResults`. The error names each failure's path
 and code, as `run_id: string_pattern_mismatch`, and never the value: a key the tool's schemas do
 not declare is written `*`, so no part of a refused result reaches the agent through the error.
+With `--spell-out`, each tool is listed with its input schema spelled out for a model's chat
+template, which may drop a `const` or a `pattern`: each `const` is written as its value's
+`type`, a one-value `enum` and a `description`, `{"type": "string", "enum": ["delivered"],
+"description": "always \"delivered\""}`, and each `pattern` is named in the `description`, an
+upstream description kept before it. A tool is listed so only where valgebra proves the
+arguments the spelling admits equal, both ways, to the published ones; any other is listed as
+published, and a warning names it. The gate holds every call to the published schemas.
 A result the proxy's client refuses against the output schema the server declares is refused
 naming the tool alone, since the client's own message holds the value.
 A refused call leaves every policy
