@@ -12,9 +12,9 @@ so is one asking for input (MCP 2026-07-28's ``input_required``: a sampling, an 
 roots, or an interaction it waits on): the client gives none, so no value a program did not hold
 reaches a call.
 
-Requires the ``mcp`` extra. The runner is synchronous and the client asynchronous, so the run
-goes on a worker thread and each call is sent to the client's event loop. Canceling the task that
-awaits `run_on_server` cancels the call in flight and sends no call after it.
+Requires the ``mcp`` extra. `run_on_server` drives `valgebra_planning.run.run`, which is
+synchronous, on a worker thread, and sends each call to the client's event loop. Canceling the
+task that awaits `run_on_server` cancels the call in flight and sends no call after it.
 """
 
 from __future__ import annotations

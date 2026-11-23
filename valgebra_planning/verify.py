@@ -222,11 +222,12 @@ class _Walk:
     def loop(self, end: For, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         """Walk a loop's body for an arbitrary item, the policies at a fixpoint; then what follows.
 
-        Nothing crosses iterations, so one walk over the item's set holds for every item. The
+        No value crosses iterations, so one walk over the item's set holds for every item. The
         body may run any number of times, so the states a policy may be in when it starts are
         taken to a fixpoint, the states being finite. How many times it runs is the array's, so
         its calls run under a test on the array's source (Debenedetti et al. 2025, §5.4). What
-        follows runs only where no iteration ended the run, so it runs under every test a path
+        follows runs only where no iteration ended the run, the returns in the body being terminal
+        states of the program (Cimatti et al. 2003, Def. 2.10), so it runs under every test a path
         ending the run in the body is under, the array's source among them: an early exit is a
         test, as a statement after an operation that may end a run early depends on what that
         operation read (Debenedetti et al. 2025, §7). The item's name binds the item alone:

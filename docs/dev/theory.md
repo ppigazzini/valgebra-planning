@@ -457,6 +457,6 @@ iteration ended the run, and a policy's obligation at a return in the body is re
 states the loop's fixpoint holds, any number of iterations coming before it.
 **[LOAD-BEARING: first-success]**
 
-IMPLEMENTED-BY: critic.py::_ending
+IMPLEMENTED-BY: critic.py::_ending, verify.py::_Walk.loop
 
 HELD-BY: test_a_return_in_a_body_ends_the_program_at_the_first_item_reaching_it, test_an_obligation_at_a_return_in_a_body_is_read_after_any_number_of_iterations, test_an_early_return_from_a_loop_is_a_test_on_its_array

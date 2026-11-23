@@ -87,6 +87,7 @@ label.
   no parcel twice: 49 stops in 400 at a fault rate of 0.5, where the program without it stops
   in 191.
 - A stale read and a partial booking are where the postcondition is false: the read shows no
-  label after a call that acted. There the block books twice as often as the blind retry. Both
+  label after a call that acted. There the block books a parcel twice in as many episodes as the
+  blind retry. Both
   are what its proof names: that the read sees the effect at once, and that `shows` is the
   weakest trace any effect leaves, which a label-less booking is not.

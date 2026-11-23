@@ -44,11 +44,12 @@ suite and the studies ran on, `pip install "valgebra-planning[mcp]==0.0.6" -c co
 | search a strong program, or a weak one whose stops name what they leave | `valgebra_planning/planner.py` |
 | verify every link of a program with valgebra alone | `valgebra_planning/verify.py` |
 | read a program written in Python, verify it and critique it | `valgebra_planning/critic.py` |
-| hold a program to tool errors, policies, flow rules and mined types | `planner.py`, `policy.py`, `flows.py`, `mining.py` |
+| hold a program to tool errors, policies, flow rules, mined types, fresh reads and postconditions | `planner.py`, `policy.py`, `flows.py`, `mining.py`, `contracts.py` |
 | run a program, failing closed on every contract and policy | `valgebra_planning/run.py` |
 | plan a library's tasks or critique a program from the command line | `valgebra_planning/cli.py` |
 | read a live MCP server's tools and run a program against it (`mcp` extra) | `valgebra_planning/servers.py` |
 | find the specifications of a library that hold vacuously | `valgebra_planning/vacuity.py` |
+| note contracts wider than their keywords suggest | `valgebra_planning/meaning.py` |
 | read Progent's privilege policies as sets: narrowing, expansion, a program held to one | `valgebra_planning/privilege.py` |
 | serve an MCP proxy holding every call to the contracts, policies and flow rules | `valgebra_planning/proxy.py` |
 | give a model typed stubs, and repair its program with the critique | `valgebra_planning/codemode.py` |

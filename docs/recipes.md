@@ -292,7 +292,7 @@ for every total. Run with the policy, the runner steps it on each call before th
 so the unapproved refund of 250.00 never reaches the server. `plan(..., policies=[...])` makes
 no call that breaks a policy, and finds the approved program itself.
 
-**A policy carries no value from one call to another.** It reads that some approval came first,
+**A policy carries no value from one call to another before the run.** It reads that some approval came first,
 not that it approved this order: a program approving one order and refunding another passes it.
 That one call takes the value another returned is a flow rule's, below. At run time a policy
 naming `"per": "order_id"` holds an instance for each order, so the runner refuses a refund of an

@@ -84,7 +84,7 @@ every value, and each question is asked of the array so; the loop's body and eve
 are walked either way. A value refutes a link on an item
 only where valgebra proves an item carrying it in an array of a value the program may hold,
 proven on a value drawn or given for that value with such an array in place of its own.
-Nothing crosses iterations, since what the
+No value crosses iterations, since what the
 body calls is scoped to its iteration, so the one walk holds for every item. A `return` in the
 body ends the program at the first item reaching it: the array is finite, so the iterations are
 acyclic, and each return is a terminal state its link proves in the goal, a strong solution's
@@ -136,7 +136,7 @@ failure through one origin is never taken for a state another origin reaches. Wh
 bound lets a branch stop once its sibling returns, and each stop names the values it leaves
 uncovered. The tools are tried in their names' order, so a server listing them in another order
 gets the same program; a weak program is searched for each tool the start may call first, until
-2,000 expansions past the first found, and the one whose stops leave the fewest cells uncovered
+`RANKING` (`valgebra_planning/planner.py`) expansions past the first found, and the one whose stops leave the fewest cells uncovered
 is returned, a tie going to the earlier name. A task may name its `goals` in the order it
 prefers them, as "grasp, else say why not": its goal is their union, which every return is
 verified in, and the planner searches a strong program for the first, else a weak one whose
@@ -167,8 +167,9 @@ verifier, which adds a link for it.
   are valgebra sets over the argument record. Along each path a guard is taken surely, possibly or
   never, and a path surely reaching a bad state is refuted, possibly undecided. A loop's body may
   run any number of times, so the states a policy may be in when it starts are taken to a
-  fixpoint, the states being finite. A policy reads one program's calls in order and carries no
-  value from one call to another. A transition may read an annotation hint, `destructiveHint` or
+  fixpoint, the states being finite. A policy reads one program's calls in order and, before the
+  run, carries no value from one call to another; with `per`, the runner holds one instance per
+  value. A transition may read an annotation hint, `destructiveHint` or
   another, on any tool giving it, MCP's default read where a tool sets none: a tool setting no
   annotation is destructive and open-world, and read-only only where it says so; the policy's link
   then lists the hints it reads as an assumption. A transition may read the call's result instead,
@@ -213,8 +214,9 @@ verifier, which adds a link for it.
   `walk_to` may have returned there inside `when`, and every link over the read names "the
   postcondition of walk_to on estimate_pose". The pair is matched by reference, so a name it
   reads that is bound again in between leaves the read uncovered. The runner refuses a read
-  outside `shows`, and `blame` lays it on the declaration; `check` notes a `when` meeting no
-  result of its call, and a `shows` meeting no result of its read or holding every one.
+  outside `shows`, and `blame` lays it on the declaration; `check` reports as vacuous a `when`
+  meeting no result of its call, and a `shows` meeting no result of its read or holding every
+  one.
 - **Verify before retry** (`"when": "acted"`). The postcondition then says what the read shows
   whenever the call acted at all, an error answered or not, so `shows` is the weakest trace any
   effect of it leaves, a partial one included, never the full effect a success leaves. After
@@ -267,8 +269,9 @@ and `valgebra_planning/vacuity.py` finds each kind a library can hold, every one
 a goal no value meets or every value meets; an input, an argument record or a result no value
 meets, a result the closed reading empties named as such; a policy transition naming no tool, or whose guard no argument record of its tool meets,
 and a policy no transition that can fire takes to a bad state; a flow rule naming no tool or
-argument, or whose endorsed set meets nothing its sink takes, or holds all of it; a policy or rule
-no task is held to. Values drawn from a schema are tried first, a member found proving a set
+argument, or whose endorsed set meets nothing its sink takes, or holds all of it; a postcondition
+whose `when` meets no result of its call, or whose `shows` meets no result of its read or holds
+every one; a policy or rule no task is held to. Values drawn from a schema are tried first, a member found proving a set
 inhabited; valgebra is asked only where none is, and a question it leaves undecided is reported
 as undecided.
 
@@ -331,12 +334,13 @@ ones.
   `format` does, takes any string, and a library with `"assertFormat": true` reads `format` as an
   assertion, so a `uuid` slot takes a UUID and free text reaches it only under a test; distinct schemas, patterns, enums and ranges are what make a
   plan mean what it should, and mined types narrow what observations support.
-- **What is not modeled.** Side effects beyond the calls a policy reads; a field or an item inside a resource with an `$id` of its own that refers into that resource,
+- **What is not modeled.** Side effects beyond the calls a policy reads, the readings a task's
+  `fresh` holds stale after a call that may act, and the reads a library's postconditions declare; a field or an item inside a resource with an `$id` of its own that refers into that resource,
   which the walk resolves from the document's root and so reads as any value, a gap the
   companion's reader of the whole schema closes; a field whose record's `properties` do not declare it, which takes any JSON
   value, as one an `anyOf` alone declares; and a program the planner writes holds no
-  constant but those its task fixes, tests no key and loops over no array. A program written
-  elsewhere may do all three, and each is checked like any value. A task fixes the constants its
+  constant but those its task fixes, tests no key but an acted postcondition's, and loops over
+  no array. A program written elsewhere may do all three, and each is checked like any value. A task fixes the constants its
   intent gives in `constants`, as the action a confirmation asks about: the planner writes each
   where its argument is, the verifier holds every call to the tool to it, and a flow rule judges
   it as the literal it is. A choice the planner should not make, as which hand grasps, is a task
@@ -402,7 +406,8 @@ ones.
   which would change the signatures the proxy lists. A gate served to any client is moved by any
   client, so the proxy serves HTTP only as an OAuth 2.1 resource server, as MCP 2026-07-28 has
   an HTTP server authorize: a request carries a bearer token issued for the proxy's URL as its
-  audience, unexpired and holding the scopes asked, or is answered 401; a Host other than the
+  audience, unexpired and holding the scopes asked, or is answered 401, or 403 where a scope is
+  missing; a Host other than the
   URL's is answered 421 and an Origin not listed 403. Reading a token is the verifier's the
   deployment names, and issuing one its authorization server's; the proxy reaches its server on
   a connection of its own, so no client's token goes upstream. Which client holds a value is

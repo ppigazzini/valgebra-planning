@@ -386,7 +386,8 @@ def http_app(
     The app is an OAuth 2.1 resource server, as MCP 2026-07-28 has an HTTP server authorize:
     every request carries a bearer token, which ``verifier`` reads, issued for ``resource``, the
     proxy's canonical URL, as its audience, unexpired, and holding every scope of ``scopes``.
-    Any other request is answered 401, naming the protected resource metadata that points the
+    Any other request is answered 401, or 403 where a scope is missing, naming the protected
+    resource metadata that points the
     client at ``issuer``, the authorization server. A request whose Host is not the resource's is
     answered 421, and one carrying an Origin not among ``origins`` 403, the check MCP asks of
     every connection against DNS rebinding. A token reaches no upstream: the proxy reaches its

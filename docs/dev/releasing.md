@@ -115,7 +115,8 @@ and repository, `release.yml` and the environment.
    its header names, and `test_the_tested_set_is_the_lock_s` holds its pins to the lock's: at a
    release's tag it is the set the release was tested with, which the README tells a deployment
    to pin.
-2. **Bump, in one commit.** `version` in `pyproject.toml`, `uv lock`, and the changelog: the
+2. **Bump, in one commit.** `version` in `pyproject.toml`, `uv lock`, the README's install pin,
+   and the changelog: the
    `Unreleased` entries roll into a section for the version, dated the day of the commit, with its
    compare and tag links. It lands on `main`, and the push runs `ci.yml` on the tree about to
    be published; the dispatches wait until it passes. The run's `api` job lists each public name

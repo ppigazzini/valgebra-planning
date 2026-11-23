@@ -25,7 +25,8 @@ holding every file.
 
 A rule means what its keys say. A key no reader reads, in a file, a task, a policy, a transition or
 a flow rule, is refused by name, as a misspelled `only` or `arguments` would leave a rule weaker
-than the one written; `errors`, `trusted`, `only` and `implicit` are `true` or `false`, a `depth`
+than the one written; `errors`, `trusted`, `assertFormat`, `closedResults`, `only` and
+`implicit` are `true` or `false`, a `depth`
 is a positive integer, and a transition names a `tool` or a `hint`, one of the two; `per`, an argument's name, gives the policy an instance for each value of it at run time. A command reading such a library exits 2
 naming the key.
 
@@ -77,7 +78,8 @@ uv run valgebra-planning check examples/parcels
 lists every specification in the library that holds vacuously, as
 [the method](method.md#specifications-that-hold-vacuously) defines them: a goal no value or
 every value meets, a policy transition that never fires, a policy that can never be violated, a
-flow rule that lets nothing or everything through, a rule no task is held to. A finding valgebra
+flow rule that lets nothing or everything through, a result the closed reading empties, a
+postcondition that covers no read or narrows none, a rule no task is held to. A finding valgebra
 leaves undecided is marked so. The exit status is 1 when it finds one. After them, each line
 starting `note:` names a contract wider than its keywords suggest
 ([the method](method.md#specifications-that-hold-vacuously)), which the exit status does not
@@ -117,7 +119,8 @@ fails closed on any argument record, policy step or result outside its contract.
 run ended, and the cause of a break (the server, an assumption, or the program), and exits 1 unless
 it returned a value with no break. With `--timeout`, `run` and `proxy` give each call that many
 seconds to be answered, after which it fails as a tool error; with none, a call waits for its
-answer. A canceled run sends no call after the cancel. `tests/parcel_server.py` serves the example's
+answer. `--depth` sets the calls and tests a path of the planned program may take, as for
+`plan`. A canceled run sends no call after the cancel. `tests/parcel_server.py` serves the example's
 tools over stdio.
 
 ## A proxy in front of a server

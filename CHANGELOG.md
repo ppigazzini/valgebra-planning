@@ -86,8 +86,7 @@ All notable changes to valgebra-planning are recorded here. The format follows
   proxy, the mcp package serving it over Streamable HTTP as it is, calls through its one gate,
   so a policy reads every client's calls and a flow rule pools what each was returned; one proxy
   per agent holds only the calls made through it, and a policy about the actuator for no agent.
-  A test holds both, two clients reaching one proxy over HTTP in process. The method page's
-  limit on HTTP is the command line's alone.
+  A test holds both, two clients reaching one proxy over HTTP in process.
 - A program the reader does not read is refused naming the form it reads there. A call left
   unbound was answered "only calls and loops come before a block's last statement", which names
   the statement it refuses as allowed, and a model resubmitted it unchanged: it is answered with
@@ -104,8 +103,8 @@ All notable changes to valgebra-planning are recorded here. The format follows
   postcondition, the one planned without it and a blind retry, each run 400 seeded episodes per
   fault mode and rate. Where a call acts or not and then answers with an error, the block stops
   in 49 of 400 at a fault rate of 0.5 where the program without it stops in 191, and books no
-  parcel twice; under a stale read or a booking with no label it books twice as often as the
-  blind retry.
+  parcel twice; under a stale read or a booking with no label it books a parcel twice in as
+  many episodes as the blind retry, 190 and 199 of 400 at 0.5.
 
 - A library declares what a call that returned leaves a later read showing, `postconditions` in
   `tools.json` and `read_postcondition`: `{"after": "walk_to", "when": ..., "read":
@@ -114,9 +113,9 @@ All notable changes to valgebra-planning are recorded here. The format follows
   walk returned in `when` and no other call that may act came between, and each link over it
   names the postcondition; `verify`, `critique`, `run`, `arun` and `run_on_server` take
   `postconditions`, the runner refuses a read outside `shows` as the check `postcondition`, and
-  `check` notes one that covers nothing or narrows nothing. A grasp on the distance read after
-  a walk that arrived is proven where `shows` holds the reach, and was refuted at 12.5 m. The
-  planner reads none.
+  `check` reports one that covers nothing or narrows nothing as vacuous. A grasp on the distance
+  read after a walk that arrived is proven where `shows` holds the reach, and refuted without
+  the postcondition. The planner reads none.
 
 - A call made again where a read shows it did not act is no retry. A postcondition with
   `"when": "acted"` says what its read shows whenever the call acted at all; after the call
@@ -230,7 +229,8 @@ All notable changes to valgebra-planning are recorded here. The format follows
   the policy stepped on it, a guard taken surely or never in each; a branch no value of a case
   reaches is dropped. The program walking only under the yes is proven, its stop the no's alone,
   and the one ignoring the answer is refuted on the no. Links in a case carry its place,
-  `case:c2:0`. The planner takes such a transition possibly at most.
+  `case:c2:0`. The planner tests a guard reading one field's listed members, and takes any other
+  such transition possibly at most.
 
 - A plan tests before it makes a call only one branch needs. The search makes a call where it
   first may, so a confirmation a policy requires before a grasp was asked before the distance
@@ -279,8 +279,8 @@ All notable changes to valgebra-planning are recorded here. The format follows
   meet, makes the transition step when the result arrives rather than when the call is made, as
   "a motion only after the user said yes" asks. The runner and the proxy step it on the result,
   a call answering with an error taking none; once a result takes a policy to a bad state the
-  proxy refuses every later call, the call having been made. Before a run a transition reading a
-  result is taken possibly at most, so a link resting on it is undecided, never proven.
+  proxy refuses every later call, the call having been made. Before a run the verifier splits the
+  path at such a call, the entry below.
 
 - A library reads `format` as an assertion where its `tools.json` holds `"assertFormat": true`,
   as valgebra-jsonschema reads it on request: a `uuid`, `date`, `duration` or `ipv4` slot is a
@@ -291,9 +291,9 @@ All notable changes to valgebra-planning are recorded here. The format follows
   `read_server` take `assert_format`, and `library.asserts_format` reads the library's choice
   for a caller reading a live server.
 
-- A plan with no program says why. `Plan.reason` reads whether the depth bound cut a path, so a
-  deeper search may find one, or no path reached it, so none does from the bindings the search
-  tries; the command `plan` prints it and its JSON carries it. `plan` and `run` take `--depth`,
+- A plan with no program says why. `Plan.reason` reads whether the depth bound cut a path, so
+  whether a deeper search finds one is not known, or no path reached it, so none does from the
+  bindings the search tries; the command `plan` prints it and its JSON carries it. `plan` and `run` take `--depth`,
   and a task in `tasks.json` may set its own `depth`, a positive integer. `render` raises a
   `TypeError` naming what it was given where it was given no program, as a plan holding none.
 

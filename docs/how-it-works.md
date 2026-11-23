@@ -240,8 +240,9 @@ runner and proxy ask them again of each call made.
 
 - **The types are the specification.** A slot whose schema admits any string takes any
   string: distinct patterns, enums and ranges are what make a proof mean what its author wants.
-- **Effects are the policies'.** A call can act on the world, and no effect is modeled beyond
-  the calls a policy reads.
+- **Effects are the policies', the fresh reads' and the postconditions'.** A call can act on the
+  world, and no effect is modeled beyond the calls a policy reads, the readings a task's `fresh`
+  holds stale after a call that may act, and the reads a library's postconditions declare.
 - **A gap is reported, never filled.** A relation valgebra leaves undecided, a keyword the
   companion cannot read, a stop no tool covers: each is named where it falls.
 
