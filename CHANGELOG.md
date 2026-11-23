@@ -99,6 +99,9 @@ All notable changes to valgebra-planning are recorded here. The format follows
   reading closed is a `ValueError`. An argument record's link names the assumptions of the values
   it is made of, an inferred output schema among them.
 
+- `check` notes a whole result, read as declared, that meets an argument or a task's goal only
+  through keys its output schema does not declare.
+
 - A task reads an argument fresh, `fresh` in `tasks.json` or `read_task(..., fresh=[...])`. A
   result was a value for the whole run, so a grasp bound to a distance estimated before a walk
   was proven, though the walk changed the distance. A call whose annotations do not say it is

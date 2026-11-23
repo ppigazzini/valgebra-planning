@@ -506,7 +506,8 @@ the set it lies in:
   "const": "m"}` holds the one value `{"const": "m"}` does, and a template showing a model the
   schema that drops `const` still shows it a string. A listing that cannot be changed is read
   closed with `"closedResults": true` in `tools.json`, an assumption about the server each link
-  over a result names.
+  over a result names, and `check` notes, where it is not set, a result meeting an argument only
+  through keys its schema does not declare.
 - **A number with its unit, bounded.** A distance is a record, `{"unit": "m", "value": ...}`,
   whose value has bounds, and an argument in reach is a narrower set: a distance reaches it only
   under a test, `if c2.distance in grasp.distance:`, and a server answering in centimeters

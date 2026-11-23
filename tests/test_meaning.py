@@ -116,3 +116,47 @@ def test_a_destructive_tool_whose_results_fill_only_a_gate_is_found() -> None:
     assert not any("walk_to: it is destructive" in f for f in _found([DETECT, gated, located]))
     # The grasp returns the goal itself, so it is no gate's source.
     assert not any("grasp: it is destructive" in f for f in _found([DETECT, gated, walk]))
+
+
+UNIT = {"const": "m"}
+DETECTED = {
+    "object_id": OBJECT_ID,
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+}
+PICKED = {
+    "object_id": OBJECT_ID,
+    "distance": {
+        "type": "object",
+        "properties": {"unit": UNIT, "value": {"type": "number", "minimum": 0.2, "maximum": 0.6}},
+        "required": ["unit", "value"],
+    },
+}
+
+
+@pytest.mark.parametrize(
+    ("output", "closing", "found"),
+    [
+        ({}, False, True),
+        ({"additionalProperties": False}, False, False),
+        ({}, True, False),
+        ({"properties": {**DETECTED, "unit": UNIT, "value": {"type": "number"}}}, False, False),
+    ],
+    ids=["open", "declared-closed", "read-closed", "declaring-the-keys"],
+)
+def test_a_result_meeting_an_argument_through_undeclared_keys_alone_is_found(
+    output: dict[str, Any], *, closing: bool, found: bool
+) -> None:
+    detect = _tool("detect", {"name": {"type": "string"}}, DETECTED, READ_ONLY)
+    detect["outputSchema"] |= output
+    listing = [detect, _tool("grasp", PICKED, {"grasp_id": GRASP_ID}, None)]
+    tools = {
+        contract.name: contract
+        for contract in (read_contract(tool, closed_results=closing) for tool in listing)
+    }
+    task = read_task("pick", {"name": {"type": "string"}}, GRASP_ID)
+    noted = {f"{f.where}: {f.finding}" for f in findings(Library(tools, (Problem(task),), {}))}
+    finding = (
+        "tool detect: its result meets grasp.distance only through keys its output schema does not"
+        " declare"
+    )
+    assert (finding in noted) is found

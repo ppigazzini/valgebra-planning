@@ -13,7 +13,11 @@ which `check` reports beside the vacuous specifications:
   schema with `const` dropped shows as any value;
 - a tool marked destructive, or left unmarked as MCP defaults to, whose results meet only
   arguments taking one value or a boolean and no task's goal: a plan calls it only to fill a
-  gate, a motion made to answer a confirmation.
+  gate, a motion made to answer a confirmation;
+- a whole result, read as declared, that meets an argument or a task's goal only through keys
+  its output schema does not declare: an open record takes any value at a key no field names,
+  and a closed one none (Castagna 2023, §3.2), so a plan may pass the record where its declared
+  keys never fit, as a detection whose extra keys a distance would need.
 
 A finding decides nothing: a plan, a proof and a run read the contracts as written, and what a
 finding names is the author's to narrow or keep.
@@ -25,7 +29,9 @@ from collections.abc import Iterator
 from typing import Any
 
 from valgebra_planning._valgebra import (
+    Unsupported,
     Validator,
+    closed,
     compile_schema,
     finite,
     intersection,
@@ -127,10 +133,39 @@ def _gate_only(
     return "undecided" if undecided else "proven"
 
 
+def _undeclared_only(
+    contract: Contract, targets: list[tuple[str, Validator[Any]]]
+) -> Iterator[tuple[str, Certainty]]:
+    """Yield each target the whole result meets only through keys its schema does not declare.
+
+    The meet is asked of the result as declared and of it read closed at its root, where a
+    nested record stays as written: `unevaluatedProperties: false` refuses a key exactly where no
+    keyword evaluated it (Attouche et al. 2024, §2.2), so a target the first meets and the second
+    misses is met through undeclared keys alone. A result the library reads closed meets no such
+    target, and one the companion cannot close is not asked.
+    """
+    if contract.returns is None or contract.declared is not None or not contract.results:
+        return
+    whole = contract.result()
+    try:
+        shut = compile_schema(closed(whole.schema), assert_format=whole.asserted)
+    except Unsupported:
+        return
+    for name, target in targets:
+        if _meets(contract.returns, target) != "not_subset":
+            continue
+        certainty = _certainty(_meets(shut, target))
+        if certainty is not None:
+            yield name, certainty
+
+
 def findings(library: Library) -> list[Finding]:
     """Return every contract of ``library`` wider than its keywords suggest, or that may be."""
     tools = dict(library.tools)
     goals = [problem.task.goal for problem in library.problems]
+    targets = [(slot.name, slot.values) for tool in tools.values() for slot in tool.arguments] + [
+        (f"the goal of {p.task.name}", p.task.goal) for p in library.problems
+    ]
     found: list[Finding] = []
     for name, contract in sorted(tools.items()):
         where = f"tool {name}"
@@ -157,6 +192,14 @@ def findings(library: Library) -> list[Finding]:
                 )
                 for place in _untyped_consts(contract.arguments[0].root)
             ]
+        found += [
+            Finding(
+                where,
+                f"its result meets {target} only through keys its output schema does not declare",
+                certainty,
+            )
+            for target, certainty in _undeclared_only(contract, targets)
+        ]
         gate = _gate_only(contract, tools, goals)
         if gate is not None:
             found.append(

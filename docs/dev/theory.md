@@ -278,11 +278,13 @@ it refuses every key the composition declares and empties the result;
 with it at the root, valgebra-jsonschema's `closed`. The cost: every link and binding resting
 on such a result names the assumption, a result inside the declared set and outside the closed
 one is blamed on it, a result the closing empties is vacuous, a nested record stays as written,
-and a result the companion cannot close is refused. **[DEVIATION: closed-results]**
+and a result the companion cannot close is refused. Where results are read as declared, `check`
+notes a whole result meeting an argument or a goal only through keys its schema does not
+declare, the two meets asked of it as declared and read closed. **[DEVIATION: closed-results]**
 
-IMPLEMENTED-BY: contracts.py::read_contract
+IMPLEMENTED-BY: contracts.py::read_contract, meaning.py::_undeclared_only
 
-HELD-BY: test_an_inherited_result_read_closed_admits_the_server_s_result, test_a_whole_result_read_closed_fills_no_argument_its_declared_keys_miss, test_an_argument_record_over_a_result_read_closed_names_the_assumption, test_a_result_with_a_key_its_schema_does_not_declare_is_the_closed_reading_s, test_a_result_the_closed_reading_empties_is_found, test_a_result_the_companion_cannot_close_is_refused_naming_its_tool
+HELD-BY: test_an_inherited_result_read_closed_admits_the_server_s_result, test_a_whole_result_read_closed_fills_no_argument_its_declared_keys_miss, test_an_argument_record_over_a_result_read_closed_names_the_assumption, test_a_result_with_a_key_its_schema_does_not_declare_is_the_closed_reading_s, test_a_result_the_closed_reading_empties_is_found, test_a_result_the_companion_cannot_close_is_refused_naming_its_tool, test_a_result_meeting_an_argument_through_undeclared_keys_alone_is_found
 
 ## Flows and privileges
 
