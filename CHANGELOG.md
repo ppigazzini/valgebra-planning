@@ -29,6 +29,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A proxy forwards a request for a person's answer for a tool its library names. A call its
+  server answered by asking for input, as a robot's confirmation asks the user through MCP's
+  elicitation, was answered with a tool error, so no motion under a consent rule was ever made
+  through the proxy. For a tool `tools.json` names under `"forwardsElicitation"` (`forwards_elicitation=`
+  on `proxy`, `read_proxy` and `serve`), a request for a person's answer, a form or a URL, is
+  returned to the proxy's client: the round is read as a call that answered with an error, the
+  server's state travels unread inside the proxy's own, sealed with a key only the proxy holds and
+  bound to the call, the client's principal and an expiry, and the answers that resume it reach
+  the server only inside the schema each form asked under. A sampling or a request for roots is
+  still refused, and so is a state the proxy did not seal.
 - `Repair.met` reads whether the last program a repair took met the mode it ran in, which
   `Repair.accept` holds: a repair under `accept="weak"` ends on a weak program, and
   `Repair.accepted`, which reads strict acceptance as the code-mode page uses the word, is false

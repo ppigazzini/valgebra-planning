@@ -17,7 +17,12 @@ from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 
 from valgebra_planning.cli import _address, _verifier, main
-from valgebra_planning.library import after_violation, error_texts, non_text_blocks
+from valgebra_planning.library import (
+    after_violation,
+    error_texts,
+    forwards_elicitation,
+    non_text_blocks,
+)
 from valgebra_planning.servers import connect
 
 PARCELS = str(Path(__file__).parent.parent / "examples" / "parcels")
@@ -217,7 +222,12 @@ def test_the_proxy_reads_its_server_s_tools_as_its_library_does(
 def test_a_library_names_the_tools_called_after_a_violation_in_a_list(
     tmp_path: Path, named: object
 ) -> None:
-    for key, reader in (("afterViolation", after_violation), ("nonTextBlocks", non_text_blocks)):
+    readers = (
+        ("afterViolation", after_violation),
+        ("nonTextBlocks", non_text_blocks),
+        ("forwardsElicitation", forwards_elicitation),
+    )
+    for key, reader in readers:
         (tmp_path / "tools.json").write_text(json.dumps({"tools": [], key: named}))
         with pytest.raises(TypeError, match=f"'{key}' is a list of tool names"):
             reader(tmp_path)

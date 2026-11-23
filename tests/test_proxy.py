@@ -1038,3 +1038,185 @@ def test_a_listing_naming_a_cursor_twice_is_refused_by_name() -> None:
     assert isinstance(refused, ValueError)
     assert str(refused) == "the server's listing names the cursor '1' twice, so it never ends"
     assert requests == [None, "1"]
+
+
+#: A robot asking a person before it walks: the confirmation asks through MCP's elicitation.
+ASKED = {
+    "type": "object",
+    "properties": {"confirmed": {"type": "boolean"}},
+    "required": ["confirmed"],
+}
+
+
+def _robot_tool(name: str, inputs: dict[str, Any], outputs: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": name,
+        "inputSchema": {"type": "object", "properties": inputs, "required": [*inputs]},
+        "outputSchema": {
+            "type": "object",
+            "properties": outputs,
+            "required": [*outputs],
+            "additionalProperties": False,
+        },
+    }
+
+
+ROBOT = [
+    _robot_tool(
+        "confirm_with_user", {"question": {"type": "string"}}, {"confirmed": {"type": "boolean"}}
+    ),
+    _robot_tool("walk_to", {"object_id": {"type": "string"}}, {"arrived": {"type": "boolean"}}),
+]
+ROBOT_TOOLS = {contract.name: contract for contract in map(read_contract, ROBOT)}
+CONSENT = read_policy(
+    {
+        "name": "a walk follows a yes",
+        "initial": "start",
+        "bad": ["violated"],
+        "transitions": [
+            {
+                "from": "start",
+                "tool": "confirm_with_user",
+                "result": {"properties": {"confirmed": {"const": True}}},
+                "to": "ok",
+            },
+            {"from": "start", "tool": "walk_to", "to": "violated"},
+        ],
+    }
+)
+QUESTION = ("confirm_with_user", {"question": "may the robot walk to the cup?"})
+WALK = ("walk_to", {"object_id": "obj_1"})
+
+
+def _asking(made: list[str], states: list[Any], *, sampling: bool = False) -> Server[Any]:
+    """Serve the robot, its confirmation asking a person, or a model where ``sampling`` is set."""
+
+    async def listed(_: Any, __: Any) -> types.ListToolsResult:
+        return types.ListToolsResult(tools=[types.Tool.model_validate(tool) for tool in ROBOT])
+
+    async def called(_: Any, params: types.CallToolRequestParams) -> Any:
+        made.append(params.name)
+        if params.name == "walk_to":
+            return types.CallToolResult(content=[], structured_content={"arrived": True})
+        answer = (params.input_responses or {}).get("yes")
+        if answer is None:
+            asked: Any = (
+                types.CreateMessageRequest(
+                    params=types.CreateMessageRequestParams(messages=[], max_tokens=10)
+                )
+                if sampling
+                else types.ElicitRequest(
+                    params=types.ElicitRequestFormParams(
+                        message="May the robot walk to the cup?", requested_schema=ASKED
+                    )
+                )
+            )
+            return types.InputRequiredResult(input_requests={"yes": asked}, request_state="u1")
+        states.append(params.request_state)
+        assert isinstance(answer, types.ElicitResult)
+        confirmed = answer.action == "accept" and (answer.content or {}).get("confirmed") is True
+        return types.CallToolResult(content=[], structured_content={"confirmed": confirmed})
+
+    return Server("robot", on_list_tools=listed, on_call_tool=called)
+
+
+def _consented(content: Any, *, sampling: bool = False) -> tuple[list[str], list[Any], Any, Any]:
+    """Ask, a person answering ``content``, then walk: what reached the robot, and both answers."""
+    made: list[str] = []
+    states: list[Any] = []
+
+    async def answering(context: Any, params: Any) -> types.ElicitResult:
+        # A person reads the request the server wrote, which reaches the client unchanged.
+        assert context is not None
+        assert params.message == "May the robot walk to the cup?"
+        return types.ElicitResult(action="accept", content=content)
+
+    async def session() -> Any:
+        async with Client(_asking(made, states, sampling=sampling)) as upstream:
+            front = proxy(
+                upstream,
+                (await upstream.list_tools()).tools,
+                ROBOT_TOOLS,
+                policies=[CONSENT],
+                forwards_elicitation=["confirm_with_user"],
+            )
+            async with Client(front, elicitation_callback=answering) as client:
+                asked = await client.call_tool(*QUESTION)
+                return asked, await client.call_tool(*WALK)
+
+    asked, walked = asyncio.run(session())
+    return made, states, asked, walked
+
+
+@pytest.mark.parametrize("yes", [True, False], ids=["yes", "no"])
+def test_a_person_s_answer_reaches_the_call_that_asked(*, yes: bool) -> None:
+    made, states, asked, walked = _consented({"confirmed": yes})
+    assert asked.structured_content == {"confirmed": yes}
+    # The upstream reads its own state back, unchanged under the proxy's seal.
+    assert states == ["u1"]
+    if yes:
+        assert not walked.is_error
+        assert made == ["confirm_with_user", "confirm_with_user", "walk_to"]
+    else:
+        assert _refused(walked) == (
+            "refused: a walk follows a yes: walk_to reached violated; "
+            "from start, confirm_with_user, by its result, leads to ok"
+        )
+        assert made == ["confirm_with_user", "confirm_with_user"]
+
+
+def test_an_answer_outside_the_schema_it_was_asked_under_reaches_no_call() -> None:
+    made, states, asked, _ = _consented({"confirmed": "of course"})
+    assert _refused(asked) == (
+        "refused: confirm_with_user answers yes outside the schema it was asked under"
+    )
+    assert states == []
+    assert made == ["confirm_with_user"]
+
+
+def test_a_request_for_input_other_than_a_person_s_answer_is_not_forwarded() -> None:
+    _, states, asked, _ = _consented({"confirmed": True}, sampling=True)
+    assert [block.text for block in asked.content] == [
+        "confirm_with_user asked for input other than a person's answer"
+    ]
+    assert asked.is_error
+    assert states == []
+
+
+@pytest.mark.parametrize(
+    ("question", "state", "said"),
+    [
+        (QUESTION[1], "forged.0", "answers a request state this proxy did not seal"),
+        ({"question": "may it run?"}, None, "answers a request sealed for another call"),
+    ],
+    ids=["forged", "another-call"],
+)
+def test_answers_resume_only_the_request_the_proxy_sealed_for_the_call(
+    question: dict[str, Any], state: Any, said: str
+) -> None:
+    made: list[str] = []
+    gate_states: list[Any] = []
+
+    async def session() -> Any:
+        async with Client(_asking(made, gate_states)) as upstream:
+            front = proxy(
+                upstream,
+                (await upstream.list_tools()).tools,
+                ROBOT_TOOLS,
+                forwards_elicitation=["confirm_with_user"],
+            )
+            async with Client(front) as client:
+                first = await client.session.call_tool(*QUESTION, allow_input_required=True)
+                assert isinstance(first, types.InputRequiredResult)
+                answer = {"yes": types.ElicitResult(action="accept", content={"confirmed": True})}
+                return await client.session.call_tool(
+                    QUESTION[0],
+                    question,
+                    input_responses=answer,
+                    request_state=first.request_state if state is None else state,
+                    allow_input_required=True,
+                )
+
+    resumed = asyncio.run(session())
+    assert said in _refused(resumed)
+    assert gate_states == []

@@ -3,10 +3,11 @@
 A library is a directory. ``tools.json`` holds a server's ``tools/list`` result, ``{"tools":
 [...]}``, ``"trusted": true`` where the server's annotations are trusted, and
 ``"closedResults": true`` where each whole result is read closed, an assumption about the
-server (`valgebra_planning.contracts.read_contract`), and ``"afterViolation"``, the tools a proxy
-calls after a violation (`after_violation`), and ``"nonTextBlocks"``, the tools whose blocks
-other than text a proxy keeps (`non_text_blocks`), and ``"errorTexts"``, the set each tool's
-error text lies in to be passed on (`error_texts`). ``tasks.json``
+server (`valgebra_planning.contracts.read_contract`), ``"afterViolation"``, the tools a proxy
+calls after a violation (`after_violation`), ``"nonTextBlocks"``, the tools whose blocks other
+than text a proxy keeps (`non_text_blocks`), ``"errorTexts"``, the set each tool's
+error text lies in to be passed on (`error_texts`), and ``"forwardsElicitation"``, the tools whose
+request for a person's answer a proxy forwards (`forwards_elicitation`). ``tasks.json``
 holds ``{"tasks": [...]}``, each task its ``name``, the JSON Schema of each input in ``inputs``
 and of the ``goal``, the rules it names, ``errors`` (any tool may fail), ``policies`` and
 ``flows`` by name, and ``types``, the file of observed calls its types are mined from, and
@@ -46,6 +47,7 @@ __all__ = [
     "after_violation",
     "asserts_format",
     "error_texts",
+    "forwards_elicitation",
     "non_text_blocks",
     "read_library",
     "reads_closed",
@@ -130,6 +132,7 @@ _TOOLS_KEYS = frozenset(
         "afterViolation",
         "nonTextBlocks",
         "errorTexts",
+        "forwardsElicitation",
     }
 )
 
@@ -179,6 +182,16 @@ def non_text_blocks(directory: Path) -> frozenset[str]:
     text, as a camera's image no check reads, only for these.
     """
     return _named(directory, "nonTextBlocks")
+
+
+def forwards_elicitation(directory: Path) -> frozenset[str]:
+    """Return the tools whose request for a person's answer a proxy forwards.
+
+    ``"forwardsElicitation": [...]`` in ``tools.json``: a call to such a tool that its server
+    answers by asking a person, a form or a URL, is answered with that request, and the answers
+    that resume it are held to what was asked; any other request for input is refused.
+    """
+    return _named(directory, "forwardsElicitation")
 
 
 def error_texts(directory: Path) -> dict[str, Any]:

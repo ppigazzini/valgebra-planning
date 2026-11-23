@@ -142,7 +142,8 @@ A policy about one actuator, as "no walking while an object is held", is held by
 front of it; one proxy per agent holds it for no agent, since each sees half the calls. What
 pooling costs is which client holds a value, and no rule here reads that: `only` states that a
 value was returned by a named tool, which holds whichever client it was returned to. A call its
-server answers by asking for input is answered with a tool error ([limits](method.md#limits)).
+server answers by asking for input is answered with a tool error, but a request for a person's
+answer from a tool its library names under `"forwardsElicitation"` ([limits](method.md#limits)).
 
 ## Limits
 

@@ -49,6 +49,7 @@ from valgebra_planning.library import (
     after_violation,
     asserts_format,
     error_texts,
+    forwards_elicitation,
     non_text_blocks,
     read_library,
     reads_closed,
@@ -351,6 +352,7 @@ def _proxy(args: argparse.Namespace) -> int:
     left_open = frozenset() if directory is None else after_violation(directory)
     kept = frozenset() if directory is None else non_text_blocks(directory)
     errors = {} if directory is None else error_texts(directory)
+    asking = frozenset() if directory is None else forwards_elicitation(directory)
 
     async def served() -> None:
         async with connect(server, read_timeout_seconds=timeout) as upstream:
@@ -365,6 +367,7 @@ def _proxy(args: argparse.Namespace) -> int:
                     after_violation=left_open,
                     non_text_blocks=kept,
                     error_texts=errors,
+                    forwards_elicitation=asking,
                 )
                 return
             front = await read_proxy(
@@ -377,6 +380,7 @@ def _proxy(args: argparse.Namespace) -> int:
                 after_violation=left_open,
                 non_text_blocks=kept,
                 error_texts=errors,
+                forwards_elicitation=asking,
             )
             (host, port), verifier = http
             await serve_http(

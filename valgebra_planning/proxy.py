@@ -23,17 +23,23 @@ task input is from elsewhere. The proxy serves the agent that starts it over std
 its one gate, and a call a policy reads holds the gate from its check to its result, so each
 policy reads such calls in the order they act. MCP 2026-07-28 has no session a client ends, so a
 policy's pending states are not read there. A call the upstream answers with a protocol error,
-or with a request for input, is answered with a tool error: the proxy gives no input and
-forwards no request for one, since a value it never checked would reach the call. A call made
-whose outcome the gate does not read, its result refused, the call canceled or answered by no
-result, may have acted and returned anything, so each policy holds every state the call may have
-reached. Requires the ``mcp`` extra.
+or with a request for input, is answered with a tool error: the proxy gives no input, since a
+value it never checked would reach the call, and forwards a request for a person's answer alone,
+for a tool its library names, under its seal and with the answers held to what was asked. A call
+made whose outcome the gate does not read, its result refused, the call canceled or answered by
+no result, may have acted and returned anything, so each policy holds every state the call may
+have reached. Requires the ``mcp`` extra.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
 import json
+import secrets
+import time
 import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -42,6 +48,7 @@ from urllib.parse import urlsplit
 
 import uvicorn
 from mcp import Client, InputRequiredRoundsExceededError, MCPError, types
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.lowlevel import Server
@@ -82,6 +89,10 @@ _NAMED = frozenset(
 _LISTED = frozenset({"allOf", "anyOf", "items", "oneOf", "prefixItems"})
 
 
+#: How long a forwarded request for input stays answerable, in seconds: a person's answer.
+SEALED_SECONDS = 600
+
+
 def _leaves(value: Any) -> Iterable[Any]:
     """Return every value a result holds, the whole and each part, for provenance."""
     yield value
@@ -109,16 +120,20 @@ class Gate:
     non_text_blocks: frozenset[str] = frozenset()
     #: The set each tool's error text must lie in to be passed on as the server wrote it.
     error_texts: Mapping[str, Validator[Any]] = field(default_factory=dict)
+    #: The tools whose requests for a person's answer the proxy forwards to its client.
+    forwards_elicitation: frozenset[str] = frozenset()
+    #: The key each forwarded request's state is sealed with, the proxy's alone.
+    key: bytes = field(default_factory=lambda: secrets.token_bytes(32), repr=False)
 
     def __post_init__(self) -> None:
         """Refuse a tool named for its answers or its calls that the proxy lacks, or a policy reads.
 
-        Each of ``after_violation``, ``non_text_blocks`` and ``error_texts`` names tools the proxy
-        holds, and a tool of ``after_violation`` is one no policy reads.
+        Each of ``after_violation``, ``non_text_blocks``, ``error_texts`` and
+        ``forwards_elicitation`` names tools the proxy holds, and a tool of ``after_violation`` is
+        one no policy reads.
         """
-        for tool in sorted(
-            (self.non_text_blocks | self.error_texts.keys()) - self.contracts.keys()
-        ):
+        named = self.non_text_blocks | self.error_texts.keys() | self.forwards_elicitation
+        for tool in sorted(named - self.contracts.keys()):
             msg = f"{tool} is named for its answers, and the proxy holds no such tool"
             raise ValueError(msg)
         for tool in sorted(self.after_violation):
@@ -178,6 +193,104 @@ class Gate:
         return types.CallToolResult(
             content=[types.TextContent(type="text", text=text)], is_error=True
         )
+
+    def seal(
+        self, tool: str, arguments: Mapping[str, Any], state: str | None, asked: Mapping[str, Any]
+    ) -> str:
+        """Return the state a forwarded request for input carries to the proxy's client.
+
+        It holds the upstream's own state unread and unchanged, the call it answers, the schema
+        each form asked an answer under (None for a URL), the principal the call came from and
+        an expiry, under a MAC only this proxy computes: a client must not change a request's
+        state, and the proxy reads it to check the answers (MCP 2026-07-28, the multi round-trip
+        pattern).
+        """
+        token = get_access_token()
+        body = {
+            "tool": tool,
+            "arguments": dict(arguments),
+            "state": state,
+            "asked": dict(asked),
+            "principal": None if token is None else token.client_id,
+            "until": time.time() + SEALED_SECONDS,
+        }
+        payload = base64.urlsafe_b64encode(json.dumps(body, sort_keys=True).encode()).decode()
+        return f"{payload}.{hmac.new(self.key, payload.encode(), hashlib.sha256).hexdigest()}"
+
+    def unsealed(
+        self, tool: str, arguments: Mapping[str, Any], sealed: str
+    ) -> tuple[str | None, dict[str, Any]] | str:
+        """Return the upstream's state and the schemas asked under, or why ``sealed`` is refused.
+
+        A state this proxy did not seal, one for another call or another principal, and one
+        past its expiry are refused.
+        """
+        payload, _, mac = sealed.rpartition(".")
+        expected = hmac.new(self.key, payload.encode(), hashlib.sha256).hexdigest()
+        if not payload or not hmac.compare_digest(mac, expected):
+            return f"{tool} answers a request state this proxy did not seal"
+        body = json.loads(base64.urlsafe_b64decode(payload.encode()))
+        token = get_access_token()
+        principal = None if token is None else token.client_id
+        if (body["tool"], body["arguments"], body["principal"]) != (
+            tool,
+            dict(arguments),
+            principal,
+        ):
+            return f"{tool} answers a request sealed for another call or another client"
+        if time.time() > body["until"]:
+            return f"{tool} answers a request past its expiry"
+        return body["state"], body["asked"]
+
+    @staticmethod
+    def answers(tool: str, given: Mapping[str, Any] | None, asked: Mapping[str, Any]) -> str | None:
+        """Return why the answers to a forwarded request are refused, or None.
+
+        Each answers a request that was asked, with a person's answer; one a person accepted lies
+        in the schema its form asked under, as the elicitation page asks a client to check, and
+        one to a URL holds no content. Each failure names the request's key, never the answer.
+        """
+        for name, response in (given or {}).items():
+            if name not in asked:
+                return f"{tool} answers {name}, which was not asked"
+            if not isinstance(response, types.ElicitResult):
+                return f"{tool} answers {name} with no person's answer"
+            if response.action != "accept":
+                continue
+            schema = asked[name]
+            if schema is None and response.content is not None:
+                return f"{tool} answers {name}, a URL, with content"
+            if schema is not None and not compile_schema(schema).is_valid(response.content):
+                return f"{tool} answers {name} outside the schema it was asked under"
+        return None
+
+    def forwarded(
+        self, tool: str, arguments: Mapping[str, Any], result: types.InputRequiredResult
+    ) -> types.CallToolResult | types.InputRequiredResult:
+        """Return the upstream's request for input as the proxy forwards it, or a tool error.
+
+        The round ends with the request, and the call may have acted, so each policy reading it
+        holds the states before it too, as after an error. A request for a person's answer, a
+        form or a URL, is forwarded under the proxy's seal; a sampling or a request for roots is
+        not, a model's text or the client's files reaching the call held to no contract.
+        """
+        if self.policed(tool):
+            self.errored()
+        asked: dict[str, Any] = {}
+        for name, request in (result.input_requests or {}).items():
+            if not isinstance(request, types.ElicitRequest):
+                text = f"{tool} asked for input other than a person's answer"
+                return types.CallToolResult(
+                    content=[types.TextContent(type="text", text=text)], is_error=True
+                )
+            form = request.params
+            asked[name] = (
+                dict(form.requested_schema)
+                if isinstance(form, types.ElicitRequestFormParams)
+                else None
+            )
+        sealed = self.seal(tool, arguments, result.request_state, asked)
+        return types.InputRequiredResult(input_requests=result.input_requests, request_state=sealed)
 
     def stopped(self, tool: str) -> str | None:
         """Return the bad state a result took a policy to, which refuses a call to ``tool``.
@@ -382,16 +495,87 @@ def _refusal(reason: str) -> types.CallToolResult:
     return types.CallToolResult(content=[text], is_error=True)
 
 
+def _answered_input(
+    gate: Gate, params: types.CallToolRequestParams
+) -> types.CallToolResult | tuple[str | None] | None:
+    """Return the upstream's state a call's answers resume, or why they are refused.
+
+    A call carrying answers resumes a request the proxy forwarded for its tool, its state the
+    proxy's seal, and its answers are held to the schemas the request asked under. A call
+    carrying none resumes nothing, and None is returned.
+    """
+    if params.request_state is None and params.input_responses is None:
+        return None
+    arguments = dict(params.arguments or {})
+    if params.name not in gate.forwards_elicitation or params.request_state is None:
+        return _refusal(f"{params.name} answers no request the proxy forwarded")
+    opened = gate.unsealed(params.name, arguments, params.request_state)
+    if isinstance(opened, str):
+        return _refusal(opened)
+    state, asked = opened
+    refused = gate.answers(params.name, params.input_responses, asked)
+    return _refusal(refused) if refused is not None else (state,)
+
+
+async def _made(
+    gate: Gate,
+    upstream: Client,
+    params: types.CallToolRequestParams,
+    resumed: tuple[str | None] | None,
+) -> types.CallToolResult | types.InputRequiredResult:
+    """Make a checked call through ``upstream``, the rounds driven here for a forwarding tool."""
+    arguments = dict(params.arguments or {})
+    if params.name not in gate.forwards_elicitation:
+        return await upstream.call_tool(params.name, arguments)
+    # Drive the rounds here, so a request for a person's answer reaches the proxy's client.
+    result = await upstream.session.call_tool(
+        params.name,
+        arguments,
+        input_responses=params.input_responses,
+        request_state=None if resumed is None else resumed[0],
+        allow_input_required=True,
+    )
+    if not isinstance(result, (types.CallToolResult, types.InputRequiredResult)):
+        msg = f"{params.name} answered a result of no kind the proxy reads"
+        raise MCPError(-32603, msg)
+    return result
+
+
+def _read(
+    gate: Gate,
+    tool: str,
+    arguments: dict[str, Any],
+    result: types.CallToolResult | types.InputRequiredResult,
+) -> types.CallToolResult | types.InputRequiredResult:
+    """Return what the agent is answered with, the upstream's answer checked."""
+    if isinstance(result, types.InputRequiredResult):
+        return gate.forwarded(tool, arguments, result)
+    if result.is_error:
+        if gate.policed(tool):
+            gate.errored()
+        return gate.erred(tool, result)
+    value = result.structured_content
+    if value is None:
+        value = "".join(getattr(block, "text", "") for block in result.content)
+    refused = gate.after(tool, value, arguments)
+    if refused is not None:
+        return _refusal(refused)
+    return gate.answered(tool, result, value)
+
+
 async def _checked(
     gate: Gate, upstream: Client, params: types.CallToolRequestParams
-) -> types.CallToolResult:
+) -> types.CallToolResult | types.InputRequiredResult:
     """Check a call, make it through ``upstream`` and check its result: the proxy's answer."""
     arguments = dict(params.arguments or {})
+    resumed = _answered_input(gate, params)
+    if isinstance(resumed, types.CallToolResult):
+        return resumed
     refused = gate.before(params.name, arguments)
     if refused is not None:
         return _refusal(refused)
     try:
-        result = await upstream.call_tool(params.name, arguments)
+        result = await _made(gate, upstream, params, resumed)
     except asyncio.CancelledError:
         # The client canceled the call while the upstream held it: it may have acted.
         gate.unread(params.name, arguments)
@@ -413,17 +597,7 @@ async def _checked(
         # The client's text holds the value, so the refusal names the tool alone.
         refused = f"{params.name} returned a value outside its contract, refused by the client"
         return _refusal(refused)
-    if result.is_error:
-        if gate.policed(params.name):
-            gate.errored()
-        return gate.erred(params.name, result)
-    value = result.structured_content
-    if value is None:
-        value = "".join(getattr(block, "text", "") for block in result.content)
-    refused = gate.after(params.name, value, arguments)
-    if refused is not None:
-        return _refusal(refused)
-    return gate.answered(params.name, result, value)
+    return _read(gate, params.name, arguments, result)
 
 
 def proxy(
@@ -436,6 +610,7 @@ def proxy(
     after_violation: Iterable[str] = (),
     non_text_blocks: Iterable[str] = (),
     error_texts: Mapping[str, object] | None = None,
+    forwards_elicitation: Iterable[str] = (),
 ) -> Server[Any]:
     """Return an MCP server answering ``listing`` through ``upstream``, every call checked.
 
@@ -452,7 +627,9 @@ def proxy(
     result's text is the checked value alone, and a block that is not text is kept only for a
     tool of ``non_text_blocks`` (`Gate.answered`). An error's text is passed on where it lies
     in the JSON Schema ``error_texts`` gives its tool, and is otherwise a fixed text naming the
-    tool (`Gate.erred`).
+    tool (`Gate.erred`). A call to a tool of ``forwards_elicitation`` that the upstream answers
+    by asking a person, a form or a URL, is answered with that request under the proxy's seal,
+    and the answers that resume it are held to what was asked (`Gate.forwarded`).
     """
     gate = Gate(
         contracts,
@@ -461,13 +638,16 @@ def proxy(
         after_violation=frozenset(after_violation),
         non_text_blocks=frozenset(non_text_blocks),
         error_texts={tool: compile_schema(schema) for tool, schema in (error_texts or {}).items()},
+        forwards_elicitation=frozenset(forwards_elicitation),
     )
     held = asyncio.Lock()
 
     async def listed(_: Any, __: Any) -> types.ListToolsResult:
         return types.ListToolsResult(tools=list(listing))
 
-    async def called(_: Any, params: types.CallToolRequestParams) -> types.CallToolResult:
+    async def called(
+        _: Any, params: types.CallToolRequestParams
+    ) -> types.CallToolResult | types.InputRequiredResult:
         if not gate.policed(params.name):
             return await _checked(gate, upstream, params)
         async with held:
@@ -487,6 +667,7 @@ async def read_proxy(
     after_violation: Iterable[str] = (),
     non_text_blocks: Iterable[str] = (),
     error_texts: Mapping[str, object] | None = None,
+    forwards_elicitation: Iterable[str] = (),
 ) -> Server[Any]:
     """Return the proxy in front of the server ``upstream`` is connected to, its listing read once.
 
@@ -501,7 +682,8 @@ async def read_proxy(
     `UserWarning` naming it; the gate holds every call to the published schemas. A call to a
     tool of ``after_violation`` is admitted after a violation, and a tool of
     ``non_text_blocks`` answers its blocks other than text, and an error's text is held to
-    ``error_texts``, as `proxy` reads them.
+    ``error_texts``, and a tool of ``forwards_elicitation`` forwards a request for a person's
+    answer, as `proxy` reads them.
     """
     from valgebra_planning.servers import read_listing, read_server  # noqa: PLC0415
 
@@ -526,6 +708,7 @@ async def read_proxy(
         after_violation=after_violation,
         non_text_blocks=non_text_blocks,
         error_texts=error_texts,
+        forwards_elicitation=forwards_elicitation,
     )
 
 
@@ -540,13 +723,15 @@ async def serve(
     after_violation: Iterable[str] = (),
     non_text_blocks: Iterable[str] = (),
     error_texts: Mapping[str, object] | None = None,
+    forwards_elicitation: Iterable[str] = (),
 ) -> None:
     """Serve the proxy over stdio in front of the server ``upstream`` is connected to.
 
     The proxy is `read_proxy`'s, its tools read with ``assert_format`` and ``closed_results``,
     listed spelled out with ``spell_out``, those of ``after_violation`` called after a
     violation, those of ``non_text_blocks`` answering their blocks other than text, and each
-    error's text held to ``error_texts``.
+    error's text held to ``error_texts``, and a request for a person's answer forwarded for a
+    tool of ``forwards_elicitation``.
     """
     from mcp.server.stdio import stdio_server  # noqa: PLC0415 - only a served proxy needs it
 
@@ -560,6 +745,7 @@ async def serve(
         after_violation=after_violation,
         non_text_blocks=non_text_blocks,
         error_texts=error_texts,
+        forwards_elicitation=forwards_elicitation,
     )
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())

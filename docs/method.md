@@ -413,12 +413,20 @@ ones.
   value's identity, takes every transition of such a policy possibly at most, and proves none of
   its links. A proxy reads no pending state: MCP 2026-07-28 has no session, and a proxy sees no
   end of a task.
-- **A call is given no input.** A server may answer a call by asking for input: an elicitation,
-  a sampling, its roots, or an interaction it waits on, MCP 2026-07-28's `input_required`. The
-  runner and the proxy give none and forward none, so the call fails as a tool error, which an
-  error block takes or which ends the run. A value a user or a model supplied there would reach
-  the call held to no contract the program was proven against, the leak a stop answered by a
-  user would be.
+- **A call is given no input, and a person's answer is forwarded only where a library says.** A
+  server may answer a call by asking for input: an elicitation, a sampling, its roots, or an
+  interaction it waits on, MCP 2026-07-28's `input_required`. The runner gives none, so the call
+  fails as a tool error, which an error block takes or which ends the run: a value a user or a
+  model supplied there would reach the call held to no contract the program was proven against,
+  the leak a stop answered by a user would be. The proxy forwards to its client a request for a
+  person's answer, a form or a URL, for a tool `tools.json` names under
+  `"forwardsElicitation"`, as a robot's confirmation asks the user: the round may have acted, so
+  each policy holds the states before it; the server's state travels unread under the proxy's
+  seal, bound to the call, its client and an expiry; and the answers that resume it reach the
+  server only inside the schema each form asked under. Any other request is answered with a tool
+  error. A form's answer is the client's to give, and no text of MCP keeps a client's model from
+  giving it; a URL keeps the answer off the client and the proxy alike, so a consent no steered
+  model may give is asked by URL.
 - **A proxy over HTTP is one gate for every client holding a token.** `valgebra-planning proxy`
   serves the agent that starts it over stdio, and with `--http` every client holding a token
   issued for it over Streamable HTTP, through one gate: policies read the calls of all of them,
