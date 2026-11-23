@@ -472,6 +472,8 @@ TOKENS = _Tokens(
         "elsewhere": _issued("elsewhere", "http://127.0.0.1:9000/mcp"),
         "expired": _issued("expired", expires_at=1),
         "unscoped": _issued("unscoped", scopes=[]),
+        "operator-a": _issued("operator-a", client_id="console", subject="a"),
+        "operator-b": _issued("operator-b", client_id="console", subject="b"),
     }
 )
 
@@ -1184,20 +1186,17 @@ def test_a_request_for_input_other_than_a_person_s_answer_is_not_forwarded() -> 
 
 
 @pytest.mark.parametrize(
-    ("question", "state", "said"),
-    [
-        (QUESTION[1], "forged.0", "answers a request state this proxy did not seal"),
-        ({"question": "may it run?"}, None, "answers a request sealed for another call"),
-    ],
+    ("question", "state"),
+    [(QUESTION[1], "forged.0"), ({"question": "may it run?"}, None)],
     ids=["forged", "another-call"],
 )
 def test_answers_resume_only_the_request_the_proxy_sealed_for_the_call(
-    question: dict[str, Any], state: Any, said: str
+    question: dict[str, Any], state: Any
 ) -> None:
     made: list[str] = []
     gate_states: list[Any] = []
 
-    async def session() -> Any:
+    async def session() -> MCPError | None:
         async with Client(_asking(made, gate_states)) as upstream:
             front = proxy(
                 upstream,
@@ -1208,18 +1207,77 @@ def test_answers_resume_only_the_request_the_proxy_sealed_for_the_call(
             async with Client(front) as client:
                 first = await client.session.call_tool(*QUESTION, allow_input_required=True)
                 assert isinstance(first, types.InputRequiredResult)
-                answer = {"yes": types.ElicitResult(action="accept", content={"confirmed": True})}
-                return await client.session.call_tool(
-                    QUESTION[0],
-                    question,
-                    input_responses=answer,
-                    request_state=first.request_state if state is None else state,
-                    allow_input_required=True,
-                )
+                answer: types.InputResponses = {
+                    "yes": types.ElicitResult(action="accept", content={"confirmed": True})
+                }
+                try:
+                    await client.session.call_tool(
+                        QUESTION[0],
+                        question,
+                        input_responses=answer,
+                        request_state=first.request_state if state is None else state,
+                        allow_input_required=True,
+                    )
+                except MCPError as error:
+                    return error
+                return None
 
-    resumed = asyncio.run(session())
-    assert said in _refused(resumed)
+    refused = asyncio.run(session())
+    assert refused is not None
+    assert (refused.error.code, refused.error.message) == (
+        -32602,
+        "Invalid or expired requestState",
+    )
     assert gate_states == []
+
+
+def test_answers_resume_a_request_only_for_the_principal_it_was_forwarded_to() -> None:
+    made: list[str] = []
+    gate_states: list[Any] = []
+    answer: types.InputResponses = {
+        "yes": types.ElicitResult(action="accept", content={"confirmed": True})
+    }
+
+    async def resumed(client: Client, state: str) -> Any:
+        return await client.session.call_tool(
+            QUESTION[0],
+            QUESTION[1],
+            input_responses=answer,
+            request_state=state,
+            allow_input_required=True,
+        )
+
+    async def session() -> tuple[Any, Any]:
+        async with Client(_asking(made, gate_states)) as upstream:
+            front = proxy(
+                upstream,
+                (await upstream.list_tools()).tools,
+                ROBOT_TOOLS,
+                forwards_elicitation=["confirm_with_user"],
+            )
+            app, client = _authenticated(front)
+            # One console, one client id, serves two operators, told apart by the subject alone.
+            async with (
+                app.router.lifespan_context(app),
+                client("operator-a") as one,
+                client("operator-b") as two,
+            ):
+                first = await one.session.call_tool(*QUESTION, allow_input_required=True)
+                assert isinstance(first, types.InputRequiredResult)
+                assert first.request_state is not None
+                try:
+                    await resumed(two, first.request_state)
+                except MCPError as error:
+                    crossed: Any = error
+                else:
+                    crossed = None
+                return crossed, await resumed(one, first.request_state)
+
+    crossed, own = asyncio.run(session())
+    assert isinstance(crossed, MCPError)
+    assert crossed.error.code == -32602
+    assert own.structured_content == {"confirmed": True}
+    assert gate_states == ["u1"]
 
 
 #: A robot measuring a distance per object and walking, read-only where it says so.

@@ -434,9 +434,10 @@ ones.
   the leak a stop answered by a user would be. The proxy forwards to its client a request for a
   person's answer, a form or a URL, for a tool `tools.json` names under
   `"forwardsElicitation"`, as a robot's confirmation asks the user: the round may have acted, so
-  each policy holds the states before it; the server's state travels unread under the proxy's
-  seal, bound to the call, its client and an expiry; and the answers that resume it reach the
-  server only inside the schema each form asked under. Any other request is answered with a tool
+  each policy holds the states before it; the server's state travels unread inside the proxy's,
+  which the mcp SDK's request-state boundary seals under a key the process alone holds and binds
+  to the call, the principal the token names, its client, issuer and subject, and an expiry; and
+  the answers that resume it reach the server only inside the schema each form asked under. Any other request is answered with a tool
   error. A form's answer is the client's to give, and no text of MCP keeps a client's model from
   giving it; a URL keeps the answer off the client and the proxy alike, so a consent no steered
   model may give is asked by URL.
