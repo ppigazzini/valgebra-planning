@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import sys
 from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeVar
@@ -448,11 +449,20 @@ def _made(tool: Callable[..., Any], arguments: dict[str, Any]) -> Any:
         return _Raised(error)
 
 
+#: Whether asyncio's timeouts read a subclass of `asyncio.CancelledError` as their own cancel.
+#: From Python 3.13 `asyncio.timeout` and `asyncio.wait_for` do. 3.11's `asyncio.timeout` and
+#: 3.12's two compare the class with `is`, so a subclass raised inside them passes through as
+#: itself, and the caller never sees the `TimeoutError` it asked for.
+_SUBCLASS_CANCELS = sys.version_info >= (3, 13)
+
+
 class CanceledRunError(asyncio.CancelledError):
     """A run `arun` ended, canceled while it awaited a call: ``run`` names what it left.
 
-    It is a `asyncio.CancelledError`, so a timeout or a task group canceling the run reads it
-    as the cancel it is.
+    It is a `asyncio.CancelledError`, so from Python 3.13 a timeout or a task group canceling
+    the run reads it as the cancel it is. On 3.11 and 3.12, whose timeouts read only that exact
+    class as their cancel, `arun` raises the cancel it received instead, with a note naming what
+    the run left, and raises no `CanceledRunError`.
     """
 
     def __init__(self, run: Run) -> None:
@@ -476,7 +486,8 @@ async def arun(
     calls are made here. A tool may be a coroutine function or a plain one. A cancel while a
     call is awaited ends the run: the call may have acted, so each policy is read from either
     set of states, and `CanceledRunError` carries the run, its outcome ``canceled`` and
-    ``stopped`` naming the call and each obligation a policy leaves pending.
+    ``stopped`` naming the call and each obligation a policy leaves pending. On Python 3.11 and
+    3.12 the cancel received is raised instead, ``stopped`` its note (`CanceledRunError`).
     """
     unclashed(task, contracts)
     runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
@@ -490,7 +501,11 @@ async def arun(
                     answer = await _awaited(answer)
                 except asyncio.CancelledError as cancel:
                     steps.close()
-                    raise CanceledRunError(_canceled(runner, tool)) from cancel
+                    ended = _canceled(runner, tool)
+                    if not _SUBCLASS_CANCELS:
+                        cancel.add_note(f"{ended.stopped}")
+                        raise
+                    raise CanceledRunError(ended) from cancel
             tool, arguments = steps.send(answer)
     except StopIteration as ended:
         return ended.value

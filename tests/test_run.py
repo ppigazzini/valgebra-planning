@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,7 @@ from valgebra_planning.critic import read_program
 from valgebra_planning.planner import plan
 from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Block, Call, Next, Ref, Return
-from valgebra_planning.run import CanceledRunError, Refusal, Run, ToolError, arun, blame, run
+from valgebra_planning.run import CanceledRunError, Refusal, ToolError, arun, blame, run
 from valgebra_planning.verify import verify
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
@@ -520,7 +521,7 @@ def test_a_cancel_ends_the_run_naming_the_obligations_it_leaves() -> None:
     async def find_parcel(**_: Any) -> Any:
         return {"parcel": PARCEL}
 
-    async def canceled() -> Run:
+    async def canceled() -> asyncio.CancelledError:
         asked = asyncio.Event()
 
         async def notify(**_: Any) -> Any:
@@ -539,17 +540,25 @@ def test_a_cancel_ends_the_run_naming_the_obligations_it_leaves() -> None:
         )
         await asked.wait()
         running.cancel()
-        with pytest.raises(CanceledRunError) as stopped:
+        with pytest.raises(asyncio.CancelledError) as stopped:
             await running
-        return stopped.value.run
+        return stopped.value
 
-    ended = asyncio.run(canceled())
-    assert ended.outcome == "canceled"
-    assert ended.stopped == "canceled at notify: every notice is answered may hold owed"
-    assert blame(ended, TOOLS, proven=True) == "the run was canceled at notify: the caller's"
+    cancel = asyncio.run(canceled())
+    left = "canceled at notify: every notice is answered may hold owed"
+    if sys.version_info < (3, 13):
+        # The timeouts of 3.11 and 3.12 read no subclass as their cancel: the cancel is raised.
+        assert type(cancel) is asyncio.CancelledError
+        assert cancel.__notes__ == [left]
+        return
+    assert isinstance(cancel, CanceledRunError)
+    assert cancel.run.outcome == "canceled"
+    assert cancel.run.stopped == left
+    assert blame(cancel.run, TOOLS, proven=True) == "the run was canceled at notify: the caller's"
 
 
-def test_a_timeout_reads_a_canceled_run_as_the_cancel_it_is() -> None:
+@pytest.mark.parametrize("bound", ["timeout", "wait_for"])
+def test_a_timeout_reads_a_canceled_run_as_the_cancel_it_is(bound: str) -> None:
     task = TASKS["settle a parcel"]
     program = read_program("c1 = find_parcel(tracking=tracking)\nreturn c1.parcel.parcel_id\n")
 
@@ -557,10 +566,14 @@ def test_a_timeout_reads_a_canceled_run_as_the_cancel_it_is() -> None:
         await asyncio.sleep(3600)
 
     async def bounded() -> None:
+        running = arun(
+            program, TOOLS, task, {"tracking": "AB123456789IT"}, {"find_parcel": find_parcel}
+        )
+        if bound == "wait_for":
+            await asyncio.wait_for(running, 0.01)
+            return
         async with asyncio.timeout(0.01):
-            await arun(
-                program, TOOLS, task, {"tracking": "AB123456789IT"}, {"find_parcel": find_parcel}
-            )
+            await running
 
     with pytest.raises(TimeoutError):
         asyncio.run(bounded())

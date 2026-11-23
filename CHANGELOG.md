@@ -173,7 +173,8 @@ All notable changes to valgebra-planning are recorded here. The format follows
   ends the run, each policy held in both sets of states, and raises `CanceledRunError`, an
   `asyncio.CancelledError` a timeout reads as its own, carrying the run: its outcome `canceled`,
   `stopped` naming the call and each obligation a policy may leave pending, and `blame` naming
-  the caller.
+  the caller. On Python 3.11 and 3.12, whose `asyncio.timeout` reads only the exact class as its
+  cancel, the cancel received is raised instead, `stopped` its note.
 
 - A policy may hold an instance for each value an argument takes, `"per": "object_id"`. A policy
   read a program's calls as one trace, so "each object is confirmed before it is grasped" passed
