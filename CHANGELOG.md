@@ -6,6 +6,20 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-11-23
+
+A security release: five defects of 0.0.5 that let a wrong program be proven, or a value its
+contract refuses reach an agent, are closed, each under Security, among them a proxy that read
+its server's tools as declared whatever its library said. A program is planned whatever order a server lists its tools in, toward the goals
+a task prefers, testing before a call only one branch needs. A library may read results closed,
+read an argument fresh after a call that may act, and declare what a call leaves a later read
+showing; with that declaration a call that is not idempotent and answered with an error is made
+again only where a read shows it did not act, a block the planner writes. The proxy serves
+Streamable HTTP to clients holding a token issued for it, and lists each tool spelled out for a
+model's chat template on request. It requires valgebra 0.0.32 and valgebra-jsonschema 0.0.6;
+the parcels and bench studies read every count 0.0.5 recorded, and a study of a booking under
+injected faults is new.
+
 ### Security
 
 - A proxy reads its server's tools as its library reads its own listing. `proxy --library` read
@@ -602,7 +616,8 @@ decides more of it; the user guide is published.
   on synthetic libraries of 8 to 256 tools the cut holds 5 predicates and 12 cells at every
   size.
 
-[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.5...HEAD
+[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.6...HEAD
+[0.0.6]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.2...v0.0.3
