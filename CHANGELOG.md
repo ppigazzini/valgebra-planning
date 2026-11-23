@@ -29,6 +29,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A policy and a flow rule name whom a proxy holds their state for. With `"scope": "principal"`
+  the proxy holds a policy's instance, and a flow rule's values, for each principal a token
+  names, its client, issuer and subject as the mcp SDK reads a token's principal: a yes one
+  operator relays admits no walk of another's, and a parcel one agent found grounds no approval
+  another makes. `"shared"`, the default, reads every client's calls as one trace, as before. A
+  bad state any principal's instance holds still stops every call, and a call that may act
+  withdraws every principal's fresh values, since every principal's calls reach the one server.
+  A program runs as one principal, so the critic and the runner read either scope alike.
 - The planner tests a call's result into the goal. A field whose declared set lists its members,
   an `enum` or a `const`, and meets the goal without lying inside it, is tested on the members it
   lists that the goal holds: the `then` branch returns it, and the other takes a strong program

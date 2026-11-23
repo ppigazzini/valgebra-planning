@@ -55,7 +55,7 @@ from valgebra_planning._valgebra import (
     nothing,
     union,
 )
-from valgebra_planning.contracts import keys_read
+from valgebra_planning.contracts import keys_read, scope_of
 
 __all__ = ["Monitor", "Policy", "Reach", "Snapshot", "Transition", "read_policy"]
 
@@ -107,6 +107,9 @@ class Policy:
     pending: frozenset[str] = frozenset()
     #: The argument whose every value has an instance of its own, or empty for one instance.
     per: str = ""
+    #: Whom a proxy holds the policy's states for: ``"shared"``, every client together, or
+    #: ``"principal"``, each principal a token names apart (`valgebra_planning.proxy.Gate`).
+    scope: str = "shared"
 
     def tools(self) -> frozenset[str]:
         """Return every tool a transition names."""
@@ -258,7 +261,7 @@ def _taken(record: Validator[Any], guard: Validator[Any]) -> Reach:
 
 
 #: The keys a policy and each of its transitions read.
-_POLICY_KEYS = frozenset({"name", "initial", "bad", "transitions", "pending", "per"})
+_POLICY_KEYS = frozenset({"name", "initial", "bad", "transitions", "pending", "per", "scope"})
 _TRANSITION_KEYS = frozenset({"from", "to", "tool", "hint", "arguments", "result"})
 
 
@@ -270,9 +273,12 @@ def read_policy(spec: Mapping[str, Any], *, assert_format: bool = False) -> Poli
     every record where it names none. With ``result``, the JSON Schema the call's result must
     meet, the transition is taken when the result arrives rather than when the call is made.
     With ``per``, an argument's name, the policy has an instance for each value it takes.
-    A key neither reads is refused, naming it, and so is a
-    transition naming both a tool and a hint, or neither. With ``assert_format``, ``format``
-    in a guard is read as an assertion, as the library's contracts read it.
+    With ``scope`` ``"principal"`` a proxy holds an instance for each principal a token names,
+    and with ``"shared"``, the default, one for every client; a program runs as one principal,
+    so the critic and the runner read either alike. A key neither reads is refused, naming it,
+    and so is a transition naming both a tool and a hint, or neither, and a ``scope`` that is
+    neither. With ``assert_format``, ``format`` in a guard is read as an assertion, as the
+    library's contracts read it.
     """
     keys_read(spec, _POLICY_KEYS, f"policy {spec.get('name')!r}")
     for t in spec["transitions"]:
@@ -302,6 +308,7 @@ def read_policy(spec: Mapping[str, Any], *, assert_format: bool = False) -> Poli
         transitions,
         frozenset(spec.get("pending", ())),
         _per(spec),
+        scope_of(spec, f"policy {spec.get('name')!r}"),
     )
 
 

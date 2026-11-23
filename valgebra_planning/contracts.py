@@ -422,6 +422,19 @@ def keys_read(spec: Mapping[str, Any], keys: frozenset[str], what: str) -> None:
         raise ValueError(message)
 
 
+#: Whom a rule's state is held for in a proxy: every client together, or each principal apart.
+SCOPES = frozenset({"shared", "principal"})
+
+
+def scope_of(spec: Mapping[str, Any], what: str) -> str:
+    """Return the ``scope`` ``spec`` names, ``"shared"`` where absent; refuse any other value."""
+    value = spec.get("scope", "shared")
+    if value not in SCOPES:
+        message = f"{what}: 'scope' is 'shared' or 'principal', not {value!r}"
+        raise ValueError(message)
+    return value
+
+
 def flag(spec: Mapping[str, Any], key: str, what: str) -> bool:
     """Return the boolean ``spec`` holds at ``key``, false where absent; refuse any other value."""
     value = spec.get(key, False)

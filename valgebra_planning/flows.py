@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from valgebra_planning._valgebra import Validator, compile_schema
-from valgebra_planning.contracts import flag, keys_read
+from valgebra_planning.contracts import flag, keys_read, scope_of
 
 __all__ = ["Flow", "read_flow"]
 
@@ -58,6 +58,9 @@ class Flow:
     fresh: bool = False
     #: The argument a source call and the sink's call must take the same value at, or empty.
     key: str = ""
+    #: Whom a proxy holds what the sources returned for: every client together, or each
+    #: principal a token names apart; a program runs as one principal.
+    scope: str = "shared"
 
     def holds(self, origin: str | None) -> bool:
         """Return whether a value from ``origin`` is held to the rule; None is a literal."""
@@ -70,7 +73,9 @@ class Flow:
 
 
 #: The keys a flow rule reads.
-_FLOW_KEYS = frozenset({"name", "sources", "sink", "endorsed", "implicit", "only", "fresh", "key"})
+_FLOW_KEYS = frozenset(
+    {"name", "sources", "sink", "endorsed", "implicit", "only", "fresh", "key", "scope"}
+)
 
 
 def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
@@ -81,7 +86,9 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
     ``key``. A source is a tool's name or a task input's. A key it does not read is a
     `ValueError` naming it, and so are a sink that names no argument and ``fresh`` or ``key``
     without ``only``, which would admit a value a rule refusing its sources' values refuses; a
-    flag that is no boolean, and a ``key`` that is no argument's name, is a `TypeError`. With
+    flag that is no boolean, and a ``key`` that is no argument's name, is a `TypeError`.
+    ``scope``, ``"shared"`` or ``"principal"``, names whom a proxy holds what the sources
+    returned for, every client together or each principal apart. With
     ``assert_format``, ``format`` in the endorsed set is read as an assertion, as the library's
     contracts read it.
     """
@@ -112,4 +119,5 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
         only=only,
         fresh=fresh,
         key=key,
+        scope=scope_of(spec, where),
     )

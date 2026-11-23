@@ -437,3 +437,11 @@ def test_a_fresh_rule_lets_a_value_inside_the_endorsed_set_through_after_an_acti
     )
     checked = verify(program, ROBOT, PICK, flows=[endorsed])
     assert all(link.verdict == "proven" for link in checked.links)
+
+
+def test_a_rule_names_its_scope_shared_or_principal() -> None:
+    base = {"name": "r", "sources": ["estimate_pose"], "sink": "grasp.distance_m", "only": True}
+    assert read_flow(base).scope == "shared"
+    assert read_flow(base | {"scope": "principal"}).scope == "principal"
+    with pytest.raises(ValueError, match="'scope' is 'shared' or 'principal', not 'everyone'"):
+        read_flow(base | {"scope": "everyone"})

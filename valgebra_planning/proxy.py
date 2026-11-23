@@ -20,7 +20,8 @@ equals none it was returned and passes: a flow rule here holds against no attack
 where the contract and policy checks hold against any. A proxy sees no task, so a value from a
 task input is from elsewhere. The proxy serves the agent that starts it over stdio, or, through
 `http_app`, every client holding a token issued for it over Streamable HTTP, all of them through
-its one gate, and a call a policy reads holds the gate from its check to its result, so each
+its one gate, a policy or a flow rule of ``scope`` ``"principal"`` holding each principal its
+tokens name apart, and a call a policy reads holds the gate from its check to its result, so each
 policy reads such calls in the order they act. MCP 2026-07-28 has no session a client ends, so a
 policy's pending states are not read there. A call the upstream answers with a protocol error,
 or with a request for input, is answered with a tool error: the proxy gives no input, since a
@@ -43,7 +44,8 @@ from urllib.parse import urlsplit
 
 import uvicorn
 from mcp import Client, InputRequiredRoundsExceededError, MCPError, types
-from mcp.server.auth.provider import TokenVerifier
+from mcp.server.auth.middleware.auth_context import get_access_token
+from mcp.server.auth.provider import TokenVerifier, principal_components
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.lowlevel import Server
 from mcp.server.request_state import RequestStateBoundary, RequestStateSecurity
@@ -99,6 +101,16 @@ def _leaves(value: Any) -> Iterable[Any]:
             yield from _leaves(item)
 
 
+def _principal() -> tuple[str, str | None, str | None] | None:
+    """Return the principal the call's token names, its client, issuer and subject, or None.
+
+    The mcp SDK reads a token's principal so for the sessions it owns and the request states it
+    binds; a call over stdio carries no token, and its one client is one principal.
+    """
+    token = get_access_token()
+    return None if token is None else principal_components(token)
+
+
 @dataclass(slots=True)
 class Gate:
     """The checks a proxy holds each call to, and the values each untrusted tool returned."""
@@ -117,9 +129,16 @@ class Gate:
     error_texts: Mapping[str, Validator[Any]] = field(default_factory=dict)
     #: The tools whose requests for a person's answer the proxy forwards to its client.
     forwards_elicitation: frozenset[str] = frozenset()
-    #: For a rule with ``fresh`` or ``key``, the values its sources returned, by the JSON text
-    #: of the key's value the source call took, None for a rule with no key.
-    returned: dict[str, dict[object, set[object]]] = field(default_factory=dict)
+    #: For a rule with ``fresh`` or ``key``, the values its sources returned, by the rule's name
+    #: and the principal it holds them for (None for a shared rule), then by the JSON text of the
+    #: key's value the source call took, None for a rule with no key.
+    returned: dict[tuple[str, object], dict[object, set[object]]] = field(default_factory=dict)
+    #: A policy of ``scope`` ``"principal"``'s monitor for each principal, by its index among
+    #: ``monitors``, whose own monitor is never stepped.
+    instances: dict[object, dict[int, Monitor]] = field(default_factory=dict)
+    #: What the sources of a rule of ``scope`` ``"principal"`` returned, by principal, as
+    #: ``seen`` holds it for the shared rules.
+    seen_by: dict[object, dict[object, set[str]]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Refuse a tool named for its answers or its calls that the proxy lacks, or a policy reads.
@@ -251,7 +270,7 @@ class Gate:
         """
         if flow.endorsed is not None and flow.endorsed.is_valid(value):
             return None
-        kept = self.returned.get(flow.name, {})
+        kept = self.returned.get(self.holder(flow), {})
         held = (
             kept.get(json_key(arguments.get(flow.key)), set())
             if flow.key
@@ -272,13 +291,19 @@ class Gate:
 
         A call whose annotations do not say it is read-only may change what a reading reported
         (Mansoor et al. 2026, §4.1), so a value read before it reaches a fresh rule's sink no more.
+        Every principal's calls reach the one server, so each principal's values are withdrawn.
         """
         contract = self.contracts.get(tool)
         if contract is not None and "readOnlyHint" in contract.hints:
             return
-        for flow in self.flows:
-            if flow.fresh:
-                self.returned.pop(flow.name, None)
+        fresh = {flow.name for flow in self.flows if flow.fresh}
+        for held in [held for held in self.returned if held[0] in fresh]:
+            del self.returned[held]
+
+    @staticmethod
+    def holder(flow: Flow) -> tuple[str, object]:
+        """Return whom a rule's returned values are held for: its name and the call's principal."""
+        return flow.name, _principal() if flow.scope == "principal" else None
 
     def ordered(self, tool: str) -> bool:
         """Return whether a call to ``tool`` is held in order: a policy or an ordered rule reads it.
@@ -296,15 +321,38 @@ class Gate:
             for flow in self.flows
         )
 
+    def watching(self) -> list[Monitor]:
+        """Return the monitor of each policy a call is read by: its principal's, for a scoped one.
+
+        A policy of ``scope`` ``"principal"`` is a parametric property whose parameter is the
+        principal the call's token names: each principal's calls are one instance's trace (Roşu
+        and Chen 2012, Def. 12), so a yes one principal relays admits no call of another's. A
+        shared policy reads every client's calls as one trace.
+        """
+        principal = _principal()
+        mine = self.instances.setdefault(principal, {})
+        return [
+            mine.setdefault(at, Monitor(monitor.policy))
+            if monitor.policy.scope == "principal"
+            else monitor
+            for at, monitor in enumerate(self.monitors)
+        ]
+
+    def everyone(self) -> list[Monitor]:
+        """Return every monitor stepped: each shared policy's, and every principal's instance."""
+        shared = [m for m in self.monitors if m.policy.scope != "principal"]
+        return shared + [m for mine in self.instances.values() for m in mine.values()]
+
     def stopped(self, tool: str) -> str | None:
         """Return the bad state a result took a policy to, which refuses a call to ``tool``.
 
         A result reaches a bad state after its call was made, so no call follows it but one to
-        a tool of ``after_violation``, which no policy reads.
+        a tool of ``after_violation``, which no policy reads. Every principal's calls reach the
+        one server, so a bad state any principal's instance holds stops each of them.
         """
         if tool in self.after_violation:
             return None
-        for monitor in self.monitors:
+        for monitor in self.everyone():
             if held := sorted(monitor.held() & monitor.policy.bad):
                 return f"{monitor.policy.name} holds {held[0]}: no call is made after it"
         return None
@@ -328,10 +376,11 @@ class Gate:
             # the last call a policy reads, which that call's error reads.
             return None
         # A refused call is never made, so no policy steps on it: the session goes on as before.
-        states = [monitor.snapshot() for monitor in self.monitors]
-        for monitor in self.monitors:
+        watched = self.watching()
+        states = [monitor.snapshot() for monitor in watched]
+        for monitor in watched:
             if monitor.observe(tool, arguments, contract.hints):
-                for kept, snapshot in zip(self.monitors, states, strict=True):
+                for kept, snapshot in zip(watched, states, strict=True):
                     kept.restore(snapshot)
                 # Name the calls that move the policy on from where the refusal leaves it, so an
                 # agent reads what admits the call, not the state alone.
@@ -350,7 +399,8 @@ class Gate:
                 if refused is not None:
                     return refused
                 continue
-            sources = self.seen.get(json_key(value), set()) & flow.sources
+            seen = self.seen if flow.scope != "principal" else self.seen_by.get(_principal(), {})
+            sources = seen.get(json_key(value), set()) & flow.sources
             # A value equal to one a source returned is taken as that source's, and any other
             # as from elsewhere: the rule holds the first, or with ``only`` the second.
             if bool(sources) == flow.only or (
@@ -366,7 +416,7 @@ class Gate:
 
     def errored(self) -> None:
         """Hold each policy in the states before the last call too: it answered with an error."""
-        for monitor in self.monitors:
+        for monitor in self.watching():
             monitor.errored()
 
     def unread(self, tool: str, arguments: Mapping[str, Any]) -> None:
@@ -379,7 +429,7 @@ class Gate:
         if not self.policed(tool):
             return
         hints = self.contracts[tool].hints
-        for monitor in self.monitors:
+        for monitor in self.watching():
             monitor.unread(tool, arguments, hints)
 
     def after(
@@ -397,16 +447,18 @@ class Gate:
                 return f"{tool} returned a key its output schema does not declare, read closed"
             detail = failures(contract.returns, value, contract_names(contract))
             return f"{tool} returned a value outside its contract ({detail})"
-        for monitor in self.monitors:
+        for monitor in self.watching():
             if monitor.returned(tool, arguments or {}, value, contract.hints):
                 return monitor.violations[-1]
-        if any(tool in flow.sources for flow in self.flows):
+        principal = _principal()
+        for scope in sorted({flow.scope for flow in self.flows if tool in flow.sources}):
+            seen = self.seen if scope != "principal" else self.seen_by.setdefault(principal, {})
             for leaf in _leaves(value):
-                self.seen.setdefault(json_key(leaf), set()).add(tool)
+                seen.setdefault(json_key(leaf), set()).add(tool)
         leaves = {json_key(leaf) for leaf in _leaves(value)}
         for flow in self.flows:
             if tool in flow.sources and (flow.fresh or flow.key):
-                kept = self.returned.setdefault(flow.name, {})
+                kept = self.returned.setdefault(self.holder(flow), {})
                 # A keyed rule holds the latest value a source returned for each key.
                 at = json_key((arguments or {}).get(flow.key)) if flow.key else None
                 kept[at] = leaves if flow.key else kept.get(at, set()) | leaves
@@ -793,7 +845,8 @@ def http_app(
     client at ``issuer``, the authorization server. A request whose Host is not the resource's is
     answered 421, and one carrying an Origin not among ``origins`` 403, the check MCP asks of
     every connection against DNS rebinding. A token reaches no upstream: the proxy reaches its
-    server on a connection of its own. Every client calls through the one gate ``server`` holds.
+    server on a connection of its own. Every client calls through the one gate ``server`` holds,
+    and a rule of ``scope`` ``"principal"`` there reads each token's principal apart.
     Raises `ValueError` for a resource that is no HTTP URL.
     """
     where = urlsplit(resource)

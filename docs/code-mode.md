@@ -131,17 +131,21 @@ over Streamable HTTP to every client holding a token issued for it, as `proxy --
 Every client of one proxy calls through its one gate: a policy reads the calls of all of them in order, and a flow rule takes a
 value any of them was returned as returned. A call a policy reads holds the gate from its check to
 its result, so a second one waits for the first's result before it is checked; a call no policy
-reads waits on none. Two deployments in front of one robot differ there.
+reads waits on none. A policy or a flow rule naming `"scope": "principal"` is held apart for each
+principal a token names, its client, issuer and subject. Three deployments in front of one robot
+differ there.
 
 | deployment | policy state | provenance |
 |---|---|---|
 | one proxy, every agent its client | one: a call one agent makes moves it for every other | pooled: a value one agent was returned grounds another's call |
+| one proxy, a rule of `"scope": "principal"` | one per principal: each holds its own calls, and a bad state any reaches stops every call | per principal: a value grounds only its principal's calls |
 | one proxy per agent | one per proxy: each holds the calls made through it | per proxy |
 
 A policy about one actuator, as "no walking while an object is held", is held by the one proxy in
 front of it; one proxy per agent holds it for no agent, since each sees half the calls. What
-pooling costs is which client holds a value, and no rule here reads that: `only` states that a
-value was returned by a named tool, which holds whichever client it was returned to. A call its
+pooling costs is which client holds a value, which a shared rule does not read: `only` states that
+a value was returned by a named tool, which holds whichever client it was returned to, and a rule
+of `"scope": "principal"` reads it, refusing a value another principal was returned. A call its
 server answers by asking for input is answered with a tool error, but a request for a person's
 answer from a tool its library names under `"forwardsElicitation"` ([limits](method.md#limits)).
 

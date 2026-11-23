@@ -840,3 +840,11 @@ def test_a_refusal_names_the_calls_that_move_the_policy_on() -> None:
     assert Monitor(consent).ways_out("walk_to", frozenset({"destructiveHint"})) == [
         "from start, confirm, by its result, leads to ok"
     ]
+
+
+def test_a_policy_names_its_scope_shared_or_principal() -> None:
+    spec = {"name": "p", "initial": "a", "bad": [], "transitions": []}
+    assert read_policy(spec).scope == "shared"
+    assert read_policy(spec | {"scope": "principal"}).scope == "principal"
+    with pytest.raises(ValueError, match="'scope' is 'shared' or 'principal', not 'everyone'"):
+        read_policy(spec | {"scope": "everyone"})

@@ -443,9 +443,14 @@ ones.
   model may give is asked by URL.
 - **A proxy over HTTP is one gate for every client holding a token.** `valgebra-planning proxy`
   serves the agent that starts it over stdio, and with `--http` every client holding a token
-  issued for it over Streamable HTTP, through one gate: policies read the calls of all of them,
-  and flow rules pool what each was returned
-  ([one gate](code-mode.md#the-proxy-for-an-agent-whose-program-is-not-seen)). No session keys
+  issued for it over Streamable HTTP, through one gate: a policy reads the calls of all of them,
+  and a flow rule pools what each was returned
+  ([one gate](code-mode.md#the-proxy-for-an-agent-whose-program-is-not-seen)). A policy or a flow
+  rule naming `"scope": "principal"` holds each principal apart, the client, issuer and subject
+  its token names as the mcp SDK reads them: two operators' consents do not mix, and nor do two
+  agents' of one operator, since each agent is a client of its own. Every principal's calls
+  reach the one server, so a bad state any principal's instance holds still stops every call, and
+  a call that may act withdraws every principal's fresh values. No session keys
   either: MCP 2026-07-28 leaves state across calls to handles a server mints as tool arguments,
   which would change the signatures the proxy lists. A gate served to any client is moved by any
   client, so the proxy serves HTTP only as an OAuth 2.1 resource server, as MCP 2026-07-28 has

@@ -239,13 +239,18 @@ takes a value another returned is a flow rule with `only`. A policy naming an ar
 is the parametric property at run time: the monitor holds an instance for each value the
 argument takes, a call carrying it an event of its value's instance alone and a call carrying
 none an event of every instance (Roşu and Chen 2012, Def. 11), as Agent-C binds a file read to
-the file opened before it (Kamath et al. 2025, §5.1). The walk holds no value's identity, so it
+the file opened before it (Kamath et al. 2025, §5.1). A proxy reads a policy or a flow rule of
+`"scope": "principal"` the same way with the principal a call's token names as the parameter,
+its client, issuer and subject as the mcp SDK reads a token's principal: each principal's calls
+are one instance's trace (Roşu and Chen 2012, Def. 12), so a yes one principal relays admits no
+call of another's, and a value one was returned grounds no call of another's. A program runs as
+one principal, so the walk reads either scope alike. The walk holds no value's identity, so it
 takes every transition of such a policy possibly at most and proves none of its links: the
 static half is not built. **[DEVIATION: no-parametric-policy]**
 
-IMPLEMENTED-BY: policy.py, policy.py::Monitor.stepping
+IMPLEMENTED-BY: policy.py, policy.py::Monitor.stepping, proxy.py::Gate.watching
 
-HELD-BY: test_a_rule_about_one_parcel_reads_as_a_rule_about_any_two_calls, test_every_call_on_an_item_the_user_listed_is_a_flow_rule_with_only, test_a_policy_per_value_holds_an_instance_for_each_value_its_argument_takes, test_a_call_carrying_no_value_steps_every_instance_and_the_ones_to_come, test_a_run_refuses_a_grasp_of_an_object_no_confirmation_was_for
+HELD-BY: test_a_rule_about_one_parcel_reads_as_a_rule_about_any_two_calls, test_a_yes_one_principal_relays_admits_another_s_walk_only_under_a_shared_policy, test_a_value_one_principal_was_returned_grounds_another_s_call_only_under_a_shared_rule, test_every_call_on_an_item_the_user_listed_is_a_flow_rule_with_only, test_a_policy_per_value_holds_an_instance_for_each_value_its_argument_takes, test_a_call_carrying_no_value_steps_every_instance_and_the_ones_to_come, test_a_run_refuses_a_grasp_of_an_object_no_confirmation_was_for
 
 ## Vacuity
 

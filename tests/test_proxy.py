@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +13,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from mcp import Client, MCPError, types
 from mcp.client.streamable_http import streamable_http_client
+from mcp.server.auth.middleware.auth_context import auth_context_var
+from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
 from mcp.server.lowlevel import Server
 
@@ -347,14 +351,13 @@ def test_no_call_is_made_after_a_result_takes_a_policy_to_a_bad_state() -> None:
     assert made == ["approve_freight"]
 
 
-FOUND = read_flow(
-    {
-        "name": "approvals are for the parcel found",
-        "sources": ["find_parcel"],
-        "sink": "approve_freight.parcel_id",
-        "only": True,
-    }
-)
+_FOUND_SPEC: dict[str, Any] = {
+    "name": "approvals are for the parcel found",
+    "sources": ["find_parcel"],
+    "sink": "approve_freight.parcel_id",
+    "only": True,
+}
+FOUND = read_flow(_FOUND_SPEC)
 APPROVAL = ("approve_freight", {"parcel_id": "pcl_1"})
 FINDING = ("find_parcel", {"tracking": "AB123456789IT"})
 
@@ -1070,22 +1073,21 @@ ROBOT = [
     _robot_tool("walk_to", {"object_id": {"type": "string"}}, {"arrived": {"type": "boolean"}}),
 ]
 ROBOT_TOOLS = {contract.name: contract for contract in map(read_contract, ROBOT)}
-CONSENT = read_policy(
-    {
-        "name": "a walk follows a yes",
-        "initial": "start",
-        "bad": ["violated"],
-        "transitions": [
-            {
-                "from": "start",
-                "tool": "confirm_with_user",
-                "result": {"properties": {"confirmed": {"const": True}}},
-                "to": "ok",
-            },
-            {"from": "start", "tool": "walk_to", "to": "violated"},
-        ],
-    }
-)
+CONSENT_SPEC: dict[str, Any] = {
+    "name": "a walk follows a yes",
+    "initial": "start",
+    "bad": ["violated"],
+    "transitions": [
+        {
+            "from": "start",
+            "tool": "confirm_with_user",
+            "result": {"properties": {"confirmed": {"const": True}}},
+            "to": "ok",
+        },
+        {"from": "start", "tool": "walk_to", "to": "violated"},
+    ],
+}
+CONSENT = read_policy(CONSENT_SPEC)
 QUESTION = ("confirm_with_user", {"question": "may the robot walk to the cup?"})
 WALK = ("walk_to", {"object_id": "obj_1"})
 
@@ -1383,3 +1385,145 @@ def test_a_proxy_lets_a_value_inside_a_fresh_rule_s_endorsed_set_through_after_a
     stale = _measured([*walked, ("grasp", {"object_id": "obj_1", "distance_m": 0.4})], endorsed)
     assert not short[-1].is_error
     assert _refused(stale[-1]).endswith("since the last call that may act")
+
+
+def _yes_robot(made: list[str]) -> Server[Any]:
+    """Serve the robot, its confirmation answering yes."""
+
+    async def listed(_: Any, __: Any) -> types.ListToolsResult:
+        return types.ListToolsResult(tools=[types.Tool.model_validate(tool) for tool in ROBOT])
+
+    async def called(_: Any, params: types.CallToolRequestParams) -> types.CallToolResult:
+        made.append(params.name)
+        value = {"confirm_with_user": {"confirmed": True}, "walk_to": {"arrived": True}}
+        return types.CallToolResult(content=[], structured_content=value[params.name])
+
+    return Server("robot", on_list_tools=listed, on_call_tool=called)
+
+
+@pytest.mark.parametrize(("scope", "crossed"), [("shared", True), ("principal", False)])
+def test_a_yes_one_principal_relays_admits_another_s_walk_only_under_a_shared_policy(
+    scope: str, *, crossed: bool
+) -> None:
+    made: list[str] = []
+    consent = read_policy(CONSENT_SPEC | {"scope": scope})
+
+    async def session() -> tuple[Any, Any]:
+        async with Client(_yes_robot(made)) as upstream:
+            listing = (await upstream.list_tools()).tools
+            front = proxy(upstream, listing, ROBOT_TOOLS, policies=[consent])
+            app, client = _authenticated(front)
+            async with (
+                app.router.lifespan_context(app),
+                client("supervisor") as supervisor,
+                client("agent") as agent,
+            ):
+                await supervisor.call_tool(*QUESTION)
+                other = await agent.call_tool(*WALK)
+                await agent.call_tool(*QUESTION)
+                return other, await agent.call_tool(*WALK)
+
+    other, own = asyncio.run(session())
+    assert not own.is_error
+    if crossed:
+        assert not other.is_error
+        assert made == ["confirm_with_user", "walk_to", "confirm_with_user", "walk_to"]
+    else:
+        assert _refused(other).startswith("refused: a walk follows a yes: walk_to reached violated")
+        assert made == ["confirm_with_user", "confirm_with_user", "walk_to"]
+
+
+@pytest.mark.parametrize(("scope", "crossed"), [("shared", True), ("principal", False)])
+def test_a_value_one_principal_was_returned_grounds_another_s_call_only_under_a_shared_rule(
+    scope: str, *, crossed: bool
+) -> None:
+    found = read_flow({**_FOUND_SPEC, "scope": scope})
+
+    async def session() -> tuple[Any, Any]:
+        async with Client(_upstream([], ANSWERS, LISTING)) as upstream:
+            front = proxy(upstream, (await upstream.list_tools()).tools, TOOLS, flows=[found])
+            app, client = _authenticated(front)
+            async with (
+                app.router.lifespan_context(app),
+                client("supervisor") as supervisor,
+                client("agent") as agent,
+            ):
+                await supervisor.call_tool(*FINDING)
+                other = await agent.call_tool(*APPROVAL)
+                await agent.call_tool(*FINDING)
+                return other, await agent.call_tool(*APPROVAL)
+
+    approved, own = asyncio.run(session())
+    assert not own.is_error
+    if crossed:
+        assert not approved.is_error
+    else:
+        assert "approve_freight.parcel_id holds a value none of find_parcel returned" in (
+            _refused(approved)
+        )
+
+
+@contextmanager
+def _as(client: str) -> Generator[None]:
+    """Read the calls made inside as the principal ``client``'s token names, as the app sets it."""
+    held = auth_context_var.set(AuthenticatedUser(TOKENS.table[client]))
+    try:
+        yield
+    finally:
+        auth_context_var.reset(held)
+
+
+def test_a_bad_state_one_principal_reaches_stops_every_principal_s_calls() -> None:
+    refusal = read_policy(
+        {
+            "name": "a no stops the robot",
+            "initial": "start",
+            "bad": ["violated"],
+            "scope": "principal",
+            "transitions": [
+                {
+                    "from": "start",
+                    "tool": "confirm_with_user",
+                    "result": {"properties": {"confirmed": {"const": False}}},
+                    "to": "violated",
+                }
+            ],
+        }
+    )
+    gate = Gate(ROBOT_TOOLS, [Monitor(refusal)], [])
+    with _as("supervisor"):
+        assert gate.before(*QUESTION) is None
+        assert gate.after(QUESTION[0], {"confirmed": False}, QUESTION[1]) is not None
+    with _as("agent"):
+        assert gate.before(*WALK) == "a no stops the robot holds violated: no call is made after it"
+
+
+@pytest.mark.parametrize("scope", ["shared", "principal"])
+def test_a_call_one_principal_makes_that_may_act_withdraws_every_principal_s_fresh_values(
+    scope: str,
+) -> None:
+    measured = read_flow(
+        {
+            "name": "the distance is measured since the last move",
+            "sources": ["estimate_pose"],
+            "sink": "grasp.distance_m",
+            "only": True,
+            "fresh": True,
+            "scope": scope,
+        }
+    )
+    gate = Gate(MEASURING_TOOLS, [], [measured])
+    grasp = {"object_id": "obj_1", "distance_m": 0.4}
+    with _as("supervisor"):
+        assert gate.after("estimate_pose", {"distance_m": 0.4}, {"object_id": "obj_1"}) is None
+        assert gate.before("grasp", grasp) is None
+    with _as("agent"):
+        # Another principal's reading is no reading of this one's, under a principal's rule.
+        crossed = gate.before("grasp", grasp)
+        assert (crossed is None) == (scope == "shared")
+        gate.made("walk_to")
+    with _as("supervisor"):
+        assert gate.before("grasp", grasp) == (
+            f"flow {measured.name}: grasp.distance_m holds a value none of estimate_pose "
+            "returned since the last call that may act"
+        )
