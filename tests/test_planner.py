@@ -733,6 +733,76 @@ def test_a_value_read_before_a_call_that_may_act_is_no_fresh_reading_after_it() 
     )
 
 
+LISTED = {"name": {"type": "string"}, "names": {"type": "array", "items": {"type": "string"}}}
+READ = "c1 = detect_object(name=name)\nc2 = estimate_pose(object_id=c1.object_id)\n"
+GRASP = "c4 = grasp(object_id=c1.object_id, distance=c2.distance)\n"
+
+
+@pytest.mark.parametrize(
+    ("source", "verdict"),
+    [
+        (READ + "for n in names:\n    " + GRASP + "stop(c2.distance)\n", "refuted"),
+        (
+            READ
+            + "for n in names:\n    c3 = walk_to(object_id=c1.object_id)\n"
+            + GRASP
+            + "return c4.grasp_id\n",
+            "refuted",
+        ),
+        (
+            READ
+            + "for n in names:\n    c3 = detect_object(name=n)\n"
+            + GRASP
+            + "return c4.grasp_id\n",
+            "proven",
+        ),
+        (
+            "c1 = detect_object(name=name)\nfor n in names:\n"
+            "    c2 = estimate_pose(object_id=c1.object_id)\n    " + GRASP + "stop(c1.object_id)\n",
+            "proven",
+        ),
+        (
+            READ
+            + 'for n in names:\n    if n == "x":\n        c3 = walk_to(object_id=c1.object_id)\n'
+            + GRASP
+            + "return c4.grasp_id\n",
+            "refuted",
+        ),
+        (
+            READ
+            + "for n in names:\n    try:\n        c3 = detect_object(name=n)\n"
+            + "    except ToolError:\n        c5 = walk_to(object_id=c1.object_id)\n"
+            + GRASP
+            + "return c4.grasp_id\n",
+            "refuted",
+        ),
+        (
+            READ
+            + "for n in names:\n    for m in names:\n        c3 = walk_to(object_id=c1.object_id)\n"
+            + GRASP
+            + "return c4.grasp_id\n",
+            "refuted",
+        ),
+    ],
+    ids=[
+        "in-a-body-that-acts",
+        "after-a-body-that-acts",
+        "after-a-read-only-body",
+        "read-in-the-body",
+        "after-a-branch-that-acts",
+        "after-an-error-block-that-acts",
+        "after-a-loop-in-the-body-that-acts",
+    ],
+)
+def test_a_value_read_before_a_loop_whose_body_may_act_is_stale_in_it_and_after_it(
+    source: str, verdict: str
+) -> None:
+    task = read_task("pick", LISTED, GRASPED, fresh=["grasp.distance"])
+    claim = "grasp.distance is read after every call before it that may act"
+    links = verify(read_program(source), _walking(), task).links
+    assert {link.verdict for link in links if link.claim == claim} == {verdict}
+
+
 def test_the_planner_reads_again_after_a_call_that_may_act() -> None:
     walked = read_policy(APPROACHED)
     task = read_task("pick", {"name": {"type": "string"}}, GRASPED, fresh=["grasp.distance"])

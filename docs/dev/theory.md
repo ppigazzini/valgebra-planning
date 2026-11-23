@@ -370,13 +370,15 @@ package reads the same of anything else an action may have changed: a distance r
 walk is no reading of the distance after it. A task names the arguments it reads fresh, and a call whose annotations
 do not say it is read-only may act; the verifier refutes a binding of a value held before the
 last such call before the one it fills, and the planner gives such an argument no such value,
-and lets a read-only call made before an action be made again after it. Which calls may act is
+and lets a read-only call made before an action be made again after it. A loop whose body may
+act runs after its own action from the second item on, so every value held before it, the item
+among them, is read before such a call in the body and after the loop. Which calls may act is
 read off their annotations, so a link proven over them lists that assumption unless every
 server is trusted. **[LOAD-BEARING: fresh-reads]**
 
-IMPLEMENTED-BY: verify.py::_Walk.read_fresh, planner.py::_Search.after
+IMPLEMENTED-BY: verify.py::_Walk.read_fresh, verify.py::_Walk.loop, planner.py::_Search.after
 
-HELD-BY: test_a_value_read_before_a_call_that_may_act_is_no_fresh_reading_after_it, test_the_planner_reads_again_after_a_call_that_may_act
+HELD-BY: test_a_value_read_before_a_call_that_may_act_is_no_fresh_reading_after_it, test_a_value_read_before_a_loop_whose_body_may_act_is_stale_in_it_and_after_it, test_the_planner_reads_again_after_a_call_that_may_act
 
 ## The critic and code mode
 

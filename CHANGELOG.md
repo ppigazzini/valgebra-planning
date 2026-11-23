@@ -138,7 +138,9 @@ All notable changes to valgebra-planning are recorded here. The format follows
   read-only may act: the verifier refutes a binding of a value held before the last such call
   before the one it fills, and a constant as no reading; the planner gives such an argument no
   such value, and makes a read-only call again after an action, so a pick a policy makes walk
-  first estimates the pose after the walk. A link proven over the annotations lists them as an
+  first estimates the pose after the walk. A loop whose body may act runs after its own action
+  from its second item on, so each value held before the loop, the item among them, is held
+  before such a call in the body and after the loop. A link proven over the annotations lists them as an
   assumption unless every server is trusted. A fresh argument naming no argument of a listed tool
   is refused.
 

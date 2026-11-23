@@ -229,6 +229,11 @@ class _Walk:
         nothing the program held under that name, nor any field of it, is read in the body. The
         item keeps the array it is read from, so a question its set leaves open is asked of
         every item of the array, `_Walk.asked`.
+
+        A body that may act runs after its own action from the second item on, so every value
+        held before the loop, the item among them, is read before a call that may act there, and
+        after the loop too (Mansoor et al. 2026, §4.1): the body and what follows are walked with
+        each of them stale.
         """
         held = self.held(env, end.ref, where)
         if held is None:
@@ -237,6 +242,8 @@ class _Walk:
         inner = {ref: held for ref, held in env.items() if ref.variable != end.item}
         inner[Ref(end.item)] = _Held(item.values, item, _Loop(end.ref, end.item, env))
         inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
+        if _acts(end.body, self.contracts):
+            path = replace(path, stale=path.stale | {ref.variable for ref in inner})
         states = path.states
         while self.policies:
             ends, _ = self.iterate(
@@ -1029,6 +1036,26 @@ _States = tuple[frozenset[str], ...]
 
 
 _Acted = frozenset[tuple[str, frozenset[tuple[str, Ref | Const]]]]
+
+
+def _acts(block: Block, contracts: Mapping[str, Contract]) -> bool:
+    """Return whether a call ``block`` may make, at any depth, is one that may act.
+
+    A call may act unless its tool's annotations say it is read-only; a tool no contract names
+    may act.
+    """
+    for call in block.calls:
+        contract = contracts.get(call.tool)
+        if contract is None or "readOnlyHint" not in contract.hints:
+            return True
+        if call.on_error is not None and _acts(call.on_error, contracts):
+            return True
+    end = block.end
+    if isinstance(end, Branch):
+        return _acts(end.then, contracts) or _acts(end.otherwise, contracts)
+    if isinstance(end, For):
+        return _acts(end.body, contracts) or _acts(end.after, contracts)
+    return False
 
 
 def _unread(acted: _Acted, result: str) -> _Acted:

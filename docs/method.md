@@ -199,7 +199,9 @@ verifier, which adds a link for it.
   `grasp.distance`; a binding of a value held before the last call that may act before the one
   it fills is refuted, a constant is refuted as no reading, and the planner gives such an argument
   no such value and makes a read-only call again after an action, so a pick that walks first
-  estimates the pose after the walk. The annotations are the server's word, so a link proven over
+  estimates the pose after the walk. A loop whose body may act runs after its own action from
+  its second item on, so each value held before the loop, the item among them, is held before
+  such a call in the body and after the loop. The annotations are the server's word, so a link proven over
   them lists that assumption unless every server is trusted.
 - **Mined types** (`valgebra_planning/mining.py`). Slots holding one observed value are one
   semantic type (APIphany, Guo et al. 2022), and a value fills an argument only where their
