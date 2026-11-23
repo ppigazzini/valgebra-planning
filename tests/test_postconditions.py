@@ -706,3 +706,17 @@ def test_the_planner_writes_no_stop_a_policy_s_obligation_is_open_at() -> None:
     found = plan(BOOKING, SEND, errors=True, policies=[noted], postconditions=[ACTED])
     # Each stop the block can write leaves the booking possibly unnoted: no program is found.
     assert found.program is None
+
+
+def test_the_command_line_plans_a_library_s_block_and_proves_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "tools.json").write_text(
+        json.dumps({"tools": BOOKING_SPECS, "postconditions": [BOOKED]})
+    )
+    task = {"name": "send", "inputs": {"parcel_id": PARCEL}, "goal": LABEL, "errors": True}
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}))
+    assert main(["plan", str(tmp_path), "--json"]) == 0
+    (row,) = json.loads(capsys.readouterr().out)
+    assert 'if "label_id" in c1:' in row["program"]
+    assert all(link["verdict"] == "proven" for link in row["links"])

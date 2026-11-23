@@ -81,6 +81,7 @@ def _planned(
         policies=problem.policies,
         flows=problem.flows,
         types=problem.types,
+        postconditions=problem.postconditions,
     )
     row: dict[str, Any] = {"task": problem.task.name, "program": None}
     if found.program is None:
