@@ -19,6 +19,13 @@ name, from a task input it does not name, or written into the program as a liter
 sink only inside the endorsed set. That is integrity as provenance: an identifier must come
 from the tool that retrieved it, on every path, which refutes the identifier a model makes up to
 pass an authentication step, the integrity leak (Sah et al. 2026, §4.3).
+
+An ``only`` rule may also read when and for what a value was returned. With ``fresh``, a value its
+sources returned before a call that may act reaches the sink no more: an action changes the world
+a reading reports (Mansoor et al. 2026, §4.1). With ``key``, an argument's name, a value reaches
+the sink only from a source call that took the same value at that argument as the sink's call,
+a slice of the trace per value of the key (Roşu and Chen 2012, Def. 11), as a distance measured
+for one object and passed for another is refused.
 """
 
 from __future__ import annotations
@@ -47,6 +54,10 @@ class Flow:
     endorsed: Validator[Any] | None
     implicit: bool
     only: bool = False
+    #: Whether a value its sources returned before a call that may act no longer reaches the sink.
+    fresh: bool = False
+    #: The argument a source call and the sink's call must take the same value at, or empty.
+    key: str = ""
 
     def holds(self, origin: str | None) -> bool:
         """Return whether a value from ``origin`` is held to the rule; None is a literal."""
@@ -59,17 +70,20 @@ class Flow:
 
 
 #: The keys a flow rule reads.
-_FLOW_KEYS = frozenset({"name", "sources", "sink", "endorsed", "implicit", "only"})
+_FLOW_KEYS = frozenset({"name", "sources", "sink", "endorsed", "implicit", "only", "fresh", "key"})
 
 
 def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
     """Read a flow rule from its JSON form.
 
     It holds ``name``, ``sources``, ``sink`` as ``tool.argument``, and optionally the
-    ``endorsed`` JSON Schema, ``implicit`` and ``only``. A source is a tool's name or a task
-    input's. A key it does not read is a `ValueError` naming it, and so is a sink that names
-    no argument; a flag that is no boolean is a `TypeError`. With ``assert_format``, ``format``
-    in the endorsed set is read as an assertion, as the library's contracts read it.
+    ``endorsed`` JSON Schema, ``implicit`` and ``only``, and with ``only``, ``fresh`` and
+    ``key``. A source is a tool's name or a task input's. A key it does not read is a
+    `ValueError` naming it, and so are a sink that names no argument and ``fresh`` or ``key``
+    without ``only``, which would admit a value a rule refusing its sources' values refuses; a
+    flag that is no boolean, and a ``key`` that is no argument's name, is a `TypeError`. With
+    ``assert_format``, ``format`` in the endorsed set is read as an assertion, as the library's
+    contracts read it.
     """
     where = f"flow {spec.get('name')!r}"
     keys_read(spec, _FLOW_KEYS, where)
@@ -78,6 +92,13 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
         message = f"{where}: the sink {spec['sink']!r} is no tool.argument"
         raise ValueError(message)
     implicit, only = flag(spec, "implicit", where), flag(spec, "only", where)
+    fresh, key = flag(spec, "fresh", where), spec.get("key", "")
+    if not isinstance(key, str):
+        message = f"{where}: 'key' is an argument's name, not {key!r}"
+        raise TypeError(message)
+    if (fresh or key) and not only:
+        message = f"{where}: 'fresh' and 'key' read a value's return, so they need 'only'"
+        raise ValueError(message)
     endorsed = spec.get("endorsed")
     return Flow(
         name=spec["name"],
@@ -89,4 +110,6 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
         else compile_schema(endorsed, assert_format=assert_format),
         implicit=implicit,
         only=only,
+        fresh=fresh,
+        key=key,
     )

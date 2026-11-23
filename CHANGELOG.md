@@ -29,6 +29,17 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A flow rule with `only` may read when and for what a value was returned. With `fresh`, a value
+  its sources returned before a call that may act reaches the sink no more: the verifier refutes
+  it, the planner binds the sink no such value, and the proxy withdraws every value its sources
+  returned when such a call is made. With `key`, an argument's name, a value reaches the sink
+  only from a source call that took at that argument what the sink's call takes there: the
+  verifier refutes a distance measured for one object and passed for another, the planner keys
+  each binding and its failure memo by it, and the proxy admits the latest value a source
+  returned for the sink's key. A source's value failing either reaches the sink only inside the
+  endorsed set, as a value from elsewhere does. The proxy holds the calls such a rule reads in
+  order, as a policy's. Either key without `only` is refused, since it would admit what a rule
+  refusing its sources' values refuses.
 - A proxy forwards a request for a person's answer for a tool its library names. A call its
   server answered by asking for input, as a robot's confirmation asks the user through MCP's
   elicitation, was answered with a tool error, so no motion under a consent rule was ever made

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from valgebra_planning.codemode import repair
-from valgebra_planning.contracts import read_contract, read_task
+from valgebra_planning.contracts import Contract, read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.flows import Flow, read_flow
 from valgebra_planning.planner import plan
@@ -294,3 +294,146 @@ def test_a_flow_rule_means_what_its_keys_say_or_is_refused(
     with pytest.raises(refused, match=match):
         read_flow(spec)
     assert read_flow({**SPELLED, "only": True}).only
+
+
+OBJECT_ID = {"type": "string", "pattern": "^obj_[0-9]+$"}
+REACH = {"type": "number", "minimum": 0.2, "maximum": 0.6}
+
+
+def _robot(name: str, inputs: dict, outputs: dict, *, read_only: bool) -> Contract:
+    return read_contract(
+        {
+            "name": name,
+            "inputSchema": {"type": "object", "properties": inputs, "required": [*inputs]},
+            "outputSchema": {
+                "type": "object",
+                "properties": outputs,
+                "required": [*outputs],
+                "additionalProperties": False,
+            },
+            "annotations": {"readOnlyHint": read_only},
+        }
+    )
+
+
+ROBOT = {
+    "estimate_pose": _robot(
+        "estimate_pose", {"object_id": OBJECT_ID}, {"distance_m": REACH}, read_only=True
+    ),
+    "walk_to": _robot(
+        "walk_to", {"object_id": OBJECT_ID}, {"arrived": {"type": "boolean"}}, read_only=False
+    ),
+    "grasp": _robot(
+        "grasp",
+        {"object_id": OBJECT_ID, "distance_m": REACH},
+        {"grasp_id": {"type": "string", "pattern": "^g_[0-9]+$"}},
+        read_only=False,
+    ),
+}
+#: A grasp's distance is the latest one measured for its object, since the last call that may act.
+MEASURED = read_flow(
+    {
+        "name": "the distance is measured for the object",
+        "sources": ["estimate_pose"],
+        "sink": "grasp.distance_m",
+        "only": True,
+        "fresh": True,
+        "key": "object_id",
+    }
+)
+_SAID = f"flow {MEASURED.name}:"
+PICK = read_task(
+    "grasp an object",
+    {"o": OBJECT_ID, "p": OBJECT_ID},
+    {"type": "string", "pattern": "^g_[0-9]+$"},
+)
+
+
+@pytest.mark.parametrize(
+    ("spec", "error"),
+    [
+        ({"fresh": True}, ValueError),
+        ({"key": "object_id"}, ValueError),
+        ({"only": True, "key": 1}, TypeError),
+    ],
+    ids=["fresh-without-only", "key-without-only", "key-no-name"],
+)
+def test_a_rule_reads_fresh_and_key_with_only_alone(spec: dict, error: type[Exception]) -> None:
+    base = {"name": "r", "sources": ["estimate_pose"], "sink": "grasp.distance_m"}
+    with pytest.raises(error):
+        read_flow(base | spec)
+
+
+@pytest.mark.parametrize(
+    ("source", "refuted"),
+    [
+        (
+            (
+                "c1 = estimate_pose(object_id=o)\n"
+                "c2 = grasp(object_id=o, distance_m=c1.distance_m)\n"
+                "return c2.grasp_id\n"
+            ),
+            None,
+        ),
+        (
+            (
+                "c1 = estimate_pose(object_id=o)\n"
+                "c2 = walk_to(object_id=o)\n"
+                "c3 = grasp(object_id=o, distance_m=c1.distance_m)\n"
+                "return c3.grasp_id\n"
+            ),
+            (
+                f"{_SAID} c1.distance_m from estimate_pose was returned after every call before"
+                " grasp that may act"
+            ),
+        ),
+        (
+            (
+                "c1 = estimate_pose(object_id=o)\n"
+                "c2 = estimate_pose(object_id=p)\n"
+                "c3 = grasp(object_id=o, distance_m=c2.distance_m)\n"
+                "return c3.grasp_id\n"
+            ),
+            f"{_SAID} c2.distance_m from estimate_pose was returned for the object_id grasp takes",
+        ),
+    ],
+    ids=["measured-for-the-object", "measured-before-a-walk", "measured-for-another"],
+)
+def test_a_fresh_keyed_rule_admits_the_latest_reading_of_the_same_object(
+    source: str, refuted: str | None
+) -> None:
+    checked = verify(read_program(source), ROBOT, PICK, flows=[MEASURED])
+    assert [link.claim for link in checked.links if link.verdict != "proven"] == (
+        [] if refuted is None else [refuted]
+    )
+
+
+def test_the_planner_grasps_at_the_distance_measured_for_its_object() -> None:
+    planned = plan(ROBOT, PICK, flows=[MEASURED])
+    assert planned.program is not None
+    checked = verify(planned.program, ROBOT, PICK, flows=[MEASURED])
+    assert all(link.verdict == "proven" for link in checked.links)
+    called = render(planned.program)
+    assert "estimate_pose(object_id=o)" in called
+    assert "grasp(object_id=o," in called
+
+
+def test_a_fresh_rule_lets_a_value_inside_the_endorsed_set_through_after_an_action() -> None:
+    endorsed = read_flow(
+        {
+            "name": "a short reach needs no measure",
+            "sources": ["estimate_pose"],
+            "sink": "grasp.distance_m",
+            "only": True,
+            "fresh": True,
+            "endorsed": {"type": "number", "minimum": 0.2, "maximum": 0.3},
+        }
+    )
+    program = read_program(
+        "c1 = estimate_pose(object_id=o)\n"
+        "c2 = walk_to(object_id=o)\n"
+        "c3 = grasp(object_id=o, distance_m=0.25)\n"
+        "return c3.grasp_id\n"
+    )
+    checked = verify(program, ROBOT, PICK, flows=[endorsed])
+    assert all(link.verdict == "proven" for link in checked.links)

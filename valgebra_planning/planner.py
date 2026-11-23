@@ -199,6 +199,8 @@ class _State:
     tested: frozenset[str] = frozenset()
     #: The variables held before the last call on the path that may act.
     stale: frozenset[str] = frozenset()
+    #: The arguments each call was given, by the variable its result is bound to.
+    given: tuple[tuple[str, tuple[tuple[str, Ref], ...]], ...] = ()
 
     def cells(self, ref: Ref) -> frozenset[int]:
         return dict(self.refs)[ref]
@@ -292,13 +294,15 @@ class _Search:
     def read(self, state: _State) -> object:
         """Return what the rules read of each held value beside its cells, for the failure memo.
 
-        A flow rule admits a binding by the value's origin and a mined type by its origin and
-        path, so two states holding the same cells through origins a rule tells apart are two
-        states: a failure of one is no failure of the other. A search with neither reads nothing
-        more, and its key is the signature alone.
+        A flow rule admits a binding by the value's origin, and with a ``key`` by the argument
+        its source call took there, and a mined type by its origin and path, so two states holding
+        the same cells through origins a rule tells apart are two states: a failure of one is no
+        failure of the other. A search with neither reads nothing more, and its key is the
+        signature alone.
         """
         if not self.flows and self.types is None:
             return None
+        given = dict(state.given)
         return frozenset(
             (
                 cells,
@@ -306,6 +310,11 @@ class _Search:
                 None
                 if self.types is None
                 else self.types.of.get(_result_key(state.origin(ref), ref)),
+                tuple(
+                    dict(given.get(ref.variable, ())).get(flow.key)
+                    for flow in self.flows
+                    if flow.key
+                ),
             )
             for ref, cells in state.refs
         )
@@ -683,6 +692,7 @@ class _Search:
             fresh=state.fresh + 1,
             origins=(*state.origins, (result, contract.name)),
             stale=stale,
+            given=(*state.given, (result, bindings)),
         )
 
     def agree(self, state: _State, ref: Ref, slot: Slot) -> bool:
@@ -695,6 +705,27 @@ class _Search:
         )
         return self.types.agree(source, ("argument", slot.name))
 
+    @staticmethod
+    def current(
+        state: _State,
+        flow: Flow,
+        bindings: tuple[tuple[str, Ref], ...],
+        ref: Ref,
+        origin: str | None,
+    ) -> bool:
+        """Return whether a source's value was returned when a rule reading that requires.
+
+        With ``fresh``, after the last call on the path that may act; with ``key``, by a call
+        that took at the key the reference this call takes there. A value from elsewhere is the
+        rest of the rule's.
+        """
+        if not (flow.fresh or flow.key) or origin not in flow.sources:
+            return True
+        if flow.fresh and ref.variable in state.stale:
+            return False
+        source = dict(dict(state.given).get(ref.variable, ())).get(flow.key)
+        return not flow.key or (source is not None and source == dict(bindings).get(flow.key))
+
     def flowing(
         self, state: _State, contract: Contract, bindings: tuple[tuple[str, Ref], ...]
     ) -> bool:
@@ -705,8 +736,10 @@ class _Search:
             if flow.implicit and any(map(flow.holds, state.tested)):
                 return False
             for name, ref in bindings:
+                if name != flow.argument:
+                    continue
                 origin = None if ref in self.literals else state.origin(ref)
-                if name != flow.argument or not flow.holds(origin):
+                if not flow.holds(origin) and self.current(state, flow, bindings, ref, origin):
                     continue
                 if flow.endorsed is None:
                     return False

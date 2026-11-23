@@ -171,6 +171,9 @@ class _Walk:
     builder: random.Random | None = None
     seed: int = 0
     postconditions: tuple[Postcondition, ...] = ()
+    #: The arguments each call was given, by the variable its result is bound to, which a flow
+    #: rule's ``key`` reads of a source call.
+    given: dict[str, tuple[tuple[str, Ref | Const], ...]] = field(default_factory=dict)
 
     def block(self, block: Block, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         for index, call in enumerate(block.calls):
@@ -382,6 +385,7 @@ class _Walk:
             self.links.append(Link(where, f"{call.tool} is a tool", "refuted"))
             return [(env, path)]
         self.flowing(call, env, where, path)
+        self.given[call.result] = call.bindings
         acted = path.acted
         failing = (
             self.repeated(call, contract, where, env, path) if acted or call.on_error else acted
@@ -611,20 +615,92 @@ class _Walk:
                 claim = f"flow {flow.name}: {call.tool} runs under a test on {', '.join(tested)}"
                 self.links.append(Link(where, claim, "refuted"))
             for name, ref in call.bindings:
-                if name != flow.argument:
-                    continue
-                if isinstance(ref, Const):
-                    if flow.holds(None):
-                        self.literal(where, flow, ref)
-                    continue
-                held = self.resolve(env, ref).held
-                if held is None or not flow.holds(held.origin.tool):
-                    continue
-                claim = f"flow {flow.name}: {ref} from {held.origin.tool} reaches {flow.sink}"
-                if flow.endorsed is None:
-                    self.links.append(Link(where, claim, "refuted"))
-                else:
-                    self.inclusion(where, claim, ref, held, flow.endorsed, env)
+                if name == flow.argument:
+                    self.flowed(flow, call, ref, env, where, path)
+
+    def flowed(
+        self,
+        flow: Flow,
+        call: Call,
+        ref: Ref | Const,
+        env: dict[Ref, _Held],
+        where: str,
+        path: _Path,
+    ) -> None:
+        """Add the links of one value reaching a rule's sink."""
+        if isinstance(ref, Const):
+            if flow.holds(None):
+                self.literal(where, flow, ref)
+            return
+        held = self.resolve(env, ref).held
+        if held is None:
+            return
+        if (flow.fresh or flow.key) and held.origin.tool in flow.sources:
+            self.current(flow, call, ref, held, env, where, path)
+            return
+        if not flow.holds(held.origin.tool):
+            return
+        claim = f"flow {flow.name}: {ref} from {held.origin.tool} reaches {flow.sink}"
+        if flow.endorsed is None:
+            self.links.append(Link(where, claim, "refuted"))
+        else:
+            self.inclusion(where, claim, ref, held, flow.endorsed, env)
+
+    def current(
+        self,
+        flow: Flow,
+        call: Call,
+        ref: Ref,
+        held: _Held,
+        env: dict[Ref, _Held],
+        where: str,
+        path: _Path,
+    ) -> None:
+        """Add the links of a source's value reaching a rule that reads when it was returned.
+
+        With ``fresh``, the call that returned it came after every call on the path that may
+        act, an action changing what a reading before it reported (Mansoor et al. 2026, §4.1);
+        which calls may act is read off their annotations, so the link lists that assumption
+        unless every server is trusted. With ``key``, that call took the reference or the
+        literal the sink's call takes at the key: a value of one slice of the trace reaches no
+        call of another (Roşu and Chen 2012, Def. 11). A value read through a loop's item was
+        returned by the call returning the loop's array. A value failing either reaches the
+        sink only inside the endorsed set, as a value from elsewhere does.
+        """
+        returner = self.returner(env, ref)
+        tool = held.origin.tool
+        said = f"flow {flow.name}: {ref} from {tool} was returned"
+        read: list[tuple[str, bool, tuple[str, ...]]] = []
+        if flow.fresh:
+            hinted = not all(c.trusted for c in self.contracts.values())
+            assumed = ("the read-only annotations of the calls before it",) if hinted else ()
+            claim = f"{said} after every call before {call.tool} that may act"
+            read.append((claim, returner not in path.stale, assumed))
+        if flow.key:
+            source = dict(self.given.get(returner, ())).get(flow.key)
+            same = source is not None and source == dict(call.bindings).get(flow.key)
+            read.append((f"{said} for the {flow.key} {call.tool} takes", same, ()))
+        if all(holds for _, holds, _ in read) or flow.endorsed is None:
+            for claim, holds, assumed in read:
+                verdict = "proven" if holds else "refuted"
+                self.links.append(Link(where, claim, verdict, (), assumed if holds else ()))
+            return
+        claim = f"flow {flow.name}: {ref} from {tool} reaches {flow.sink}"
+        self.inclusion(where, claim, ref, held, flow.endorsed, env)
+
+    def returner(self, env: dict[Ref, _Held], ref: Ref) -> str:
+        """Return the variable bound to the call whose result holds ``ref``'s value.
+
+        A loop's item is a member of the loop's array, so it was returned by the call returning
+        the array; a variable no call and no loop binds is its own, a task input.
+        """
+        variable = ref.variable
+        while variable not in self.given:
+            held = env.get(Ref(variable, ()))
+            if held is None or held.loop is None or held.loop.item != variable:
+                break
+            variable = held.loop.array.variable
+        return variable
 
     def literal(self, where: str, flow: Flow, const: Const) -> None:
         """Add the link of a literal a rule holds: proven only inside the endorsed set."""

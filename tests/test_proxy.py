@@ -15,7 +15,7 @@ from mcp.server.auth.provider import AccessToken
 from mcp.server.lowlevel import Server
 
 from valgebra_planning.contracts import read_contract
-from valgebra_planning.flows import read_flow
+from valgebra_planning.flows import Flow, read_flow
 from valgebra_planning.policy import Monitor, read_policy
 from valgebra_planning.proxy import Gate, http_app, proxy, read_proxy, spelled_out
 
@@ -1220,3 +1220,108 @@ def test_answers_resume_only_the_request_the_proxy_sealed_for_the_call(
     resumed = asyncio.run(session())
     assert said in _refused(resumed)
     assert gate_states == []
+
+
+#: A robot measuring a distance per object and walking, read-only where it says so.
+MEASURING = [
+    {
+        **_robot_tool(
+            "estimate_pose", {"object_id": {"type": "string"}}, {"distance_m": {"type": "number"}}
+        ),
+        "annotations": {"readOnlyHint": True},
+    },
+    _robot_tool("walk_to", {"object_id": {"type": "string"}}, {"arrived": {"type": "boolean"}}),
+    _robot_tool(
+        "grasp",
+        {"object_id": {"type": "string"}, "distance_m": {"type": "number"}},
+        {"grasp_id": {"type": "string"}},
+    ),
+]
+MEASURING_TOOLS = {contract.name: contract for contract in map(read_contract, MEASURING)}
+MEASURED = read_flow(
+    {
+        "name": "the distance is measured for the object",
+        "sources": ["estimate_pose"],
+        "sink": "grasp.distance_m",
+        "only": True,
+        "fresh": True,
+        "key": "object_id",
+    }
+)
+
+
+def _measured(calls: list[tuple[str, dict[str, Any]]], flow: Flow = MEASURED) -> list[Any]:
+    distances = {"obj_1": 0.4, "obj_2": 0.55}
+
+    async def listed(_: Any, __: Any) -> types.ListToolsResult:
+        return types.ListToolsResult(tools=[types.Tool.model_validate(tool) for tool in MEASURING])
+
+    async def called(_: Any, params: types.CallToolRequestParams) -> types.CallToolResult:
+        arguments = params.arguments or {}
+        value: dict[str, Any] = {
+            "estimate_pose": {"distance_m": distances.get(arguments.get("object_id"), 1.0)},
+            "walk_to": {"arrived": True},
+            "grasp": {"grasp_id": "g_1"},
+        }[params.name]
+        return types.CallToolResult(content=[], structured_content=value)
+
+    async def session() -> list[Any]:
+        async with Client(Server("robot", on_list_tools=listed, on_call_tool=called)) as upstream:
+            front = proxy(
+                upstream, (await upstream.list_tools()).tools, MEASURING_TOOLS, flows=[flow]
+            )
+            async with Client(front) as client:
+                return [await client.call_tool(*call) for call in calls]
+
+    return asyncio.run(session())
+
+
+POSE_1 = ("estimate_pose", {"object_id": "obj_1"})
+POSE_2 = ("estimate_pose", {"object_id": "obj_2"})
+
+
+@pytest.mark.parametrize(
+    ("calls", "refused"),
+    [
+        ([POSE_1, ("grasp", {"object_id": "obj_1", "distance_m": 0.4})], None),
+        (
+            [
+                POSE_1,
+                ("walk_to", {"object_id": "obj_1"}),
+                ("grasp", {"object_id": "obj_1", "distance_m": 0.4}),
+            ],
+            "since the last call that may act and for this object_id",
+        ),
+        (
+            [POSE_1, POSE_2, ("grasp", {"object_id": "obj_1", "distance_m": 0.55})],
+            "since the last call that may act and for this object_id",
+        ),
+    ],
+    ids=["measured-for-the-object", "measured-before-a-walk", "measured-for-another"],
+)
+def test_a_proxy_admits_a_fresh_keyed_rule_s_latest_reading_of_the_same_object(
+    calls: list[tuple[str, dict[str, Any]]], refused: str | None
+) -> None:
+    grasped = _measured(calls)[-1]
+    if refused is None:
+        assert not grasped.is_error
+    else:
+        assert _refused(grasped).endswith(refused)
+
+
+def test_a_proxy_lets_a_value_inside_a_fresh_rule_s_endorsed_set_through_after_an_action() -> None:
+    endorsed = read_flow(
+        {
+            "name": "a short reach needs no measure",
+            "sources": ["estimate_pose"],
+            "sink": "grasp.distance_m",
+            "only": True,
+            "fresh": True,
+            "endorsed": {"type": "number", "maximum": 0.3},
+        }
+    )
+    walked = [POSE_1, ("walk_to", {"object_id": "obj_1"})]
+    short = _measured([*walked, ("grasp", {"object_id": "obj_1", "distance_m": 0.25})], endorsed)
+    stale = _measured([*walked, ("grasp", {"object_id": "obj_1", "distance_m": 0.4})], endorsed)
+    assert not short[-1].is_error
+    assert _refused(stale[-1]).endswith("since the last call that may act")

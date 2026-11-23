@@ -196,7 +196,12 @@ verifier, which adds a link for it.
   decided over sets. With `only`, the rule holds every origin but its sources, so a sink takes
   a value from a named tool or input on every path, and a literal or another tool's value only
   inside the endorsed set: an identifier the program did not retrieve, the integrity leak of
-  Sah et al. 2026, is refuted before the run.
+  Sah et al. 2026, is refuted before the run. An `only` rule with `fresh` refutes a value its
+  sources returned before a call that may act, as a task's `fresh` refutes an argument read
+  then; with `key`, an argument's name, a value from a source reaches the sink only from a call
+  that took at that argument the reference or literal the sink's call takes, so a distance
+  measured for one object is refuted where it is passed for another. A source's value failing
+  either reaches the sink only inside the endorsed set, as a value from elsewhere does.
 - **Fresh reads** (a task's `fresh`). A call whose annotations do not say it is read-only may
   act, and an action may change what a reading before it reported: a distance read before a walk
   is no reading of the distance after it. A task names the arguments it reads fresh, as
@@ -338,7 +343,9 @@ gate does not read, its result refused, the call canceled or answered by no resu
 every state the call may have reached, a transition reading its result taken possibly. A flow rule reads a value's
 source from equality with what a source tool returned, an assumption. With `only` that is the
 grounding gate of Sah et al. 2026: an argument equal to no value its sources returned is refused,
-and a value from a task input with it, since a proxy sees no task. Its listing is the server's, read once for the tools it lists and the
+and a value from a task input with it, since a proxy sees no task. An `only` rule with `fresh`
+admits only a value its sources returned since the last call that may act, and one with `key` only
+the latest value a source returned for a call taking the sink's call's value at the key. Its listing is the server's, read once for the tools it lists and the
 contracts its gate holds, a cursor the server names twice and a listing past `MAX_PAGES` pages
 refused,
 or, with `spell_out`, each input schema written with `type` and a one-value `enum` for each

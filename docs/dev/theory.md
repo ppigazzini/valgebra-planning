@@ -325,11 +325,15 @@ HELD-BY: test_a_sink_called_under_a_test_on_an_untrusted_value_is_an_implicit_fl
 **An identifier must come from the tool that retrieves it.** A model that makes up an identifier
 to pass an authentication step commits an integrity leak (Sah et al. 2026, §4.3). With `only`,
 a flow rule holds every origin but its sources: a literal, a task input or a result of a tool
-it does not name reaches the sink only inside the endorsed set. **[LOAD-BEARING: grounded-identifiers]**
+it does not name reaches the sink only inside the endorsed set. With `fresh`, a value its
+sources returned before a call that may act reaches the sink no more, an action changing what a
+reading before it reported (Mansoor et al. 2026, §4.1); with `key`, a value reaches the sink only
+from a source call that took at that argument the value the sink's call takes, the trace sliced
+by the key's value (Roşu and Chen 2012, Def. 11). **[LOAD-BEARING: grounded-identifiers]**
 
-IMPLEMENTED-BY: flows.py
+IMPLEMENTED-BY: flows.py, verify.py::_Walk.current, proxy.py::Gate.made
 
-HELD-BY: test_only_refutes_an_identifier_written_into_the_program, test_only_refutes_an_input_or_a_tool_it_does_not_name, test_only_lets_a_literal_inside_the_endorsed_set_through, test_the_planner_grounds_every_identifier_a_rule_names, test_a_task_naming_an_input_as_a_rule_s_source_tool_is_refused
+HELD-BY: test_only_refutes_an_identifier_written_into_the_program, test_only_refutes_an_input_or_a_tool_it_does_not_name, test_a_rule_reads_fresh_and_key_with_only_alone, test_a_fresh_keyed_rule_admits_the_latest_reading_of_the_same_object, test_the_planner_grasps_at_the_distance_measured_for_its_object, test_a_proxy_admits_a_fresh_keyed_rule_s_latest_reading_of_the_same_object, test_a_fresh_rule_lets_a_value_inside_the_endorsed_set_through_after_an_action, test_a_proxy_lets_a_value_inside_a_fresh_rule_s_endorsed_set_through_after_an_action, test_only_lets_a_literal_inside_the_endorsed_set_through, test_the_planner_grounds_every_identifier_a_rule_names, test_a_task_naming_an_input_as_a_rule_s_source_tool_is_refused
 
 **A privilege policy is a set of argument records.** A policy maps each tool to rules with an
 effect, a condition on the arguments and a fallback (Shi et al. 2025, §4.1), applied with the

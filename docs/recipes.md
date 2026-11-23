@@ -591,6 +591,149 @@ is named in `tools.json` under `"afterViolation"`, and no policy may read it: a 
 annotation is destructive by MCP's defaults, so a policy keyed on `destructiveHint` reads it, and
 the proxy is not built with it named.
 
+## A distance measured for the object, since the last move
+
+A grasp at a distance measured before the robot moved, or measured for another object, reaches
+the object at a distance it is not at. A flow rule with `only` holds that the distance came from
+`estimate_pose`, not that it is that object's or still holds. Two rules read more. A policy naming
+`"per": "object_id"` holds an instance for each object, a pose stepping its object's instance to
+`posed` and a walk stepping it back; a flow rule with `fresh` withdraws every distance a pose
+returned once a call that may act is made, and with `"key": "object_id"` admits only the latest
+distance a pose returned for the object the grasp takes. The proxy holds both:
+
+```python
+import asyncio
+
+from mcp import Client, types
+from mcp.server.lowlevel import Server
+
+from valgebra_planning.contracts import read_contract
+from valgebra_planning.flows import read_flow
+from valgebra_planning.policy import read_policy
+from valgebra_planning.proxy import proxy
+
+OBJECT = {"type": "string", "pattern": "^obj_[0-9]+$"}
+
+
+def tool(name, inputs, outputs, *, read_only=False):
+    return {
+        "name": name,
+        "inputSchema": {"type": "object", "properties": inputs, "required": sorted(inputs)},
+        "outputSchema": {
+            "type": "object",
+            "properties": outputs,
+            "required": sorted(outputs),
+            "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": read_only},
+    }
+
+
+listing = [
+    tool(
+        "estimate_pose",
+        {"object_id": OBJECT},
+        {"distance_m": {"type": "number"}},
+        read_only=True,
+    ),
+    tool("walk_to", {"object_id": OBJECT}, {"arrived": {"type": "boolean"}}),
+    tool(
+        "grasp",
+        {"object_id": OBJECT, "distance_m": {"type": "number"}},
+        {"grasped": {"type": "boolean"}},
+    ),
+]
+contracts = {spec["name"]: read_contract(spec) for spec in listing}
+answers = {
+    "estimate_pose": lambda a: {"distance_m": {"obj_1": 0.4, "obj_2": 0.55}[a["object_id"]]},
+    "walk_to": lambda a: {"arrived": True},
+    "grasp": lambda a: {"grasped": True},
+}
+per_object = read_policy(
+    {
+        "name": "a grasp follows a pose of its object, since a walk to it",
+        "initial": "unposed",
+        "bad": ["violated"],
+        "per": "object_id",
+        "transitions": [
+            {"from": "unposed", "tool": "estimate_pose", "to": "posed"},
+            {"from": "posed", "tool": "walk_to", "to": "unposed"},
+            {"from": "unposed", "tool": "grasp", "to": "violated"},
+        ],
+    }
+)
+measured = read_flow(
+    {
+        "name": "the distance is measured for the object",
+        "sources": ["estimate_pose"],
+        "sink": "grasp.distance_m",
+        "only": True,
+        "fresh": True,
+        "key": "object_id",
+    }
+)
+runs = {
+    "pose, grasp": [("estimate_pose", "obj_1"), ("grasp", "obj_1", 0.4)],
+    "pose, walk to it, grasp": [
+        ("estimate_pose", "obj_1"),
+        ("walk_to", "obj_1"),
+        ("grasp", "obj_1", 0.4),
+    ],
+    "pose, walk to another, grasp": [
+        ("estimate_pose", "obj_1"),
+        ("walk_to", "obj_2"),
+        ("grasp", "obj_1", 0.4),
+    ],
+    "pose two, grasp at the other's": [
+        ("estimate_pose", "obj_1"),
+        ("estimate_pose", "obj_2"),
+        ("grasp", "obj_1", 0.55),
+    ],
+}
+
+
+async def grasped(calls, rules):
+    async def listed(context, params):
+        return types.ListToolsResult(tools=[types.Tool.model_validate(t) for t in listing])
+
+    async def called(context, params):
+        answer = answers[params.name]
+        return types.CallToolResult(content=[], structured_content=answer(params.arguments))
+
+    server = Server("robot", on_list_tools=listed, on_call_tool=called)
+    async with Client(server) as upstream:
+        front = proxy(upstream, (await upstream.list_tools()).tools, contracts, **rules)
+        async with Client(front) as client:
+            for name, object_id, *distance in calls:
+                arguments = {"object_id": object_id}
+                if distance:
+                    arguments["distance_m"] = distance[0]
+                result = await client.call_tool(name, arguments)
+    return "refused" if result.is_error else "made"
+
+
+for name, calls in runs.items():
+    by_policy = asyncio.run(grasped(calls, {"policies": [per_object]}))
+    by_flow = asyncio.run(grasped(calls, {"flows": [measured]}))
+    print(f"{name}: the policy per object {by_policy}, the fresh keyed flow {by_flow}")
+```
+
+```text
+pose, grasp: the policy per object made, the fresh keyed flow made
+pose, walk to it, grasp: the policy per object refused, the fresh keyed flow refused
+pose, walk to another, grasp: the policy per object made, the fresh keyed flow refused
+pose two, grasp at the other's: the policy per object made, the fresh keyed flow refused
+```
+
+The policy holds only while each call that moves the robot names no object, which steps every
+instance, or names the object the grasp is for: a walk toward `obj_2` steps `obj_2`'s instance
+alone, so `obj_1` stays posed and its outdated distance passes. The flow reads a move by its
+annotations, not its arguments, so it refuses that distance, and its key refuses the distance
+measured for another object, which the policy admits, reading only that a pose of the object came
+first. Both read what the server says: a tool annotated read-only that moves the robot withdraws
+nothing. Before the run, the planner and the verifier read the same flow, and refute a program
+passing a distance read before a call that may act, or one returned for another object.
+
 ## A contract a plan can mean
 
 The planner and the critic pass a value to an argument wherever valgebra proves it inside the

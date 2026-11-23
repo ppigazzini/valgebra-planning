@@ -124,6 +124,9 @@ class Gate:
     forwards_elicitation: frozenset[str] = frozenset()
     #: The key each forwarded request's state is sealed with, the proxy's alone.
     key: bytes = field(default_factory=lambda: secrets.token_bytes(32), repr=False)
+    #: For a rule with ``fresh`` or ``key``, the values its sources returned, by the JSON text
+    #: of the key's value the source call took, None for a rule with no key.
+    returned: dict[str, dict[object, set[object]]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Refuse a tool named for its answers or its calls that the proxy lacks, or a policy reads.
@@ -292,6 +295,60 @@ class Gate:
         sealed = self.seal(tool, arguments, result.request_state, asked)
         return types.InputRequiredResult(input_requests=result.input_requests, request_state=sealed)
 
+    def returned_for(self, flow: Flow, arguments: Mapping[str, Any], value: Any) -> str | None:
+        """Return why a rule with ``fresh`` or ``key`` refuses ``value`` at its sink, or None.
+
+        The value is one a source returned since the last call that may act, where the rule is
+        ``fresh``, and in the latest answer of a source call that took the sink's call's value at
+        the rule's ``key``, where it has one; a value inside the endorsed set passes too.
+        """
+        if flow.endorsed is not None and flow.endorsed.is_valid(value):
+            return None
+        kept = self.returned.get(flow.name, {})
+        held = (
+            kept.get(json_key(arguments.get(flow.key)), set())
+            if flow.key
+            else set().union(*kept.values())
+        )
+        if json_key(value) in held:
+            return None
+        named = ", ".join(sorted(flow.sources))
+        when = [
+            *(["since the last call that may act"] if flow.fresh else []),
+            *([f"for this {flow.key}"] if flow.key else []),
+        ]
+        said = " and ".join(when)
+        return f"flow {flow.name}: {flow.sink} holds a value none of {named} returned {said}"
+
+    def made(self, tool: str) -> None:
+        """Withdraw every value a ``fresh`` rule's sources returned: ``tool`` may act.
+
+        A call whose annotations do not say it is read-only may change what a reading reported
+        (Mansoor et al. 2026, §4.1), so a value read before it reaches a fresh rule's sink no more.
+        """
+        contract = self.contracts.get(tool)
+        if contract is not None and "readOnlyHint" in contract.hints:
+            return
+        for flow in self.flows:
+            if flow.fresh:
+                self.returned.pop(flow.name, None)
+
+    def ordered(self, tool: str) -> bool:
+        """Return whether a call to ``tool`` is held in order: a policy or an ordered rule reads it.
+
+        A rule with ``fresh`` or ``key`` reads which call came last, so its sources, its sink and,
+        for a fresh rule, a call that may act take their place in the order beside a policy's.
+        """
+        if self.policed(tool):
+            return True
+        contract = self.contracts.get(tool)
+        acts = contract is not None and "readOnlyHint" not in contract.hints
+        return any(
+            ((flow.fresh or flow.key) and (tool in flow.sources or tool == flow.tool))
+            or (flow.fresh and acts)
+            for flow in self.flows
+        )
+
     def stopped(self, tool: str) -> str | None:
         """Return the bad state a result took a policy to, which refuses a call to ``tool``.
 
@@ -341,6 +398,11 @@ class Gate:
             if flow.tool != tool or flow.argument not in arguments:
                 continue
             value = arguments[flow.argument]
+            if flow.fresh or flow.key:
+                refused = self.returned_for(flow, arguments, value)
+                if refused is not None:
+                    return refused
+                continue
             sources = self.seen.get(json_key(value), set()) & flow.sources
             # A value equal to one a source returned is taken as that source's, and any other
             # as from elsewhere: the rule holds the first, or with ``only`` the second.
@@ -394,6 +456,13 @@ class Gate:
         if any(tool in flow.sources for flow in self.flows):
             for leaf in _leaves(value):
                 self.seen.setdefault(json_key(leaf), set()).add(tool)
+        leaves = {json_key(leaf) for leaf in _leaves(value)}
+        for flow in self.flows:
+            if tool in flow.sources and (flow.fresh or flow.key):
+                kept = self.returned.setdefault(flow.name, {})
+                # A keyed rule holds the latest value a source returned for each key.
+                at = json_key((arguments or {}).get(flow.key)) if flow.key else None
+                kept[at] = leaves if flow.key else kept.get(at, set()) | leaves
         return None
 
 
@@ -574,6 +643,7 @@ async def _checked(
     refused = gate.before(params.name, arguments)
     if refused is not None:
         return _refusal(refused)
+    gate.made(params.name)
     try:
         result = await _made(gate, upstream, params, resumed)
     except asyncio.CancelledError:
@@ -648,7 +718,7 @@ def proxy(
     async def called(
         _: Any, params: types.CallToolRequestParams
     ) -> types.CallToolResult | types.InputRequiredResult:
-        if not gate.policed(params.name):
+        if not gate.ordered(params.name):
             return await _checked(gate, upstream, params)
         async with held:
             return await _checked(gate, upstream, params)
