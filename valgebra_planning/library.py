@@ -37,9 +37,9 @@ from valgebra_planning.contracts import (
     read_postcondition,
     read_task,
 )
-from valgebra_planning.flows import Flow, read_flow
+from valgebra_planning.flows import Flow, check_flow, read_flow
 from valgebra_planning.mining import Types, infer_outputs, mine
-from valgebra_planning.policy import Policy, read_policy
+from valgebra_planning.policy import Policy, check_policy, read_policy
 from valgebra_planning.program import aliases
 
 __all__ = [
@@ -302,6 +302,13 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
             for spec in _listed(directory / "flows.json", "flows")
         )
     }
+    # A rule naming a tool, a hint or an argument the library lacks reads no call; a flow's
+    # source may also be an input a task names.
+    inputs = frozenset(name for spec in specs for name in spec.get("inputs", {}))
+    for policy in policies.values():
+        check_policy(policy, tools)
+    for flow in flows.values():
+        check_flow(flow, tools, inputs)
     problems = []
     for spec in specs:
         log = spec.get("types")

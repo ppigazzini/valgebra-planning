@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from valgebra_planning._valgebra import Validator, compile_schema
-from valgebra_planning.contracts import flag, keys_read, scope_of
+from valgebra_planning.contracts import Contract, flag, keys_read, scope_of
 
 __all__ = ["Flow", "read_flow"]
 
@@ -94,7 +94,8 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
     """
     where = f"flow {spec.get('name')!r}"
     keys_read(spec, _FLOW_KEYS, where)
-    tool, _, argument = spec["sink"].partition(".")
+    # The last dot, as MCP allows one in a tool's name: `g1.grasp.distance` is `g1.grasp`'s.
+    tool, _, argument = spec["sink"].rpartition(".")
     if not tool or not argument:
         message = f"{where}: the sink {spec['sink']!r} is no tool.argument"
         raise ValueError(message)
@@ -121,3 +122,27 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
         key=key,
         scope=scope_of(spec, where),
     )
+
+
+def check_flow(
+    flow: Flow, contracts: Mapping[str, Contract], inputs: frozenset[str] = frozenset()
+) -> None:
+    """Refuse a flow rule naming a sink, an argument or a source the listing lacks.
+
+    A sink no tool listed is, an argument its tool does not take, or a source that is neither a
+    listed tool nor one of ``inputs``, the task inputs a library names, makes the rule read
+    nothing, so a value reaches the sink it guards unchecked: ``grasp.dist`` for
+    ``grasp.distance`` held no grasp. A rule here is refused naming it, a `ValueError`.
+    """
+    where = f"flow {flow.name!r}"
+    contract = contracts.get(flow.tool)
+    if contract is None:
+        message = f"{where}: the sink {flow.tool}.{flow.argument} names no tool listed"
+        raise ValueError(message)
+    if flow.argument not in {slot.path[0] for slot in contract.arguments}:
+        message = f"{where}: {flow.tool} takes no argument {flow.argument!r}"
+        raise ValueError(message)
+    for source in sorted(flow.sources - contracts.keys() - inputs):
+        named = "no tool listed and no task's input" if inputs else "no tool listed"
+        message = f"{where}: the source {source!r} names {named}"
+        raise ValueError(message)

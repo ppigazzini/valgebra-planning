@@ -258,7 +258,7 @@ def field_slot(slot: Slot, key: str) -> Slot:
 
 
 #: MCP's tool annotation hints, each read as the protocol reads a tool that sets none.
-_MCP_HINTS = frozenset({"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"})
+MCP_HINTS = frozenset({"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"})
 
 
 def _hints(annotations: object) -> frozenset[str]:
@@ -271,7 +271,7 @@ def _hints(annotations: object) -> frozenset[str]:
     true is given as it is.
     """
     given: Mapping[str, Any] = annotations if isinstance(annotations, Mapping) else {}
-    hints = {name for name, value in given.items() if value is True and name not in _MCP_HINTS}
+    hints = {name for name, value in given.items() if value is True and name not in MCP_HINTS}
     read_only = given.get("readOnlyHint") is True
     if read_only:
         hints.add("readOnlyHint")

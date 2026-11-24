@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
+import re
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -1529,3 +1531,55 @@ def test_a_call_one_principal_makes_that_may_act_withdraws_every_principal_s_fre
             f"flow {measured.name}: grasp.distance_m holds a value none of estimate_pose "
             "returned since the last call that may act"
         )
+
+
+def _rule(kind: str, spec: dict[str, Any]) -> Gate:
+    """Build a gate over the parcel tools holding one policy or one flow rule."""
+    if kind == "policy":
+        policy = read_policy({"name": "rule", "initial": "s", "bad": ["v"], "transitions": [spec]})
+        return Gate(TOOLS, [Monitor(policy)], [])
+    return Gate(TOOLS, [], [read_flow({"name": "rule", **spec})])
+
+
+@pytest.mark.parametrize(
+    ("kind", "spec", "named"),
+    [
+        ("policy", {"from": "s", "tool": "notify_all", "to": "v"}, "'notify_all', and no tool"),
+        (
+            "policy",
+            {"from": "s", "hint": "destructivehint", "to": "v"},
+            "'destructivehint' is none",
+        ),
+        ("flow", {"sources": ["find_parcel"], "sink": "notify.mail"}, "notify takes no argument"),
+        (
+            "flow",
+            {"sources": ["find_parcels"], "sink": "notify.email"},
+            "'find_parcels' names no tool listed",
+        ),
+    ],
+)
+def test_a_rule_naming_what_the_listing_lacks_is_refused(
+    kind: str, spec: dict[str, Any], named: str
+) -> None:
+    """A rule reading no listed tool, hint or argument holds nothing, and is refused when built.
+
+    A transition on a misspelled tool or hint, or a flow on a misspelled argument or source,
+    reads no call, so the motion or the value it seems to guard would pass unchecked.
+    """
+    with pytest.raises(ValueError, match=re.escape(named)):
+        _rule(kind, spec)
+
+
+def test_a_rule_naming_what_the_listing_holds_is_built() -> None:
+    _rule("policy", {"from": "s", "tool": "notify", "to": "v"})
+    _rule("policy", {"from": "s", "hint": "destructiveHint", "to": "v"})
+    _rule("flow", {"sources": ["find_parcel"], "sink": "notify.email"})
+
+
+def test_a_dotted_sink_names_its_tool_by_the_last_dot() -> None:
+    dotted = {f"parcels.{n}": dataclasses.replace(c, name=f"parcels.{n}") for n, c in TOOLS.items()}
+    flow = read_flow(
+        {"name": "rule", "sources": ["parcels.find_parcel"], "sink": "parcels.notify.email"}
+    )
+    assert (flow.tool, flow.argument) == ("parcels.notify", "email")
+    Gate(dotted, [], [flow])

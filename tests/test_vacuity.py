@@ -5,6 +5,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from valgebra_planning.library import read_library
 from valgebra_planning.vacuity import vacuities
 
@@ -66,20 +68,25 @@ def test_a_guard_no_record_meets_leaves_the_policy_unbreakable(tmp_path: Path) -
     )
 
 
-def test_an_unused_rule_and_a_tool_no_library_lists_are_found(tmp_path: Path) -> None:
-    def extra(policies: Any) -> Any:
-        unused = json.loads(json.dumps(policies["policies"][0]))
-        unused["name"] = "unused"
-        unused["transitions"][0]["tool"] = "no_such_tool"
-        policies["policies"].append(unused)
-        return policies
+def test_an_unused_rule_is_found_and_one_naming_no_tool_is_refused(tmp_path: Path) -> None:
+    # A rule no task is held to is a finding; a rule naming a tool the library lacks reads no
+    # call at all, and the library is refused naming it, before any check runs.
+    def unused(tool: str) -> Any:
+        def extra(policies: Any) -> Any:
+            rule = json.loads(json.dumps(policies["policies"][0]))
+            rule["name"] = "unused"
+            rule["transitions"][0]["tool"] = tool
+            policies["policies"].append(rule)
+            return policies
 
-    found = _found(_planted(tmp_path, "policies.json", extra))
+        return extra
+
+    policies = json.loads((PARCELS / "policies.json").read_text(encoding="utf-8"))
+    listed = policies["policies"][0]["transitions"][0]["tool"]
+    found = _found(_planted(tmp_path / "a", "policies.json", unused(listed)))
     assert ("policy unused", "no task is held to it", "proven") in found
-    assert any(
-        where.startswith("policy unused, transition 0") and "no_such_tool" in finding
-        for where, finding, _ in found
-    )
+    with pytest.raises(ValueError, match="'no_such_tool', and no tool listed is it"):
+        _found(_planted(tmp_path / "b", "policies.json", unused("no_such_tool")))
 
 
 def test_an_endorsed_set_that_admits_nothing_or_everything_is_found(tmp_path: Path) -> None:
@@ -179,3 +186,17 @@ def test_a_transition_the_ones_before_it_take_every_record_of_never_fires(tmp_pa
     heavy = {**every, "arguments": {"properties": {"weight_g": {"minimum": 30000}}}}
     narrower = _found(_planted(tmp_path / "narrower", "policies.json", _first(heavy)))
     assert not any("take every" in finding for _, finding, _ in narrower)
+
+
+def test_a_flow_source_names_a_tool_or_a_task_input_at_load(tmp_path: Path) -> None:
+    # A source is a tool's name or a task input's; one naming neither reads no value.
+    def sourced(source: str) -> Any:
+        def change(flows: Any) -> Any:
+            flows["flows"][0]["sources"] = [source]
+            return flows
+
+        return change
+
+    read_library(_planted(tmp_path / "a", "flows.json", sourced("tracking")))
+    with pytest.raises(ValueError, match="'trackin' names no tool listed and no task's input"):
+        read_library(_planted(tmp_path / "b", "flows.json", sourced("trackin")))

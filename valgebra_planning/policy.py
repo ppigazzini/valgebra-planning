@@ -55,7 +55,7 @@ from valgebra_planning._valgebra import (
     nothing,
     union,
 )
-from valgebra_planning.contracts import keys_read, scope_of
+from valgebra_planning.contracts import MCP_HINTS, Contract, keys_read, scope_of
 
 __all__ = ["Monitor", "Policy", "Reach", "Snapshot", "Transition", "read_policy"]
 
@@ -542,3 +542,28 @@ class Monitor:
                 self.violations.append(f"{self.named(instance)}: the run ended in {pending[0]}")
                 return True
         return False
+
+
+def check_policy(policy: Policy, contracts: Mapping[str, Contract]) -> None:
+    """Refuse a policy naming a tool the listing lacks, or a hint no tool can set.
+
+    A transition on a tool no server lists, or on a hint that is none of MCP's and that no
+    listed tool sets, reads no call, so the policy holds nothing it seems to: a misspelled
+    ``walk`` for ``walk_to`` or ``destructivehint`` for ``destructiveHint`` would leave the
+    motion it names unguarded. Progent warns on a tool or an argument its policy names and no
+    server offers (``policy_type_check.py``); a rule here is refused naming it, a `ValueError`.
+    """
+    hints = MCP_HINTS.union(*(contract.hints for contract in contracts.values()))
+    for transition in policy.transitions:
+        if transition.hint and transition.hint not in hints:
+            message = (
+                f"policy {policy.name!r}: the hint {transition.hint!r} is none MCP names and "
+                "no tool listed sets"
+            )
+            raise ValueError(message)
+        if not transition.hint and transition.tool not in contracts:
+            message = (
+                f"policy {policy.name!r}: a transition reads {transition.tool!r}, and no tool "
+                "listed is it"
+            )
+            raise ValueError(message)

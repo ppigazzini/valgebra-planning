@@ -53,8 +53,8 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from valgebra_planning._valgebra import Unsupported, Validator, compile_schema, json_key, read_tool
 from valgebra_planning.contracts import Contract, contract_names, failures
-from valgebra_planning.flows import Flow
-from valgebra_planning.policy import Monitor, Policy
+from valgebra_planning.flows import Flow, check_flow
+from valgebra_planning.policy import Monitor, Policy, check_policy
 from valgebra_planning.servers import refused_by_client
 
 if TYPE_CHECKING:
@@ -145,8 +145,14 @@ class Gate:
 
         Each of ``after_violation``, ``non_text_blocks``, ``error_texts`` and
         ``forwards_elicitation`` names tools the proxy holds, and a tool of ``after_violation`` is
-        one no policy reads.
+        one no policy reads. Each policy and flow rule names tools, hints and arguments the
+        proxy holds (`check_policy`, `check_flow`): one naming none reads no call, and the call
+        it seems to guard would pass unchecked.
         """
+        for monitor in self.monitors:
+            check_policy(monitor.policy, self.contracts)
+        for flow in self.flows:
+            check_flow(flow, self.contracts)
         named = self.non_text_blocks | self.error_texts.keys() | self.forwards_elicitation
         for tool in sorted(named - self.contracts.keys()):
             msg = f"{tool} is named for its answers, and the proxy holds no such tool"

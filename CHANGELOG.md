@@ -6,6 +6,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- A rule naming what the listing lacks is refused. A policy transition on a tool no server lists or
+  a hint none sets, as `walk` for `walk_to` or `destructivehint` for `destructiveHint`, and a flow
+  rule on an argument its sink does not take or a source no tool is, as `grasp.dist` for
+  `grasp.distance`, read no call, so the motion or value each seemed to guard passed the proxy
+  unchecked, with no warning. The proxy refuses such a rule when it is built, and a library at load,
+  where a flow's source may also be a task's input. A flow's sink is read at its last dot, so a
+  tool MCP names with a dot, `g1.grasp.distance`, is `g1.grasp`'s.
+
 ### Added
 
 - A tool whose name Python does not spell is called by an alias. MCP allows a tool's name dots

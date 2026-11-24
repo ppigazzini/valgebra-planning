@@ -28,7 +28,10 @@ holding every file.
 
 A rule means what its keys say. A key no reader reads, in a file, a task, a policy, a transition or
 a flow rule, is refused by name, as a misspelled `only` or `arguments` would leave a rule weaker
-than the one written; `errors`, `trusted`, `assertFormat`, `closedResults`, `only` and
+than the one written, and so is a rule naming what the library lacks: a transition's tool, a hint
+that is none of MCP's and no tool sets, a flow's sink, its argument, or a source that is no tool
+and no task's input, each of which reads no call, as a proxy refuses one naming what its server
+lists; `errors`, `trusted`, `assertFormat`, `closedResults`, `only` and
 `implicit` are `true` or `false`, a `depth`
 is a positive integer, and a transition names a `tool` or a `hint`, one of the two; `per`, an argument's name, gives the policy an instance for each value of it at run time, and `scope`, on a policy or a flow rule, is `"shared"`, every client of a proxy together and the default, or `"principal"`, each principal a token names apart. A command reading such a library exits 2
 naming the key.
