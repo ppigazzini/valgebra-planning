@@ -180,14 +180,13 @@
         "assumed: the read-only annotations of the calls before it"
       ],
       "run": {
-        "outcome": "returned",
+        "outcome": "refused",
         "calls": [
           "estimate_pose",
           "walk_to",
-          "estimate_pose",
-          "grasp"
+          "estimate_pose"
         ],
-        "refused": null
+        "refused": "flow measured: c1.distance_m from estimate_pose was returned before walk_to, which may act"
       }
     },
     {
@@ -202,7 +201,15 @@
       "undecided": [],
       "notes": [
         "assumed: the read-only annotations of the calls before it"
-      ]
+      ],
+      "run": {
+        "outcome": "refused",
+        "calls": [
+          "estimate_pose",
+          "estimate_pose"
+        ],
+        "refused": "flow measured: c1.distance_m from estimate_pose was returned for another object_id than grasp takes"
+      }
     },
     {
       "program": "a grasp reads a detection the program has since replaced",
@@ -216,7 +223,16 @@
       "undecided": [],
       "notes": [
         "assumed: the read-only annotations of the calls before it"
-      ]
+      ],
+      "run": {
+        "outcome": "refused",
+        "calls": [
+          "detect",
+          "estimate_pose",
+          "detect"
+        ],
+        "refused": "flow measured: c2.distance_m from estimate_pose was returned for another object_id than grasp takes"
+      }
     },
     {
       "program": "a loop grasps one object at the distance of another's item",
@@ -234,7 +250,15 @@
       "notes": [
         "refuted: flow scanned: it.distance_m from scan was returned for the object_id grasp takes (at for:it); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
         "refuted: return c1 <= goal; {'items': [{'object_id': 'fH._ZM', 'distance_m': 982}, {'object_id': '@rK', 'distance_m': -713.5}, {'object_id': 'sNmj', 'distance_m': 840.5}]} lies outside"
-      ]
+      ],
+      "run": {
+        "outcome": "refused",
+        "calls": [
+          "scan",
+          "scan"
+        ],
+        "refused": "flow scanned: it.distance_m from scan was returned for another object_id than grasp takes"
+      }
     },
     {
       "program": "the same loop, its item named as a call's result",
@@ -250,7 +274,15 @@
       "undecided": [],
       "notes": [
         "refuted: return c1 <= goal; {'items': [{'object_id': 'fH._ZM', 'distance_m': 982}, {'object_id': '@rK', 'distance_m': -713.5}, {'object_id': 'sNmj', 'distance_m': 840.5}]} lies outside"
-      ]
+      ],
+      "run": {
+        "outcome": "refused",
+        "calls": [
+          "scan",
+          "scan"
+        ],
+        "refused": "flow scanned: c1.distance_m from scan was returned for another object_id than grasp takes"
+      }
     },
     {
       "program": "a branch rebinds the reading the other side grasps at",
@@ -264,7 +296,15 @@
       "undecided": [],
       "notes": [
         "assumed: the read-only annotations of the calls before it"
-      ]
+      ],
+      "run": {
+        "outcome": "refused",
+        "calls": [
+          "estimate_pose",
+          "detect"
+        ],
+        "refused": "flow measured: c1.distance_m from estimate_pose was returned for another object_id than grasp takes"
+      }
     },
     {
       "program": "the same branch, the faulty grasp on the side the test names",
@@ -295,7 +335,16 @@
       "undecided": [],
       "notes": [
         "assumed: the read-only annotations of the calls before it"
-      ]
+      ],
+      "run": {
+        "outcome": "refused",
+        "calls": [
+          "estimate_pose",
+          "scan",
+          "estimate_pose"
+        ],
+        "refused": "flow measured: c2.distance_m from estimate_pose was returned for another object_id than grasp takes"
+      }
     },
     {
       "program": "a grasp tested against a tool no library holds",
@@ -483,7 +532,15 @@
       "undecided": [],
       "notes": [
         "refuted: flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act; pass a value from a source the rule trusts, or test it into the rule's endorsed set first"
-      ]
+      ],
+      "run": {
+        "outcome": "refused",
+        "calls": [
+          "estimate_pose",
+          "walk_to"
+        ],
+        "refused": "flow measured: c1.distance_m from estimate_pose was returned before walk_to, which may act"
+      }
     },
     {
       "program": "a confirmation leaving out the action the task fixes",

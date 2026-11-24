@@ -31,6 +31,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- `run`, `arun` and `run_on_server` take `flows` and hold each flow rule before a call is made,
+  after its argument record and before each policy, and `valgebra-planning run` holds a task's.
+  A run binds each name to the call that returned its value, on its own path, so it holds a rule
+  on values: a reading made before a call that may act, or for another object than the sink's
+  call takes, never reaches the sink, and a broken rule ends the run on the `flow` check, which
+  `blame` reads as a check the verification proved. A run held no flow rule: a grasp the critic
+  accepted at a reading the walk had made stale was made.
+
 - A study of a humanoid robot's skills, `tools/case.py examples/robot-skills --check
   docs/studies/robot-skills.json`, a step of the gate. Its nine tasks are planned and verified as
   the parcels' are, and 24 programs written as an agent writes one are read, critiqued under

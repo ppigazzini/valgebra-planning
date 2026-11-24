@@ -226,6 +226,7 @@ def _run(
                 client,
                 policies=problem.policies,
                 postconditions=problem.postconditions,
+                flows=problem.flows,
             )
             return row | {
                 "outcome": result.outcome,

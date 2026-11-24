@@ -55,7 +55,29 @@
         "    return c3.grasp_id",
         "c4 = grasp(object_id=p, distance_m=c1.distance_m)",
         "return c4.grasp_id"
-      ]
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1",
+          "p": "obj_2",
+          "a": "mug",
+          "b": "bottle",
+          "d": 0.4
+        },
+        "answers": {
+          "estimate_pose": [
+            {
+              "distance_m": 0.25
+            },
+            "lost track"
+          ],
+          "grasp": [
+            {
+              "grasp_id": "g_1"
+            }
+          ]
+        }
+      }
     },
     {
       "name": "a grasp reads a detection the program has since replaced",
@@ -66,7 +88,38 @@
         "c1 = detect(label=b)",
         "c3 = grasp(object_id=c1.object_id, distance_m=c2.distance_m)",
         "return c3.grasp_id"
-      ]
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1",
+          "p": "obj_2",
+          "a": "mug",
+          "b": "bottle",
+          "d": 0.4
+        },
+        "answers": {
+          "detect": [
+            {
+              "object_id": "obj_1",
+              "found": true
+            },
+            {
+              "object_id": "obj_2",
+              "found": true
+            }
+          ],
+          "estimate_pose": [
+            {
+              "distance_m": 0.25
+            }
+          ],
+          "grasp": [
+            {
+              "grasp_id": "g_1"
+            }
+          ]
+        }
+      }
     },
     {
       "name": "a loop grasps one object at the distance of another's item",
@@ -77,7 +130,33 @@
         "for it in c2.items:",
         "    c3 = grasp(object_id=o, distance_m=it.distance_m)",
         "return c1"
-      ]
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1",
+          "p": "obj_2",
+          "a": "mug",
+          "b": "bottle",
+          "d": 0.4
+        },
+        "answers": {
+          "scan": [
+            {
+              "items": [
+                {
+                  "object_id": "obj_2",
+                  "distance_m": 0.5
+                }
+              ]
+            }
+          ],
+          "grasp": [
+            {
+              "grasp_id": "g_1"
+            }
+          ]
+        }
+      }
     },
     {
       "name": "the same loop, its item named as a call's result",
@@ -88,7 +167,33 @@
         "for c1 in c2.items:",
         "    c3 = grasp(object_id=o, distance_m=c1.distance_m)",
         "return c1"
-      ]
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1",
+          "p": "obj_2",
+          "a": "mug",
+          "b": "bottle",
+          "d": 0.4
+        },
+        "answers": {
+          "scan": [
+            {
+              "items": [
+                {
+                  "object_id": "obj_2",
+                  "distance_m": 0.5
+                }
+              ]
+            }
+          ],
+          "grasp": [
+            {
+              "grasp_id": "g_1"
+            }
+          ]
+        }
+      }
     },
     {
       "name": "a branch rebinds the reading the other side grasps at",
@@ -102,7 +207,34 @@
         "    return c3.grasp_id",
         "c4 = grasp(object_id=p, distance_m=c1.distance_m)",
         "return c4.grasp_id"
-      ]
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1",
+          "p": "obj_2",
+          "a": "mug",
+          "b": "bottle",
+          "d": 0.4
+        },
+        "answers": {
+          "estimate_pose": [
+            {
+              "distance_m": 0.25
+            }
+          ],
+          "detect": [
+            {
+              "object_id": "obj_1",
+              "found": false
+            }
+          ],
+          "grasp": [
+            {
+              "grasp_id": "g_1"
+            }
+          ]
+        }
+      }
     },
     {
       "name": "the same branch, the faulty grasp on the side the test names",
@@ -128,7 +260,41 @@
         "    c2 = estimate_pose(object_id=o)",
         "c3 = grasp(object_id=o, distance_m=c2.distance_m)",
         "return c3.grasp_id"
-      ]
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1",
+          "p": "obj_2",
+          "a": "mug",
+          "b": "bottle",
+          "d": 0.4
+        },
+        "answers": {
+          "estimate_pose": [
+            {
+              "distance_m": 0.5
+            },
+            {
+              "distance_m": 0.25
+            }
+          ],
+          "scan": [
+            {
+              "items": [
+                {
+                  "object_id": "obj_1",
+                  "distance_m": 0.25
+                }
+              ]
+            }
+          ],
+          "grasp": [
+            {
+              "grasp_id": "g_1"
+            }
+          ]
+        }
+      }
     },
     {
       "name": "a grasp tested against a tool no library holds",
@@ -349,7 +515,34 @@
         "c2 = walk_to(object_id=o)",
         "c3 = grasp(object_id=o, distance_m=c1.distance_m)",
         "return c3.grasp_id"
-      ]
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1",
+          "p": "obj_2",
+          "a": "mug",
+          "b": "bottle",
+          "d": 0.4
+        },
+        "answers": {
+          "estimate_pose": [
+            {
+              "distance_m": 0.25
+            }
+          ],
+          "walk_to": [
+            {
+              "object_id": "obj_1",
+              "arrived": true
+            }
+          ],
+          "grasp": [
+            {
+              "grasp_id": "g_1"
+            }
+          ]
+        }
+      }
     },
     {
       "name": "a confirmation leaving out the action the task fixes",

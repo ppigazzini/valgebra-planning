@@ -310,8 +310,16 @@ plan, the proof and the run read the contracts as written.
 ## Running a program
 
 `valgebra_planning/run.py` calls the tools a program names and checks each step as it is made: the
-argument record against the tool's input set, each policy's step, the result against the output set,
-or against the JSON values where the tool declares none, and the returned value against the goal. A
+argument record against the tool's input set, each flow rule, each policy's step, the result
+against the output set, or against the JSON values where the tool declares none, and the returned
+value against the goal. A run binds each name to the call that returned its value, on the path it
+runs, a loop's item to the call that returned the array, so it holds a flow rule on values where
+the verifier holds it on the sets a program's references may bind: a value from an origin the
+rule holds reaches the sink only inside the endorsed set; under `fresh` a source's value is one no
+call that may act was made after, an error of that call included, and a source that acts answers
+with a fresh one; under `key` its call took the value the sink's call takes at the key, compared as
+JSON values; under `implicit` the sink's call runs under no test on a value the rule holds, what
+follows a loop counted under the test on its array as the verifier counts it. A
 coroutine an async tool hands back unawaited is no JSON value: it is refused and closed, never run.
 `arun` awaits it instead: one interpreter walks the program and asks for each call, doing no I/O
 of its own, `run` making each call and `arun` awaiting it, so the two make the same checks in the

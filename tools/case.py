@@ -114,6 +114,7 @@ def _program(spec: dict[str, Any], library: Library) -> tuple[dict[str, Any], li
             _answering(spec["run"]["answers"], made),
             policies=problem.policies,
             postconditions=problem.postconditions,
+            flows=problem.flows,
         )
         row["run"] = {"outcome": ran.outcome, "calls": made, "refused": ran.refused}
         text.append(f"- run: {row['run']}")

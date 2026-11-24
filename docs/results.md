@@ -82,14 +82,14 @@ where a stop the task tolerates is left, and `proven, no return` where no path r
 
 | program | task | verdict | run |
 |---|---|---|---|
-| an error block grasps at the reading made before the walk | pick, measured | accepted | returned: estimate_pose, walk_to, estimate_pose, grasp |
-| an error block grasps one object at another's reading | pick, measured | accepted |  |
-| a grasp reads a detection the program has since replaced | pick, measured | accepted |  |
-| a loop grasps one object at the distance of another's item | pick, scanned | refuted: `flow scanned: it.distance_m from scan was returned for the object_id grasp takes`; `return c1 <= goal` |  |
-| the same loop, its item named as a call's result | pick, scanned | refuted: `return c1 <= goal` |  |
-| a branch rebinds the reading the other side grasps at | pick, measured | accepted |  |
+| an error block grasps at the reading made before the walk | pick, measured | accepted | refused: estimate_pose, walk_to, estimate_pose |
+| an error block grasps one object at another's reading | pick, measured | accepted | refused: estimate_pose, estimate_pose |
+| a grasp reads a detection the program has since replaced | pick, measured | accepted | refused: detect, estimate_pose, detect |
+| a loop grasps one object at the distance of another's item | pick, scanned | refuted: `flow scanned: it.distance_m from scan was returned for the object_id grasp takes`; `return c1 <= goal` | refused: scan, scan |
+| the same loop, its item named as a call's result | pick, scanned | refuted: `return c1 <= goal` | refused: scan, scan |
+| a branch rebinds the reading the other side grasps at | pick, measured | accepted | refused: estimate_pose, detect |
 | the same branch, the faulty grasp on the side the test names | pick, measured | refuted: `flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes` |  |
-| a loop rebinds the reading the grasp after it reads | pick, measured | accepted |  |
+| a loop rebinds the reading the grasp after it reads | pick, measured | accepted | refused: estimate_pose, scan, estimate_pose |
 | a grasp tested against a tool no library holds | pick, never grasping | accepted |  |
 | a grasp tested against an argument the grasp lacks | pick, never grasping | refuted: `grasp.distance is an argument` |  |
 | a failed grasp retried on the walked-to object's other name | pick | accepted |  |
@@ -104,15 +104,17 @@ where a stop the task tolerates is left, and `proven, no return` where no path r
 | a test against an ellipsis | sweep a scan | refused, line 2 |  |
 | a test against a complex number | sweep a scan | refused, line 2 |  |
 | an argument named for a keyword | sweep a scan | refused, line 1 |  |
-| a grasp at a reading the walk has made stale | pick, measured | refuted: `flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act` |  |
+| a grasp at a reading the walk has made stale | pick, measured | refuted: `flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act` | refused: estimate_pose, walk_to |
 | a confirmation leaving out the action the task fixes | confirm a grasp | accepted |  |
 
 - Five programs grasp at a reading or a detection through a name the program rebinds before the
   grasp: in an error block, after a second detection, in a branch the grasp is not on, and in a
-  loop. Each is accepted under `measured`, and the first, run, grasps at the reading made before
-  the walk: the walk keeps a name's source and object in one table across the program's paths,
-  where a name holds the value its own path bound, and a run holds no flow rule. A loop whose
-  item takes a call's name is refuted on its return alone.
+  loop. Each is accepted under `measured`: the verifier keeps a name's source and object in one
+  table across the program's paths, where a name holds the value its own path bound. A loop
+  whose item takes a call's name is refuted on its return alone. Each is refused at its grasp
+  when run on the path the scripted answers take, and so is the stale reading the verifier
+  refutes: a run binds each name to the call that returned it and holds the rule on the values,
+  so the grasp is never made.
 - A test against a tool the library lacks walks neither branch, so its program is accepted; one
   against an argument the grasp lacks is refuted.
 - A failed grasp retried on the walked-to object's other name is accepted, and the same retry on

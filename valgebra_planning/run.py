@@ -3,7 +3,8 @@
 The runner calls the tools a program names with the values the program binds, takes each
 branch by testing the value it reads, and checks every argument record against the tool's
 input set, every policy's step before the call, every result against its output set and the
-returned value against the goal. It fails closed: a broken check stops the run before the call
+returned value against the goal, and each flow rule on where a value reaching its sink came
+from. It fails closed: a broken check stops the run before the call
 is made, the result bound or the value returned, and the run names the check. A field the
 program reads and the value it holds lacks ends the run, named as a check too, since no value
 can be passed on in its place. A proof of the
@@ -32,6 +33,7 @@ from valgebra_planning.contracts import (
     listed,
     unclashed,
 )
+from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Monitor, Policy
 from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
 
@@ -94,8 +96,9 @@ class RefusedResultError(Exception):
 class Refusal:
     """Which check ended a run.
 
-    One of `inputs`, `arguments`, `policy`, `given`, `result`, `closed`, `postcondition`,
-    `goal`, `error`, `raised`, `read`, `ended` or `canceled`: `closed` is a result inside the
+    One of `inputs`, `arguments`, `flow`, `policy`, `given`, `result`, `closed`,
+    `postcondition`, `goal`, `error`, `raised`, `read`, `ended` or `canceled`: `closed` is a
+    result inside the
     output schema its server declares and outside its closed reading, and `postcondition` a
     read outside what a postcondition of the library says it shows.
 
@@ -125,6 +128,25 @@ class _Raised:
 #: A walk of the interpreter: it yields each call it asks, is sent the call's result or what it
 #: raised as `_Raised`, and returns what it ends in.
 _Steps = Generator[_Asked, Any, _T]
+
+
+@dataclass(frozen=True, slots=True)
+class _Origin:
+    """Where a value a run holds came from, as a flow rule reads it.
+
+    ``name`` is a task input's, or the tool of the call that returned it; ``made`` is that
+    call's place among the calls made, ``-1`` for an input, and ``arguments`` what it was given.
+    A loop's item came from the call that returned the array.
+    """
+
+    name: str
+    made: int = -1
+    arguments: Mapping[str, Any] | None = None
+
+
+#: The values a run holds by name, each beside where it came from. A name holds the value its
+#: own path bound: a failed call binds nothing, and a loop's body binds nothing past it.
+_Env = dict[str, tuple[Any, _Origin]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,8 +206,17 @@ class _Runner:
     enforce: bool
     broken: list[str] = field(default_factory=list)
     postconditions: tuple[Postcondition, ...] = ()
+    flows: tuple[Flow, ...] = ()
     #: The last call made that may act, where it returned: its tool, arguments and result.
     last: tuple[str, dict[str, Any], Any] | None = None
+    #: How many calls were made, each attempt of a retried one counted.
+    made: int = 0
+    #: The place and tool of the last call made that may act, whatever it answered.
+    acted: tuple[int, str] = (-1, "")
+    #: Where the values the tests on the path to this point read came from, and those of the
+    #: paths reaching the end of an iteration of the loop being run.
+    tested: frozenset[str] = frozenset()
+    iterated: frozenset[str] = frozenset()
 
     def breaks(self, message: str, check: str, tool: str | None = None) -> Run | None:
         """Record a broken check; return the run it ends when contracts are enforced."""
@@ -210,7 +241,7 @@ class _Runner:
                 return refused
         return None
 
-    def block(self, block: Block, env: dict[str, Any]) -> _Steps[Run | None]:
+    def block(self, block: Block, env: _Env) -> _Steps[Run | None]:
         """Run a block; return the run it ends, or None where an iteration of a loop ends."""
         for call in block.calls:
             outcome = yield from self.call(call, env)
@@ -229,18 +260,28 @@ class _Runner:
         if isinstance(end, Stop):
             return self.settled() or Run(_read(env, end.ref), str(end.ref), tuple(self.broken))
         if isinstance(end, Next):
+            self.iterated |= self.tested
             return None
         if isinstance(end, For):
             return (yield from self.loop(end, env))
         return (yield from self.branch(end, env))
 
-    def loop(self, end: For, env: dict[str, Any]) -> _Steps[Run | None]:
-        """Run a loop's body for each item, then what follows; a body ending the run ends it."""
+    def loop(self, end: For, env: _Env) -> _Steps[Run | None]:
+        """Run a loop's body for each item, then what follows; a body ending the run ends it.
+
+        Whether the body runs is a test on the array, and what follows runs under each test an
+        iteration reaching its end made, as the verifier reads a loop.
+        """
         items = _read(env, end.ref)
+        origin = env[end.ref.variable][1]
+        before, outer = self.tested, self.iterated
+        self.iterated = frozenset()
         for item in items if isinstance(items, list) else ():
-            ended = yield from self.block(end.body, {**env, end.item: item})
+            self.tested = before | {origin.name}
+            ended = yield from self.block(end.body, {**env, end.item: (item, origin)})
             if ended is not None:
                 return ended
+        self.tested, self.iterated = before | self.iterated, outer
         return (yield from self.block(end.after, env))
 
     def settled(self) -> Run | None:
@@ -252,20 +293,22 @@ class _Runner:
                     return refused
         return None
 
-    def call(self, call: Call, env: dict[str, Any]) -> _Steps[dict[str, Any] | Run | None]:
+    def call(self, call: Call, env: _Env) -> _Steps[_Env | Run | None]:
         """Make one call; return the values held after it, the run it ended, or None (`block`)."""
         contract = self.contracts[call.tool]
         arguments = {
             name: ref.value if isinstance(ref, Const) else _read(env, ref)
             for name, ref in call.bindings
         }
-        refused = self.admitted(call.tool, contract, arguments)
+        refused = self.admitted(call, contract, arguments, env)
         if refused is not None:
             return refused
         made = yield from self.attempts(call, arguments, env)
         if made is None or isinstance(made, Run):
             return made
         result = made[0]
+        # The call that answered is the last one made: an error block's calls end no result.
+        origin = _Origin(call.tool, self.made - 1, arguments)
         refused = self.returned(call, contract, arguments, result) or self.shows(
             call, arguments, result
         )
@@ -273,7 +316,7 @@ class _Runner:
             return refused
         if "readOnlyHint" not in contract.hints:
             self.last = (call.tool, arguments, result)
-        return {**env, call.result: result}
+        return {**env, call.result: (result, origin)}
 
     def shows(self, call: Call, arguments: dict[str, Any], result: Any) -> Run | None:
         """Check a read a postcondition covers: its result inside what the read shows.
@@ -338,11 +381,21 @@ class _Runner:
                     return refused
         return None
 
-    def admitted(self, tool: str, contract: Contract, arguments: dict[str, Any]) -> Run | None:
-        """Check a call before it is made: its argument record, then each policy's step."""
+    def admitted(
+        self, call: Call, contract: Contract, arguments: dict[str, Any], env: _Env
+    ) -> Run | None:
+        """Check a call before it is made: its arguments, each flow rule, then each policy's step.
+
+        The order is the one a proxy reads them in.
+        """
+        tool = call.tool
         if not contract.accepts.is_valid(arguments):
             detail = failures(contract.accepts, arguments, contract_names(contract))
             refused = self.breaks(f"{tool} refuses its arguments ({detail})", "arguments", tool)
+            if refused is not None:
+                return refused
+        for message in self.flowing(call, arguments, env):
+            refused = self.breaks(message, "flow", tool)
             if refused is not None:
                 return refused
         for monitor in self.monitors:
@@ -352,8 +405,63 @@ class _Runner:
                     return refused
         return None
 
+    def flowing(self, call: Call, arguments: dict[str, Any], env: _Env) -> list[str]:
+        """Return each flow rule whose sink the call fills that it breaks, as its message.
+
+        The runner binds every name to the call that returned its value, so it reads a rule on
+        the values, as the verifier abstracts it (`valgebra_planning.flows`): a value from an
+        origin the rule holds reaches the sink only inside the endorsed set; under ``fresh`` a
+        source's value is one no call that may act came after, and under ``key`` one its call
+        returned for the value the sink's call takes at the key, as JSON values; under
+        ``implicit`` the sink's call runs under no test on a value the rule holds.
+        """
+        broken = []
+        for flow in self.flows:
+            if flow.tool != call.tool:
+                continue
+            if flow.implicit and (tested := sorted(filter(flow.holds, self.tested))):
+                broken.append(
+                    f"flow {flow.name}: {call.tool} runs under a test on {', '.join(tested)}"
+                )
+            for name, ref in call.bindings:
+                if name == flow.argument:
+                    why = self.flowed(flow, ref, arguments, env)
+                    if why is not None:
+                        broken.append(why)
+        return broken
+
+    def flowed(
+        self, flow: Flow, ref: Ref | Const, arguments: dict[str, Any], env: _Env
+    ) -> str | None:
+        """Return why the value ``ref`` binds at a rule's sink breaks the rule, or None."""
+        if flow.endorsed is not None and flow.endorsed.is_valid(arguments[flow.argument]):
+            return None
+        if isinstance(ref, Const):
+            return (
+                f"flow {flow.name}: the literal {ref} reaches {flow.sink}"
+                if flow.holds(None)
+                else None
+            )
+        origin = env[ref.variable][1]
+        if (flow.fresh or flow.key) and origin.name in flow.sources:
+            said = f"flow {flow.name}: {ref} from {origin.name} was returned"
+            at, acting = self.acted
+            if flow.fresh and at > origin.made:
+                return f"{said} before {acting}, which may act"
+            given = origin.arguments or {}
+            if flow.key and (
+                flow.key not in given
+                or flow.key not in arguments
+                or json_key(given[flow.key]) != json_key(arguments[flow.key])
+            ):
+                return f"{said} for another {flow.key} than {flow.tool} takes"
+            return None
+        if flow.holds(origin.name):
+            return f"flow {flow.name}: {ref} from {origin.name} reaches {flow.sink}"
+        return None
+
     def attempts(
-        self, call: Call, arguments: dict[str, Any], env: dict[str, Any]
+        self, call: Call, arguments: dict[str, Any], env: _Env
     ) -> _Steps[tuple[Any] | Run | None]:
         """Make the call, retried as it says; return its result, or how its error block ended.
 
@@ -365,7 +473,12 @@ class _Runner:
             message = f"{call.tool} is no tool the run was given"
             self.broken.append(message)
             return Run(None, None, tuple(self.broken), message, Refusal("given", call.tool))
+        acts = "readOnlyHint" not in self.contracts[call.tool].hints
         for _ in range(ATTEMPTS if call.retry else 1):
+            # A call that may act may have acted whatever it answers.
+            if acts:
+                self.acted = (self.made, call.tool)
+            self.made += 1
             answer = yield (call.tool, arguments)
             if not isinstance(answer, _Raised):
                 return (answer,)
@@ -397,17 +510,20 @@ class _Runner:
         stopped = f"an error of {call.tool}"
         return Run(None, stopped, tuple(self.broken), None, Refusal("error", call.tool, call.retry))
 
-    def branch(self, branch: Branch, env: dict[str, Any]) -> _Steps[Run | None]:
+    def branch(self, branch: Branch, env: _Env) -> _Steps[Run | None]:
+        """Take the side a test reads; what runs there runs under a test on the tested value."""
+        value = _read(env, branch.ref)
         if branch.key:
-            value = _read(env, branch.ref)
             holds = isinstance(value, dict) and branch.key in value
-            return (yield from self.block(branch.then if holds else branch.otherwise, env))
-        if branch.tool:
-            tested = self.contracts[branch.tool].argument(branch.argument).values
+        elif branch.tool:
+            holds = self.contracts[branch.tool].argument(branch.argument).values.is_valid(value)
         else:
-            tested = listed(branch.values)
-        taken = branch.then if tested.is_valid(_read(env, branch.ref)) else branch.otherwise
-        return (yield from self.block(taken, env))
+            holds = listed(branch.values).is_valid(value)
+        before = self.tested
+        self.tested = before | {env[branch.ref.variable][1].name}
+        ended = yield from self.block(branch.then if holds else branch.otherwise, env)
+        self.tested = before
+        return ended
 
 
 class _AbsentError(Exception):
@@ -418,11 +534,11 @@ class _AbsentError(Exception):
         self.ref = ref
 
 
-def _read(env: Mapping[str, Any], ref: Ref) -> Any:
+def _read(env: _Env, ref: Ref) -> Any:
     """Return the value ``ref`` names in ``env``, or raise `_AbsentError` where none holds it."""
     if ref.variable not in env:
         raise _AbsentError(ref)
-    value = env[ref.variable]
+    value = env[ref.variable][0]
     for name in ref.path:
         if not isinstance(value, dict) or name not in value:
             raise _AbsentError(ref)
@@ -436,7 +552,8 @@ def _program(runner: _Runner, program: Block, inputs: Mapping[str, Any]) -> _Ste
     if refused is not None:
         return refused
     try:
-        ended = yield from runner.block(program, dict(inputs))
+        held = {name: (value, _Origin(name)) for name, value in inputs.items()}
+        ended = yield from runner.block(program, held)
     except _AbsentError as absent:
         message = f"{absent.ref} is no value the run holds"
         runner.broken.append(message)
@@ -457,6 +574,7 @@ def run(
     policies: Sequence[Policy] = (),
     enforce: bool = True,
     postconditions: Sequence[Postcondition] = (),
+    flows: Sequence[Flow] = (),
 ) -> Run:
     """Run ``program`` on ``inputs``, calling ``tools`` by name, checking every contract.
 
@@ -468,12 +586,13 @@ def run(
     but `ToolError` ends the run, its message naming the exception's class alone; a
     `BaseException` that is no `Exception` propagates. A call to a tool ``tools`` does not give
     ends the run at that call. A read a postcondition covers is held to what it says the read
-    shows, a broken check like a broken contract. Raises `ValueError` for a task naming an
-    input as a tool.
+    shows, a broken check like a broken contract, and so is each of ``flows`` on where each
+    value reaching its sink came from, before the call is made and after its argument record.
+    Raises `ValueError` for a task naming an input as a tool.
     """
     unclashed(task, contracts)
     runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
-    runner.postconditions = tuple(postconditions)
+    runner.postconditions, runner.flows = tuple(postconditions), tuple(flows)
     steps = _program(runner, program, inputs)
     try:
         tool, arguments = next(steps)
@@ -527,6 +646,7 @@ async def arun(
     policies: Sequence[Policy] = (),
     enforce: bool = True,
     postconditions: Sequence[Postcondition] = (),
+    flows: Sequence[Flow] = (),
 ) -> Run:
     """Run ``program`` as `run` does, awaiting each call a tool answers with an awaitable.
 
@@ -539,7 +659,7 @@ async def arun(
     """
     unclashed(task, contracts)
     runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
-    runner.postconditions = tuple(postconditions)
+    runner.postconditions, runner.flows = tuple(postconditions), tuple(flows)
     steps = _program(runner, program, inputs)
     try:
         tool, arguments = next(steps)
@@ -585,6 +705,7 @@ def _canceled(runner: _Runner, tool: str) -> Run:
 #: What each check a proven program should never break holds, as `blame` names it.
 _CHECKED = {
     "arguments": "an argument record",
+    "flow": "a flow rule",
     "policy": "a policy",
     "goal": "the value returned",
     "read": "a value the program reads",
@@ -599,7 +720,7 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
     from observed calls is that assumption's, as one with a key its output schema does not
     declare is the closed reading's, a read outside what a postcondition says it shows is
     that declaration's, and an error a retry could not outlast is the fairness a retry
-    assumes. An argument record, a policy or a returned value breaking in a
+    assumes. An argument record, a flow rule, a policy or a returned value breaking in a
     proven program is a check the verification proved: a defect of this package or of valgebra.
     An unproven program's break is its own link's.
     """

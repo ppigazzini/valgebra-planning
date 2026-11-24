@@ -15,6 +15,8 @@ from hypothesis import strategies as st
 from valgebra_planning._valgebra import Sampler
 from valgebra_planning.contracts import Contract, Task, read_contract, read_task
 from valgebra_planning.critic import read_program
+from valgebra_planning.flows import read_flow
+from valgebra_planning.library import read_library
 from valgebra_planning.planner import plan
 from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Block, Call, Next, Ref, Return
@@ -579,3 +581,251 @@ def test_a_timeout_reads_a_canceled_run_as_the_cancel_it_is(bound: str) -> None:
 
     with pytest.raises(TimeoutError):
         asyncio.run(bounded())
+
+
+ROBOT = read_library(Path(__file__).parent.parent / "examples" / "robot-skills")
+GIVEN = {"o": "obj_1", "p": "obj_2", "a": "mug", "b": "bottle", "d": 0.4}
+#: The robot's answers: a pose read per object, a detection per label, a scan near an object.
+POSES = {"obj_1": 0.25, "obj_2": 0.5}
+SEEN = {"mug": "obj_1", "bottle": "obj_2"}
+
+
+def _robot(fails: dict[str, int] | None = None, *, found: bool = True) -> dict[str, Any]:
+    """Return the robot's tools; ``fails`` names the call of a tool, counted from 1, that errs."""
+    count: dict[str, int] = {}
+
+    def answer(name: str, arguments: dict[str, Any]) -> Any:
+        count[name] = count.get(name, 0) + 1
+        if (fails or {}).get(name) == count[name]:
+            message = "lost track"
+            raise ToolError(message)
+        target = arguments.get("object_id", "")
+        return {
+            "detect": lambda: {"object_id": SEEN[arguments["label"]], "found": found},
+            "estimate_pose": lambda: {"distance_m": POSES[target]},
+            "walk_to": lambda: {"object_id": target, "arrived": True},
+            "grasp": lambda: {"grasp_id": "g_1"},
+            "scan": lambda: {"items": [{"object_id": target, "distance_m": POSES[target]}]},
+        }[name]()
+
+    return {name: (lambda name=name, **a: answer(name, a)) for name in ROBOT.tools}
+
+
+def _held(source: str, task: str = "pick, measured", **options: Any) -> Any:
+    """Run a program on the robot under a task's flow rules."""
+    problem = ROBOT.problem(task)
+    tools = _robot(options.pop("fails", None), found=options.pop("found", True))
+    flows = options.pop("flows", problem.flows)
+    return run(
+        read_program(source), ROBOT.tools, problem.task, GIVEN, tools, flows=flows, **options
+    )
+
+
+#: The grasps the verifier's names admit and the values refuse, each with the run's reason.
+_STALE_AND_ELSEWHERE = [
+    (
+        "an error block grasps at the reading made before the walk",
+        (
+            "c1 = estimate_pose(object_id=o)\nc2 = walk_to(object_id=o)\ntry:\n"
+            "    c1 = estimate_pose(object_id=o)\nexcept ToolError:\n"
+            "    c3 = grasp(object_id=o, distance_m=c1.distance_m)\n    return c3.grasp_id\n"
+            "c4 = grasp(object_id=o, distance_m=c1.distance_m)\nreturn c4.grasp_id\n"
+        ),
+        {"fails": {"estimate_pose": 2}},
+        "c1.distance_m from estimate_pose was returned before walk_to, which may act",
+    ),
+    (
+        "an error block grasps one object at another's reading",
+        (
+            "c1 = estimate_pose(object_id=o)\ntry:\n    c1 = estimate_pose(object_id=p)\n"
+            "except ToolError:\n    c3 = grasp(object_id=p, distance_m=c1.distance_m)\n"
+            "    return c3.grasp_id\nc4 = grasp(object_id=p, distance_m=c1.distance_m)\n"
+            "return c4.grasp_id\n"
+        ),
+        {"fails": {"estimate_pose": 2}},
+        "c1.distance_m from estimate_pose was returned for another object_id than grasp takes",
+    ),
+    (
+        "a grasp reads a detection the program has since replaced",
+        (
+            "c1 = detect(label=a)\nc2 = estimate_pose(object_id=c1.object_id)\n"
+            "c1 = detect(label=b)\n"
+            "c3 = grasp(object_id=c1.object_id, distance_m=c2.distance_m)\nreturn c3.grasp_id\n"
+        ),
+        {},
+        "c2.distance_m from estimate_pose was returned for another object_id than grasp takes",
+    ),
+    (
+        "a branch rebinds the reading the other side grasps at",
+        (
+            "c1 = estimate_pose(object_id=o)\nc2 = detect(label=a)\nif c2.found in (True,):\n"
+            "    c1 = estimate_pose(object_id=p)\n"
+            "    c3 = grasp(object_id=p, distance_m=c1.distance_m)\n"
+            "    return c3.grasp_id\nc4 = grasp(object_id=p, distance_m=c1.distance_m)\n"
+            "return c4.grasp_id\n"
+        ),
+        {"found": False},
+        "c1.distance_m from estimate_pose was returned for another object_id than grasp takes",
+    ),
+    (
+        "a loop rebinds the reading the grasp after it reads",
+        (
+            "c2 = estimate_pose(object_id=p)\nc5 = scan(object_id=o)\nfor it in c5.items:\n"
+            "    c2 = estimate_pose(object_id=o)\n"
+            "c3 = grasp(object_id=o, distance_m=c2.distance_m)\n"
+            "return c3.grasp_id\n"
+        ),
+        {},
+        "c2.distance_m from estimate_pose was returned for another object_id than grasp takes",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("source", "options", "reason"),
+    [case[1:] for case in _STALE_AND_ELSEWHERE],
+    ids=[case[0] for case in _STALE_AND_ELSEWHERE],
+)
+def test_a_run_refuses_the_grasp_a_flow_rule_refuses(
+    source: str, options: dict[str, Any], reason: str
+) -> None:
+    """A run binds each name to the call that returned its value, on its own path.
+
+    So it reads a fresh and keyed rule on the values: a reading made before a call that may act,
+    or for another object than the grasp's, reaches the grasp on no path, the grasp is never made,
+    and the run names the rule.
+    """
+    ran = _held(source, **options)
+    assert ran.outcome == "refused"
+    assert ran.why == Refusal("flow", "grasp")
+    assert ran.refused == f"flow measured: {reason}"
+
+
+def test_a_run_admits_a_value_from_a_source_fresh_and_keyed() -> None:
+    # The controls: the branch's other side, the error block not entered, a reading made last.
+    sides = (
+        "c1 = estimate_pose(object_id=o)\nc2 = detect(label=a)\nif c2.found in (True,):\n"
+        "    c1 = estimate_pose(object_id=p)\n"
+        "    c3 = grasp(object_id=p, distance_m=c1.distance_m)\n"
+        "    return c3.grasp_id\nc4 = grasp(object_id=p, distance_m=c1.distance_m)\n"
+        "return c4.grasp_id\n"
+    )
+    assert _held(sides).value == "g_1"
+    assert _held(_STALE_AND_ELSEWHERE[0][1]).value == "g_1"
+    walked = (
+        "c1 = walk_to(object_id=o)\nc2 = estimate_pose(object_id=c1.object_id)\n"
+        "c3 = grasp(object_id=o, distance_m=c2.distance_m)\nreturn c3.grasp_id\n"
+    )
+    assert _held(walked).value == "g_1"
+
+
+def test_a_source_that_acts_answers_with_a_fresh_value() -> None:
+    # A call that may act reports the world after its own act, as the proxy keeps its answer.
+    arrived = read_flow(
+        {
+            "name": "arrived",
+            "sources": ["walk_to"],
+            "sink": "grasp.object_id",
+            "only": True,
+            "fresh": True,
+        }
+    )
+    walked = "c1 = walk_to(object_id=o)\nc2 = grasp(object_id=c1.object_id, distance_m=d)\n"
+    assert _held(walked + "return c2.grasp_id\n", flows=[arrived]).value == "g_1"
+    again = walked.replace("c2 = grasp", "c3 = walk_to(object_id=p)\nc2 = grasp")
+    assert _held(again + "return c2.grasp_id\n", flows=[arrived]).refused == (
+        "flow arrived: c1.object_id from walk_to was returned before walk_to, which may act"
+    )
+
+
+def test_a_scanned_item_is_keyed_by_the_scan_that_returned_it() -> None:
+    near = (
+        "c1 = scan(object_id={})\nfor it in c1.items:\n"
+        "    c2 = grasp(object_id=o, distance_m=it.distance_m)\nstop(c1)\n"
+    )
+    assert _held(near.format("o"), "pick, scanned").outcome == "stopped"
+    other = _held(near.format("p"), "pick, scanned")
+    assert other.refused == (
+        "flow scanned: it.distance_m from scan was returned for another object_id than grasp takes"
+    )
+
+
+def test_a_rule_holds_every_origin_it_names_and_admits_its_endorsed_set() -> None:
+    plain = "c1 = grasp(object_id=o, distance_m={})\nreturn c1.grasp_id\n"
+    measured = ROBOT.flows["measured"]
+    assert _held(plain.format("d")).refused == "flow measured: d from d reaches grasp.distance_m"
+    assert _held(plain.format("0.4")).refused == (
+        "flow measured: the literal 0.4 reaches grasp.distance_m"
+    )
+    endorsed = read_flow(
+        {
+            "name": "near",
+            "sources": ["estimate_pose"],
+            "sink": "grasp.distance_m",
+            "only": True,
+            "endorsed": {"maximum": 0.5},
+        }
+    )
+    assert _held(plain.format("0.4"), flows=[endorsed]).value == "g_1"
+    assert _held(plain.format("0.6"), flows=[endorsed]).outcome == "refused"
+    # A rule naming its sources alone refuses their values, and admits every other.
+    untrusted = read_flow(
+        {"name": "untrusted", "sources": ["estimate_pose"], "sink": measured.sink}
+    )
+    read = (
+        "c1 = estimate_pose(object_id=o)\n"
+        "c2 = grasp(object_id=o, distance_m=c1.distance_m)\nreturn c2.grasp_id\n"
+    )
+    assert _held(read, flows=[untrusted]).refused == (
+        "flow untrusted: c1.distance_m from estimate_pose reaches grasp.distance_m"
+    )
+    assert _held(plain.format("d"), flows=[untrusted]).value == "g_1"
+
+
+def test_an_implicit_rule_refuses_a_sink_under_a_test_on_its_source() -> None:
+    implicit = read_flow(
+        {"name": "steered", "sources": ["detect"], "sink": "grasp.object_id", "implicit": True}
+    )
+    tested = (
+        "c1 = detect(label=a)\nif c1.found in (True,):\n    c2 = grasp(object_id=o, distance_m=d)\n"
+        "    return c2.grasp_id\nstop(c1)\n"
+    )
+    assert (
+        _held(tested, flows=[implicit]).refused == "flow steered: grasp runs under a test on detect"
+    )
+    # What follows a loop runs under the test on its array, as the verifier reads it.
+    looped = (
+        "c1 = scan(object_id=o)\nfor it in c1.items:\n    c2 = detect(label=a)\n"
+        "c3 = grasp(object_id=o, distance_m=d)\nreturn c3.grasp_id\n"
+    )
+    scanned = read_flow(
+        {"name": "steered", "sources": ["scan"], "sink": "grasp.object_id", "implicit": True}
+    )
+    assert _held(looped, flows=[scanned]).refused == "flow steered: grasp runs under a test on scan"
+    assert _held(looped, flows=[implicit]).value == "g_1"
+
+
+def test_an_awaited_run_holds_the_same_rules() -> None:
+    problem = ROBOT.problem("pick, measured")
+    source, reason = _STALE_AND_ELSEWHERE[0][1], _STALE_AND_ELSEWHERE[0][3]
+    tools = _robot({"estimate_pose": 2})
+    ran = asyncio.run(
+        arun(read_program(source), ROBOT.tools, problem.task, GIVEN, tools, flows=problem.flows)
+    )
+    assert ran.refused == f"flow measured: {reason}"
+
+
+def test_a_run_not_enforced_records_each_broken_rule_and_goes_on() -> None:
+    ran = _held(_STALE_AND_ELSEWHERE[0][1], fails={"estimate_pose": 2}, enforce=False)
+    assert ran.outcome == "returned"
+    assert ran.broken == (f"flow measured: {_STALE_AND_ELSEWHERE[0][3]}",)
+
+
+def test_a_broken_flow_rule_is_blamed_on_the_proof_it_breaks() -> None:
+    ran = _held(_STALE_AND_ELSEWHERE[2][1])
+    assert blame(ran, ROBOT.tools, proven=True) == (
+        "a flow rule the verification proved broke: a defect to report"
+    )
+    assert (
+        blame(ran, ROBOT.tools, proven=False) == "a flow rule no link of the program proves broke"
+    )
