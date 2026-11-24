@@ -8,12 +8,12 @@ from typing import Any
 import pytest
 
 from valgebra_planning.contracts import read_contract, read_task
-from valgebra_planning.critic import ProgramError, critique, read_program
+from valgebra_planning.critic import MAX_PATHS, ProgramError, critique, read_program
 from valgebra_planning.flows import read_flow
 from valgebra_planning.mining import mine
 from valgebra_planning.planner import plan
 from valgebra_planning.policy import read_policy
-from valgebra_planning.program import Block, Branch, Ref, Return, Stop, render
+from valgebra_planning.program import Block, Branch, For, Ref, Return, Stop, render
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 TOOLS = {
@@ -253,3 +253,101 @@ def test_a_listed_constant_no_json_value_is_refused_by_its_line(item: str) -> No
     source = f"c1 = find_parcel(parcel_id=parcel_id)\nif c1.parcel.state in ({item},):\n"
     with pytest.raises(ProgramError, match="line 2: a test lists JSON values"):
         read_program(source + "    return c1\nreturn c1\n")
+
+
+def _ran(source: str) -> str:
+    """Return a program's text as the reader reads it, rendered."""
+    return render(read_program(source))
+
+
+def test_an_if_with_no_else_runs_on_into_what_follows_it() -> None:
+    """Python runs the statements after an `if` once its side runs out, in a loop's body too.
+
+    The side that runs out carries them, so a lost parcel is notified and then booked, as
+    Python runs it, where the reader made the booking the `if`'s other side alone.
+    """
+    source = (
+        "c1 = list_parcels()\n"
+        "for p in c1.parcels:\n"
+        "    c2 = find_parcel(parcel_id=p.id)\n"
+        "    if c2.parcel.state in ('lost',):\n"
+        "        c3 = notify(parcel_id=p.id)\n"
+        "    c4 = book_return(parcel_id=p.id)\n"
+        "return c1\n"
+    )
+    assert _ran(source) == (
+        "c1 = list_parcels()\n"
+        "for p in c1.parcels:\n"
+        "    c2 = find_parcel(parcel_id=p.id)\n"
+        "    if c2.parcel.state in ('lost',):\n"
+        "        c3 = notify(parcel_id=p.id)\n"
+        "        c4 = book_return(parcel_id=p.id)\n"
+        "    else:\n"
+        "        c4 = book_return(parcel_id=p.id)\n"
+        "return c1"
+    )
+
+
+def test_a_handler_runs_on_into_what_follows_its_try() -> None:
+    source = (
+        "c1 = list_parcels()\n"
+        "for p in c1.parcels:\n"
+        "    try:\n"
+        "        c2 = find_parcel(parcel_id=p.id)\n"
+        "    except ToolError:\n"
+        "        c3 = notify(parcel_id=p.id)\n"
+        "    c4 = book_return(parcel_id=p.id)\n"
+        "return c1\n"
+    )
+    program = read_program(source)
+    loop = program.end
+    assert isinstance(loop, For)
+    (guarded, booked) = loop.body.calls
+    assert guarded.on_error is not None
+    assert [call.tool for call in guarded.on_error.calls] == ["notify", "book_return"]
+    assert booked.tool == "book_return"
+
+
+def test_a_nested_if_with_no_else_ends_as_its_outer_side_does() -> None:
+    source = (
+        "c1 = find_parcel(parcel_id=parcel_id)\n"
+        "if c1.parcel.state in ('lost',):\n"
+        "    if c1.parcel.weight_g in (1,):\n"
+        "        c2 = notify(parcel_id=parcel_id)\n"
+        "    return c1\n"
+        "return c1\n"
+    )
+    assert _ran(source) == (
+        "c1 = find_parcel(parcel_id=parcel_id)\n"
+        "if c1.parcel.state in ('lost',):\n"
+        "    if c1.parcel.weight_g in (1,):\n"
+        "        c2 = notify(parcel_id=parcel_id)\n"
+        "        return c1\n"
+        "    else:\n"
+        "        return c1\n"
+        "else:\n"
+        "    return c1"
+    )
+
+
+def test_in_a_string_is_refused_as_the_substring_test_it_is() -> None:
+    with pytest.raises(ProgramError, match="line 2: `in` a string tests a substring"):
+        read_program(
+            "c1 = find_parcel(parcel_id=parcel_id)\nif c1.parcel.state in 'a, b':\n"
+            "    return c1\nreturn c1\n"
+        )
+
+
+@pytest.mark.parametrize(("tests", "read"), [(12, True), (13, False)])
+def test_a_program_past_the_path_bound_is_refused_with_its_count(tests: int, *, read: bool) -> None:
+    # Each `if` whose sides run on doubles the paths: twelve in a row are MAX_PATHS.
+    source = "c1 = find_parcel(parcel_id=parcel_id)\n" + "".join(
+        f"if c1.parcel.weight_g in ({i},):\n    c{i + 2} = notify(parcel_id=parcel_id)\n"
+        for i in range(tests)
+    )
+    source += "return c1\n"
+    if read:
+        read_program(source)
+    else:
+        with pytest.raises(ProgramError, match=f"runs {2**tests} paths, past {MAX_PATHS}"):
+            read_program(source)

@@ -24,6 +24,7 @@ import ast
 import json
 import math
 from collections.abc import Mapping, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
@@ -102,8 +103,13 @@ def _named(node: ast.expr) -> str | None:
     return node.id if isinstance(node, ast.Name) else None
 
 
-def _guarded_call(statement: ast.Try, *, looping: bool = False) -> Call:
-    """Read ``try: x = tool(...) except ToolError: <block>`` as a call with an error block."""
+def _guarded_call(
+    statement: ast.Try, rest: Sequence[ast.stmt] = (), *, looping: bool = False
+) -> Call:
+    """Read ``try: x = tool(...) except ToolError: <block>`` as a call with an error block.
+
+    A handler that runs out runs on into what follows the `try`, as Python runs it.
+    """
     if (
         len(statement.body) != 1
         or not isinstance(statement.body[0], ast.Assign)
@@ -116,7 +122,7 @@ def _guarded_call(statement: ast.Try, *, looping: bool = False) -> Call:
     if handler.type is None or _tool(handler.type) != "ToolError":
         raise _fail(statement, "a try catches `ToolError` alone")
     call = _call(statement.body[0])
-    handled = _block(handler.body, handler, looping=looping)
+    handled = _block(_onto(handler.body, rest), handler, looping=looping)
     return Call(call.tool, call.bindings, call.result, call.retry, handled)
 
 
@@ -186,6 +192,12 @@ def _branch(statement: ast.If, *, looping: bool = False) -> Branch:
     if isinstance(op, (ast.In, ast.NotIn)) and isinstance(right, ast.Attribute):
         tool, argument = _tool(right.value), right.attr
         return Branch(ref, tool, argument, then, otherwise)
+    if (
+        isinstance(op, (ast.In, ast.NotIn))
+        and isinstance(right, ast.Constant)
+        and isinstance(right.value, (str, bytes))
+    ):
+        raise _fail(statement, "`in` a string tests a substring; list the members as a tuple")
     if isinstance(op, (ast.Eq, ast.NotEq)) and not isinstance(right, ast.Constant):
         raise _fail(statement, "a value is compared for equality with a constant")
     if not isinstance(op, (ast.In, ast.NotIn, ast.Eq, ast.NotEq)):
@@ -193,10 +205,45 @@ def _branch(statement: ast.If, *, looping: bool = False) -> Branch:
     return Branch(ref, "", "", then, otherwise, _constants(right))
 
 
-def _with_else(statement: ast.If, rest: Sequence[ast.stmt]) -> ast.If:
+def _falling(statement: ast.If, rest: Sequence[ast.stmt]) -> ast.If:
+    """Return ``statement`` with ``rest`` after each side of it that runs out."""
     return ast.If(
-        test=statement.test, body=statement.body, orelse=list(rest), lineno=statement.lineno
+        test=statement.test,
+        body=_onto(statement.body, rest),
+        orelse=_onto(statement.orelse, rest),
+        lineno=statement.lineno,
     )
+
+
+def _onto(side: Sequence[ast.stmt], rest: Sequence[ast.stmt]) -> list[ast.stmt]:
+    """Return ``side`` followed by ``rest`` where control runs out of it, as Python runs on."""
+    return [*side, *rest] if _runs_out(side) else list(side)
+
+
+def _runs_out(statements: Sequence[ast.stmt]) -> bool:
+    """Return whether control may reach the end of ``statements``, as Python runs them.
+
+    It does past every statement but a `return`, a `raise`, a `continue`, a `break` and a
+    `stop`, and past an `if` or a `try` where one of its sides does.
+    """
+    body = [s for s in statements if not isinstance(s, ast.Pass)]
+    if not body:
+        return True
+    last = body[-1]
+    if isinstance(last, (ast.Return, ast.Raise, ast.Continue, ast.Break)):
+        return False
+    if (
+        isinstance(last, ast.Expr)
+        and isinstance(last.value, ast.Call)
+        and isinstance(last.value.func, ast.Name)
+        and last.value.func.id == "stop"
+    ):
+        return False
+    if isinstance(last, ast.If):
+        return _runs_out(last.body) or _runs_out(last.orelse)
+    if isinstance(last, ast.Try):
+        return _runs_out(last.body) or any(_runs_out(h.body) for h in last.handlers)
+    return True
 
 
 def _loop(statement: ast.For, rest: Block) -> For:
@@ -247,21 +294,41 @@ def _misplaced(statement: ast.stmt, number: int) -> str:
     )
 
 
+#: Each run of statements a reading has read, by the statements and whether a loop holds them,
+#: so the rest after an `if`, which each side that runs out carries, is read once and shared.
+_READ: ContextVar[dict[tuple[tuple[int, ...], bool], Block] | None] = ContextVar(
+    "_READ", default=None
+)
+
+
 def _block(
     statements: Sequence[ast.stmt], parent: ast.AST | None = None, *, looping: bool = False
 ) -> Block:
     """Read statements as a block; in a loop's body, running out of them ends the iteration."""
     statements = [s for s in statements if not isinstance(s, ast.Pass)]
+    read = _READ.get()
+    key = (tuple(map(id, statements)), looping)
+    if read is not None and statements and key in read:
+        return read[key]
+    block = _statements(statements, parent, looping=looping)
+    if read is not None and statements:
+        read[key] = block
+    return block
+
+
+def _statements(statements: Sequence[ast.stmt], parent: ast.AST | None, *, looping: bool) -> Block:
+    """Read statements as a block, each `if` and handler running on into what follows it."""
     calls: list[Call] = []
     for at, statement in enumerate(statements):
         rest = statements[at + 1 :]
         if isinstance(statement, ast.For):
             return Block(tuple(calls), _loop(statement, _block(rest, statement, looping=looping)))
-        if isinstance(statement, ast.If) and not statement.orelse and rest:
-            # An `if` with no `else` before more statements: what follows is its other branch.
-            return Block(tuple(calls), _branch(_with_else(statement, rest), looping=looping))
+        if isinstance(statement, ast.If) and rest:
+            # Python runs what follows an `if` after each side that runs out, an absent
+            # `else` among them: each such side carries the rest.
+            return Block(tuple(calls), _branch(_falling(statement, rest), looping=looping))
         if isinstance(statement, ast.Try):
-            calls.append(_guarded_call(statement, looping=looping))
+            calls.append(_guarded_call(statement, rest, looping=looping))
         elif isinstance(statement, ast.Assign):
             calls.append(_call(statement))
         elif rest:
@@ -299,7 +366,40 @@ def read_program(source: str) -> Block:
     if len(body) == 1 and isinstance(body[0], (ast.FunctionDef, ast.AsyncFunctionDef)):
         body = body[0].body
     body = [s for s in body if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant))]
-    return _block(body)
+    reading = _READ.set({})
+    try:
+        program = _block(body)
+    finally:
+        _READ.reset(reading)
+    paths = _paths(program, {})
+    if paths > MAX_PATHS:
+        what = (
+            f"the program runs {paths} paths, past {MAX_PATHS}: each `if` in a row that runs on "
+            "doubles them; end a side with a return or a stop"
+        )
+        raise ProgramError(what)
+    return program
+
+
+#: The paths a program may take: each `if` whose sides run on into what follows doubles them,
+#: and the verifier walks each.
+MAX_PATHS = 4096
+
+
+def _paths(block: Block, counted: dict[int, int]) -> int:
+    """Return the paths ``block`` takes to its ends, each shared block counted once."""
+    if id(block) in counted:
+        return counted[id(block)]
+    end = block.end
+    if isinstance(end, Branch):
+        total = _paths(end.then, counted) + _paths(end.otherwise, counted)
+    elif isinstance(end, For):
+        total = _paths(end.body, counted) + _paths(end.after, counted)
+    else:
+        total = 1
+    total += sum(_paths(call.on_error, counted) for call in block.calls if call.on_error)
+    counted[id(block)] = total
+    return total
 
 
 @dataclass(frozen=True, slots=True)

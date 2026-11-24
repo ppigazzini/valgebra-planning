@@ -8,6 +8,15 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- The program text reads as Python runs it. An `if` with no `else` before more statements made
+  them its other side alone, so in a loop's body a side that ran out ended the iteration where
+  Python runs on into what follows, and an `if` nested at the end of an outer side was refused or
+  read so too; a handler that ran out ended the iteration likewise. What follows an `if` runs
+  after each side that runs out, `else` or not, and what follows a `try` after a handler that runs
+  out, each side carrying the rest, read once and shared. A test of `in` against a string, which
+  Python reads as a substring test, is refused naming the tuple to write, and a program past 4096
+  paths, twelve `if`s in a row that run on, is refused naming its count.
+
 - A test's listed constants read as the literals `render` writes. The reader took a listed item
   only where Python parses it as a bare constant, so the planner's own `in (-1,)` and
   `in ([1, 2],)`, written by `repr`, did not read back: a negative number is a unary minus and a

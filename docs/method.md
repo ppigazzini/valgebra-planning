@@ -269,6 +269,10 @@ against typed tool APIs, verifies it under the rules the task is held to and ret
 each link not proven, the value refuting it, and what the author can change, the test that makes a
 call safe for a binding, the call a policy needs first, the source a flow rule trusts, the error
 block a call needs. A language model proposes, a sound critic checks (Kambhampati et al. 2024).
+The text reads as Python runs it: what follows an `if` runs after each side that runs out, an
+absent `else` among them, and what follows a `try` after a handler that runs out, in a loop's body
+as outside one, each side carrying the rest, which is read once and shared. A test of `in` against
+a string, a substring test in Python, is refused, naming the tuple to write.
 Mined types decide nothing here either: a binding crossing two types the observed calls tell apart
 is a note, and the program is accepted on its links alone.
 
@@ -362,6 +366,10 @@ ones.
 
 ## Limits
 
+- **A program runs at most 4096 paths** (`MAX_PATHS`). Each `if` whose sides run on into what
+  follows doubles the paths, and the verifier walks each, so twelve in a row are the most a
+  program holds and a thirteenth is refused, naming the count; the planner's programs over the
+  examples take at most five.
 - **A proxy reads no text a tool declaring no output schema answers.** Such a tool's result is
   answered as the server wrote it, so its text reaches an agent held to no contract, and a
   result field any string fills reaches it inside the checked value: patterns and enums on the
