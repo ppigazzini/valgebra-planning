@@ -95,7 +95,7 @@ where a stop the task tolerates is left, and `proven, no return` where no path r
 | a failed grasp retried on the walked-to object's other name | pick | refuted: `grasp may be retried` |  |
 | a failed grasp retried on the object as given | pick | refuted: `grasp may be retried` |  |
 | a joint moved at a speed read from any number | move a joint | refuted: `c0.v <= move_joint.speed` |  |
-| a stop on a field the result may lack | say | proven, no return |  |
+| a stop on a field the result may lack | say | refuted: `c1.reason is a value the program holds` |  |
 | a return on a status the result never takes | say | proven, weak |  |
 | a loop whose body tests, then calls | sweep a scan | proven, no return | stopped: scan, grasp, walk_to |
 | a loop whose body tries, then calls | sweep a scan | proven, no return | stopped: scan, grasp, detect, walk_to |
@@ -119,8 +119,8 @@ where a stop the task tolerates is left, and `proven, no return` where no path r
   is: neither reads a set, and neither side either guards is walked.
 - A failed grasp retried on the walked-to object's other name is refuted, as the same retry on
   the object as given is: the grasp may have acted, and the other name may hold the same object.
-- A stop on a field the result may lack is proven, and a return under a status the result never
-  takes counts its program weak.
+- A stop on a field the result may lack is refuted, as a return on one is. A return under a
+  status the result never takes counts its program weak.
 - The two loops run as Python runs them: the call after the test, and the call after the error
   block, are made for each item.
 - Five texts are refused by their line: `in` against a string, a test listing bytes, an ellipsis

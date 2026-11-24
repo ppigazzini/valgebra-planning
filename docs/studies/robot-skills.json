@@ -447,13 +447,16 @@
       "program": "a stop on a field the result may lack",
       "task": "say",
       "accepted": false,
-      "verified": true,
+      "verified": false,
       "weak": false,
-      "links": 1,
+      "links": 2,
       "proven": 1,
-      "refuted": [],
+      "refuted": [
+        ": c1.reason is a value the program holds"
+      ],
       "undecided": [],
       "notes": [
+        "refuted: c1.reason is a value the program holds; {'status': 'queued'} lies outside; test `if \"reason\" in c1:` and read `c1.reason` in that branch",
         "uncovered: c1.reason (at top); the task tolerates it"
       ]
     },

@@ -63,7 +63,8 @@ Python.
 The verifier (`valgebra_planning/verify.py`) walks a program with the set each value lies in,
 narrowed by intersection or complement at every branch, and asks valgebra each inclusion the
 program rests on: a value inside the argument it fills, the record where the arguments are
-related, the returned value inside the goal. Each link reads proven, refuted or undecided, and a
+related, the returned value inside the goal, and the value a return or a stop names one the
+program holds there, a field the result may lack refuted at either. Each link reads proven, refuted or undecided, and a
 refuted or undecided one carries a value outside the inclusion where the examples given or the
 values drawn from the value's own schema hold one. A concrete member is a proof, so such a value
 refutes an undecided link. A field's declared schema may admit more than its record allows, as

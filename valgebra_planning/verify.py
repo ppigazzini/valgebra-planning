@@ -245,6 +245,8 @@ class _Walk:
             self.obeyed(where, path.states)
             self.ended(path)
         elif isinstance(end, Stop):
+            # A stop hands back the value it names, which the run reads as it reads a return's.
+            self.held(env, end.ref, where)
             self.gaps.append(Gap(where, str(end.ref), self.tolerated(env, end.ref)))
             self.obeyed(where, path.states)
             self.ended(path)

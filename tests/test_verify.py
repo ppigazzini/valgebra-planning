@@ -138,6 +138,38 @@ def test_a_test_against_a_tool_or_an_argument_the_library_lacks_is_refuted() -> 
         assert {link.where for link in links} == {""}
 
 
+def test_a_stop_names_a_value_the_program_holds() -> None:
+    # A stop hands back the value it names, so a field the result may lack is refuted there,
+    # as at a return, and a test showing the key reads it.
+    say = read_contract(
+        {
+            "name": "say",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {"status": {"type": "string"}, "reason": {"type": "string"}},
+                "required": ["status"],
+                "additionalProperties": False,
+            },
+        }
+    )
+    task = read_task("say", {"t": {"type": "string"}}, True, stops={"say": True})
+
+    def links(source: str) -> list[tuple[str, str]]:
+        checked = verify(read_program(source), {"say": say}, task)
+        return [(link.claim, link.verdict) for link in checked.links if link.verdict != "proven"]
+
+    assert links("c1 = say(text=t)\nstop(c1.reason)\n") == [
+        ("c1.reason is a value the program holds", "refuted")
+    ]
+    assert links("c1 = say(text=t)\nstop(c1.status)\n") == []
+    assert links('c1 = say(text=t)\nif "reason" in c1:\n    stop(c1.reason)\nstop(c1)\n') == []
+
+
 def test_a_record_the_input_schema_relates_is_asked_whole() -> None:
     card = read_task("pay", {"card": {"type": "string"}, "iban": {"type": "string"}}, True)
     both = Block(

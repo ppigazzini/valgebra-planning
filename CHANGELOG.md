@@ -8,6 +8,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Security
 
+- A stop names a value the program holds. `stop(c1.reason)`, on a field the result may lack, was
+  proven, though a run reaching it with no `reason` ends on the read and stops on nothing: a
+  return was asked whether its value is held there, and a stop was not. It is refuted, with a
+  result lacking the field as its witness, and a test that the key is present reads it.
+
 - A test against a tool the library lacks is refuted. `if x in grasp_object.distance_m:` read no
   set, added no link and walked neither side, so a program whose every call stood behind such a
   test was accepted with nothing proven, a grasp under a policy refusing every grasp among them.
