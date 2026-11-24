@@ -31,6 +31,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- `contracts.failures` and `contracts.contract_names` are public. A proxy's refusal names where a
+  value lies outside a contract by `failures`, each path and code with no value and no key the
+  contract does not name, over the names `contract_names` gives, and a caller holding a contract
+  outside a proxy could not word a refusal the same way: both stood outside `__all__`.
+
 - A tool whose name Python does not spell is called by an alias. MCP allows a tool's name dots
   and hyphens, and a proxy may prefix each with its server's, so `g1.grasp` named a tool no
   program could call, and the reader read `g1.grasp(...)` as a call of `grasp`. `alias` writes

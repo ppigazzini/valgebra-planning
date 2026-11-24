@@ -37,6 +37,8 @@ __all__ = [
     "Postcondition",
     "Slot",
     "Task",
+    "contract_names",
+    "failures",
     "read_contract",
     "read_postcondition",
     "read_task",

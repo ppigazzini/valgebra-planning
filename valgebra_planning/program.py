@@ -29,6 +29,7 @@ __all__ = [
     "Ref",
     "Return",
     "Stop",
+    "alias",
     "render",
     "steps",
 ]
