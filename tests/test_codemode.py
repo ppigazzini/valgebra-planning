@@ -4,7 +4,7 @@ import ast
 import dataclasses
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -40,6 +40,94 @@ def test_the_stubs_are_python_and_carry_each_tool_s_own_schemas() -> None:
         doc = ast.get_docstring(functions[tool["name"]]) or ""
         written = doc.split("Arguments, as JSON Schema: ", 1)[1].split("\n", 1)[0]
         assert json.loads(written) == tool["inputSchema"]
+
+
+def _signature(schema: dict[str, Any]) -> str:
+    """The stub's signature line for a tool taking one argument `x` of `schema`."""
+    tool = read_contract(
+        {
+            "name": "t",
+            "inputSchema": {"type": "object", "properties": {"x": schema}, "required": ["x"]},
+        }
+    )
+    return stubs({"t": tool}).split("def t(*, ", 1)[1].split(")", 1)[0]
+
+
+@pytest.mark.parametrize(
+    ("schema", "written"),
+    [
+        ({"type": "string", "enum": ["brief", "full"]}, "x: Literal['brief', 'full']"),
+        ({"const": "yes"}, "x: Literal['yes']"),
+        ({"type": "string", "enum": ["a", 1]}, "x: Literal['a']"),
+        ({"enum": [1, 2.0]}, "x: Literal[1, 2]"),
+        ({"enum": [True, 1, None]}, "x: Literal[True, 1, None]"),
+        ({"enum": ["a", 1.5]}, "x: Any"),
+        ({"type": "number", "enum": [0.5]}, "x: float"),
+        ({"type": "boolean"}, "x: bool"),
+        ({"enum": [False, True]}, "x: bool"),
+        ({"type": "null"}, "x: None"),
+        ({"type": "string", "pattern": "^a"}, "x: str"),
+    ],
+    ids=[
+        "enum",
+        "const",
+        "enum-the-type-filters",
+        "integral-numbers",
+        "a-boolean-is-no-integer",
+        "a-fraction-has-no-literal",
+        "a-typed-fraction",
+        "boolean",
+        "both-booleans-listed",
+        "null",
+        "no-list",
+    ],
+)
+def test_an_argument_listing_its_values_is_typed_as_their_literal(
+    schema: dict[str, Any], written: str
+) -> None:
+    # A `Literal` holds what PEP 586 allows, and the schema's own keywords choose the members:
+    # an `enum` or a `const` filtered by the rest of the schema, as JSON Schema reads it.
+    assert _signature(schema) == written
+
+
+def test_annex_b_s_view_argument_is_typed_as_its_two_literals() -> None:
+    # The report's tool: `view` was `str`, and a program passing "summary" was refuted only by
+    # the critic, where the stub could say so.
+    get_run = read_contract(
+        {
+            "name": "get_run",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string", "pattern": "^[a-f0-9]{24}$"},
+                    "view": {"type": "string", "enum": ["brief", "full"]},
+                },
+                "required": ["run_id", "view"],
+            },
+        }
+    )
+    text = stubs({"get_run": get_run})
+    assert "def get_run(*, run_id: str, view: Literal['brief', 'full'])" in text
+    ast.parse(text)
+
+
+def test_a_literal_reads_back_through_pydantic_as_the_values_it_was_written_from() -> None:
+    # The MCP SDK writes a tool's inputSchema from its annotations with pydantic, so a server
+    # author's `Literal` is where an `enum` comes from; the stub writes it back the same way.
+    pydantic = pytest.importorskip("pydantic")
+    for schema in (
+        {"type": "string", "enum": ["brief", "full"]},
+        {"const": "yes"},
+        {"enum": [1, "a", None]},
+    ):
+        annotation = ast.parse(_signature(schema).split(": ", 1)[1], mode="eval").body
+        assert isinstance(annotation, ast.Subscript)
+        members = ast.literal_eval(annotation.slice)
+        members = members if isinstance(members, tuple) else (members,)
+        read = pydantic.TypeAdapter(Literal.__getitem__(members)).json_schema()
+        assert read.get("enum", [read.get("const")]) == list(
+            schema.get("enum", [schema.get("const")])
+        )
 
 
 def test_a_model_s_program_is_repaired_by_the_critique_it_is_handed() -> None:

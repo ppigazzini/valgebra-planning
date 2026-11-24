@@ -2,8 +2,9 @@
 
 In code mode a model writes a program against typed tool APIs rather than calling tools one by
 one. `stubs` gives those APIs as Python: one function a tool, every argument by name, its type
-hint the kind its schema names, and its docstring the tool's own input and output JSON Schemas,
-since a pattern or a bound has no Python type and the critic holds the program to the schemas.
+hint the kind its schema names or the `Literal` of the values it lists, and its docstring the
+tool's own input and output JSON Schemas, since a pattern or a bound has no Python type and the
+critic holds the program to the schemas.
 `repair` is the loop of a model that proposes and a sound critic that checks, the critique
 handed back as the next prompt (Kambhampati et al. 2024, §3.2): a program is critiqued, and its
 critique handed back for the next proposal, until it is accepted or the rounds run out. The
@@ -17,7 +18,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from valgebra_planning.contracts import Contract, Task
+from valgebra_planning._valgebra import finite
+from valgebra_planning.contracts import Contract, Slot, Task
 from valgebra_planning.critic import Critique, ProgramError, critique
 from valgebra_planning.program import alias
 
@@ -49,7 +51,7 @@ each path in `return value` or `stop(value)`. A program for another task reads:
     stop(c1.status)
 """
 
-from typing import Any
+from typing import Any, Literal
 
 
 class ToolError(Exception): ...
@@ -67,10 +69,41 @@ def _hint(schema: object) -> str:
     return _HINTS.get(kind, "Any") if isinstance(kind, str) else "Any"
 
 
+def _literal(slot: Slot) -> str | None:
+    """Return the `Literal` of the values an argument's schema lists, or None for no such list.
+
+    `finite` lists the JSON values a schema with `enum` or `const` admits, the rest of the
+    schema applied (JSON Schema 2020-12 Validation, §6.1.2, §6.1.3), an integral number in both
+    of its spellings. A `Literal` holds a `str`, an `int`, a `bool` or `None` (PEP 586), so the
+    float spelling of a listed integer is left out and a list holding a float that is no integer
+    has none. `True` is equal to `1` in Python and not in JSON, so a value is kept by its type as
+    well. A list naming both booleans, or `null` alone, is the set a kind's hint names, `bool`
+    or `None`, and is written so.
+    """
+    listed = finite(slot.schema, slot.root)
+    if not listed:
+        return None
+    kept: list[object] = []
+    for value in listed:
+        if isinstance(value, float):
+            if value.is_integer():
+                continue
+            return None
+        if not any(type(value) is type(held) and value == held for held in kept):
+            kept.append(value)
+    named = {(type(value), value) for value in kept}
+    if named == {(bool, True), (bool, False)}:
+        return "bool"
+    if named == {(type(None), None)}:
+        return "None"
+    return f"Literal[{', '.join(map(repr, kept))}]"
+
+
 def stub(contract: Contract) -> str:
     """Return a tool's stub: its signature, and its input and output schemas as its docstring."""
     arguments = ", ".join(
-        f"{slot.path[0]}: {_hint(slot.schema)}" + ("" if slot.required else " = ...")
+        f"{slot.path[0]}: {_literal(slot) or _hint(slot.schema)}"
+        + ("" if slot.required else " = ...")
         for slot in sorted(contract.arguments, key=lambda slot: not slot.required)
     )
     inputs = contract.arguments[0].root if contract.arguments else {"type": "object"}

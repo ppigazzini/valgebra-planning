@@ -72,8 +72,8 @@ uv run valgebra-planning stubs examples/parcels
 ```
 
 prints the library's tools as Python stubs, after a preamble stating the language a program
-uses: one function a tool, every argument by name, its docstring holding the tool's input and
-output schemas. Hand them to a model to write a program against, then `critique` it; in Python,
+uses: one function a tool, every argument by name and typed by its kind or the `Literal` of the
+values its schema lists, its docstring holding the tool's input and output schemas. Hand them to a model to write a program against, then `critique` it; in Python,
 `valgebra_planning.codemode.repair` runs that loop with any callable as the model.
 
 ## Check a library

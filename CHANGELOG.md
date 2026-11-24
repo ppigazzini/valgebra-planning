@@ -75,6 +75,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- The stubs type an argument whose schema lists its values as the `Literal` of those values. An
+  `enum` or a `const` was typed by its kind alone, `view: str` for `["brief", "full"]`, so a model
+  read the two words only in the docstring's JSON Schema. The members are the values the schema
+  admits, the rest of it applied: `{"type": "string", "enum": ["a", 1]}` is `Literal['a']`, an
+  integral number is written once, as an `int`, and a list holding a fraction, which no `Literal`
+  holds, keeps its kind's hint. Both booleans are `bool`, and `null` alone is `None`. The parcels
+  library's stubs grow from 5,490 characters to 5,589, the robot skills' from 4,631 to 4,661.
 - A refutation's witness is shrunk before it is shown. The verifier kept the first drawn value
   outside the target, as long as the draw: a text of 3,155 characters where `''` refutes. A drawn
   witness is now made smaller, length first, then nearer zero, item and field in place, while it
