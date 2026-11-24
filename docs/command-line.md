@@ -91,8 +91,9 @@ read; with `--json` each entry carries its `kind`, `vacuous` or `wide`.
 uv run valgebra-planning privileges old.json new.json
 ```
 
-reads two privilege policies in Progent's format, `{"tool": [[priority, effect, condition,
-fallback], ...]}`, and prints for each tool the new one names whether it narrows the old one,
+reads two privilege policies written as Progent's code writes them, `{"tool": [[priority,
+effect, condition, fallback], ...]}` (Shi et al. 2025, whose paper names the same four fields
+in an object), and prints for each tool the new one names whether it narrows the old one,
 expands it, with a call it newly allows, or is left undecided. The exit status is 0 only when
 every tool narrows. In Python, `valgebra_planning.privilege.as_policy` turns a policy into one the
 planner, the verifier and the runner hold a program to.

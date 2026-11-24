@@ -394,7 +394,8 @@ against no attacker that adapts
 
 A privilege policy in Progent's format maps each tool to its rules, each with a priority, an
 effect, a condition and a fallback (Shi et al. 2025); valgebra-planning reads a rule as the list
-`[priority, effect, condition, fallback]`, effect `0` allowing and `1` forbidding, so the calls
+`[priority, effect, condition, fallback]` Progent's code writes, effect `0` allowing and `1`
+forbidding, so the calls
 it allows a tool are a set. Whether an update narrows a policy is an inclusion between two such
 sets, every rule and argument at once; an expansion comes with a call the new policy allows and
 the old one denies:

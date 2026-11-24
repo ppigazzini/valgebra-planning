@@ -7,7 +7,11 @@ at that point of the program, narrowed by every test on the way there, and nothi
 cells, not the search: the belief execution along a path (Bertoli et al. 2006, Def. 3.4), each
 reference's set read apart from the others'. A program whose every link is proven and on which
 no path stops is a strong solution, applicable at each call and inside the goal at the end of
-each path (Bertoli et al. 2006, Thm. 3.5). A refuted link carries a value outside the inclusion
+each path (Bertoli et al. 2006, Thm. 3.5). The theorem is proven of finite conditional plans,
+which hold no loop (Bertoli et al. 2006, Def. 2.8); a loop over an array, which holds finitely
+many items, unrolls each run to one such plan, and the walk reads its body once for every item
+(`_Walk.loop`), a belief holding each unrolling's, so the reading holds of each: a step of this
+package's own. A refuted link carries a value outside the inclusion
 where one is found among the examples given and the values drawn from the reference's own
 schema. A value found that way refutes an undecided link too, since a concrete member is a
 proof.

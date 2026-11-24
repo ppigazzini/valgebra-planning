@@ -77,11 +77,15 @@ HELD-BY: test_a_strong_program_branches_on_every_status_and_verifies, test_a_wea
 **The verifier reads a program as belief execution.** The set a reference lies in at a point of
 a program is its belief there: a call's result enters as its output set, replacing every belief
 held under its name, and a test narrows the tested reference to the set on its `then` branch and
-to the complement on its `else` branch (Bertoli et al. 2006, Def. 3.4). A loop's item enters as
-its array's item set the same way, a step of this package's own, since a conditional plan holds
-no loop. A plan applicable at every call is a strong solution exactly
-when every final belief lies inside the goal (Bertoli et al. 2006, Thm. 3.5), so a program whose
-every link is proven and on which no path stops is strong. Each reference's set is read apart
+to the complement on its `else` branch (Bertoli et al. 2006, Def. 3.4). A plan applicable at
+every call is a strong solution exactly when every final belief lies inside the goal (Bertoli et
+al. 2006, Thm. 3.5), proven by induction over finite conditional plans, which hold no loop
+(Bertoli et al. 2006, Def. 2.8). A loop is this package's own step: an array holds finitely many
+items, so each run of a loop is one of the finite conditional plans it unrolls to, the body once
+per item; the loop's item enters as its array's item set, and the walk reads the body once for
+every item, no value crossing iterations and the policies' states at a fixpoint, a belief
+holding each unrolling's at every point. So a program whose every link is proven and on which no
+path stops is strong on each unrolling, and so strong. Each reference's set is read apart
 from the others', a belief containing the real one, so a proof stands. A question asked of a
 value rather than its field is asked of the value's belief, its own set met with each field of
 it a test narrowed, so a refutation there names a value the program may hold; the verifier
@@ -89,7 +93,7 @@ reads neither the cells nor the search. **[LOAD-BEARING: belief-execution]**
 
 IMPLEMENTED-BY: verify.py
 
-HELD-BY: test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole, test_a_record_no_call_makes_is_never_a_witness, test_a_record_a_call_makes_refutes_two_fields_of_one_value, test_a_loop_item_reads_no_field_of_a_value_its_name_held, test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads
+HELD-BY: test_a_loop_program_proven_strong_keeps_every_contract_on_every_array, test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole, test_a_record_no_call_makes_is_never_a_witness, test_a_record_a_call_makes_refutes_two_fields_of_one_value, test_a_loop_item_reads_no_field_of_a_value_its_name_held, test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads
 
 **A field is read where the held set proves it present.** Selection requires the selected
 field to be defined, the record's type a subtype of a record holding it (Castagna 2023,

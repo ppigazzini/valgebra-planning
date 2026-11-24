@@ -1,15 +1,16 @@
 """Privilege policies in Progent's format, read as valgebra sets (Shi et al. 2025, §4.1).
 
 A policy maps each tool to its rules, each a priority, an effect, a condition and a fallback
-(Shi et al. 2025, Fig. 9), read here as ``[priority, effect, condition, fallback]``: effect 0
-allows and 1 forbids, and the condition maps an argument to the JSON Schema its value must meet
-or to a regular expression a string value must match from its start. A condition checks only the
+(Shi et al. 2025, Fig. 9), read here as the list Progent's code writes, ``[priority, effect,
+condition, fallback]``, where the paper's figure names them in an object: effect 0 allows and 1
+forbids, and the condition maps an argument to the JSON Schema its value must meet or to a
+regular expression a string value must match from its start. A condition checks only the
 arguments a call passes. Rules are tried by priority, a forbidding rule before an allowing one
 of the same priority, and the first whose condition holds decides; a call no rule matches, and a
 call to a tool the policy names no rule for, is denied. Within one priority that is the order
 Progent applies a policy in (Shi et al. 2025, §4.2, Alg. 2), which reads no priority. A rule
-asking the user (fallback 2) is read as denied, the reading that admits no call the user did not
-approve.
+asking the user (fallback 2 in that code) is read as denied, the reading that admits no call the
+user did not approve.
 
 The calls a policy allows to a tool are then a set (Shi et al. 2025, §4.3): each allowing rule's
 condition, minus the conditions of every rule tried before it, joined. Progent asks an SMT

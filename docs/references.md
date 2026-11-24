@@ -113,7 +113,11 @@ directions.
   FIDES.
 - **Shi et al. 2025.** T. Shi, J. He, Z. Wang, H. Li, L. Wu, W. Guo, D. Song. Progent:
   securing AI agents with privilege control.
-  [arXiv:2504.11703v3](https://arxiv.org/abs/2504.11703v3), 2025.
+  [arXiv:2504.11703v3](https://arxiv.org/abs/2504.11703v3), 2025. The paper writes a rule as an
+  object, its priority, effect, conditions and fallback named (Fig. 9); its code,
+  [sunblaze-ucb/progent](https://github.com/sunblaze-ucb/progent) (MIT), writes one as the list
+  `(priority, effect, condition, fallback)`, effect 0 allowing and 1 forbidding, fallback 0
+  returning a message, 1 ending the run and 2 asking the user, the form this package reads.
 
 ## Specifications and prior work
 

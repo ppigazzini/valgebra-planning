@@ -4,6 +4,8 @@ import itertools
 from typing import Any
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from valgebra_planning.contracts import item_slots, read_contract, read_task
 from valgebra_planning.critic import ProgramError, read_program
@@ -196,6 +198,44 @@ def test_a_run_calls_the_body_once_for_each_item() -> None:
     result = run(program, TOOLS, TASK, {"query": "q"}, tools([{"name": "a"}, {"name": "b"}]))
     assert (result.value, made) == (2, ["a", "b"])
     assert run(program, TOOLS, TASK, {"query": "q"}, tools([])).value == 0
+
+
+@settings(max_examples=60, deadline=None)
+@given(
+    st.lists(
+        st.fixed_dictionaries(
+            {"name": st.from_regex(r"\A[a-z]{1,6}\Z")}, optional={"id": st.text(max_size=4)}
+        ),
+        max_size=6,
+    )
+)
+def test_a_loop_program_proven_strong_keeps_every_contract_on_every_array(
+    entities: list[dict[str, Any]],
+) -> None:
+    """Each run of a loop over a finite array is one of the finite plans the loop unrolls to.
+
+    The walk reads the body once for every item, so a program it proves strong is strong on
+    each unrolling: every run keeps every contract and returns inside the goal, the body made
+    once for each item.
+    """
+    program = read_program(LOOP)
+    checked = verify(program, TOOLS, TASK)
+    assert {link.verdict for link in checked.links} == {"proven"}
+    assert not checked.gaps
+    made: list[str] = []
+
+    def notify(**arguments: Any) -> Any:
+        made.append(arguments["name"])
+        return {"sent": True}
+
+    tools = {
+        "search": lambda **_: {"count": len(entities), "entities": entities},
+        "notify": notify,
+    }
+    result = run(program, TOOLS, TASK, {"query": "q"}, tools)
+    assert (result.value, result.stopped, result.broken) == (len(entities), None, ())
+    assert made == [entity["name"] for entity in entities]
+    assert TASK.goal.is_valid(result.value)
 
 
 @pytest.mark.parametrize(
