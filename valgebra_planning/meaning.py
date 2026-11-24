@@ -217,4 +217,22 @@ def findings(library: Library) -> list[Finding]:
                     gate,
                 )
             )
+    return found + _unlisted(library)
+
+
+def _unlisted(library: Library) -> list[Finding]:
+    """Return each tool that may act a fresh rule's list of withdrawing calls leaves out.
+
+    The list is the author's claim that no other call changes what the rule's sources read, so
+    each tool it trusts so is named, for the author to read.
+    """
+    found = []
+    for name, flow in sorted(library.flows.items()):
+        if not flow.withdrawn_by:
+            continue
+        for tool, contract in sorted(library.tools.items()):
+            if "readOnlyHint" not in contract.hints and not flow.withdraws(tool, contract.hints):
+                sources = ", ".join(sorted(flow.sources))
+                said = f"{tool} may act, and its calls are taken to leave what {sources} read"
+                found.append(Finding(f"flow {name}", said, "proven"))
     return found

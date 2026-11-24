@@ -86,6 +86,15 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A fresh flow rule may name the calls that withdraw it: `"fresh"` takes a list of tools and hints
+  beside `true`. Under `true` every call that may act withdraws what the sources returned, so a
+  grasp the robot answered "replayed", which moves nothing, withdrew the pose before it and the
+  grasp made again was refused; under `["walk_to"]` the pose stays, and a walk still withdraws it.
+  The list is the author's claim that no other call changes what the sources read: the verifier,
+  the planner, the runner and the proxy read it alike, each link it decides names it, a name that
+  is no listed tool and no hint is refused at load, and `check` names each tool that may act and
+  the list leaves out. `Flow.withdrawn_by` holds the list and `Flow.withdraws` reads a call.
+
 - `Run.error`: a run ended by an error no block handles keeps the error's text where it lies in the
   set `"errorTexts"` names for the tool, as a proxy passes one on, and drops any other, so a
   caller reads why `get_spsa` failed, "run 0 is no tune", without a server's text reaching it

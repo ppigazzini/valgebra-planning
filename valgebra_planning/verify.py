@@ -22,7 +22,7 @@ from __future__ import annotations
 import itertools
 import json
 import random
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
@@ -326,6 +326,10 @@ class _Walk:
             path = replace(path, stale=stale, last=None, observed=frozenset())
         else:
             path = _rebound(path, end.item)
+        listed = _withdrawn(
+            path, self.flows, inner, lambda flow: _makes(end.body, self.contracts, flow.withdraws)
+        )
+        path = replace(path, withdrawn=listed)
         states = path.states
         while self.policies:
             ends, _ = self.iterate(
@@ -514,7 +518,10 @@ class _Walk:
         # A call that may act and answered with an error left an effect no postcondition reads.
         unknown = None if acts else path.last
         observed = frozenset() if acts else _unnamed(path.observed, call.result)
-        erred = _Path(either, path.tested, failing, stale, unknown, observed)
+        withdrawn = _withdrawn(
+            path, self.flows, env, lambda flow: flow.withdraws(call.tool, contract.hints)
+        )
+        erred = _Path(either, path.tested, failing, stale, unknown, observed, withdrawn)
         self.failure(call, contract, env, where, erred)
         observed = self.observing(call, env, path, observed, acts=acts)
         shown = self.shown(call, env, path)
@@ -538,7 +545,7 @@ class _Walk:
             if transition.result is not None and transition.reads(call.tool, contract.hints)
         ]
         if whole is None or not guards:
-            return [(defined, _Path(after, path.tested, left, stale, last, observed))]
+            return [(defined, _Path(after, path.tested, left, stale, last, observed, withdrawn))]
         cases = []
         for cell in _cells(whole.values, guards):
             stepped = tuple(
@@ -554,7 +561,8 @@ class _Walk:
                 returned=whole.returned,
             )
             narrowed = {**defined, Ref(call.result): held}
-            cases.append((narrowed, _Path(stepped, path.tested, left, stale, last, observed)))
+            stepping = _Path(stepped, path.tested, left, stale, last, observed, withdrawn)
+            cases.append((narrowed, stepping))
         return cases
 
     def repeated(
@@ -814,10 +822,7 @@ class _Walk:
         said = f"flow {flow.name}: {ref} from {tool} was returned"
         read: list[tuple[str, bool, tuple[str, ...]]] = []
         if flow.fresh:
-            hinted = not all(c.trusted for c in self.contracts.values())
-            assumed = ("the read-only annotations of the calls before it",) if hinted else ()
-            claim = f"{said} after every call before {call.tool} that may act"
-            read.append((claim, returner not in path.stale, assumed))
+            read.append(self.fresh_read(flow, call, said, returner, path))
         if flow.key:
             # The same version read at the same path, or the same literal: one value.
             source = dict(self.given.get(returner, ())).get(flow.key)
@@ -831,6 +836,28 @@ class _Walk:
             return
         claim = f"flow {flow.name}: {ref} from {tool} reaches {flow.sink}"
         self.inclusion(where, claim, ref, held, flow.endorsed, env)
+
+    def fresh_read(
+        self, flow: Flow, call: Call, said: str, returner: int, path: _Path
+    ) -> tuple[str, bool, tuple[str, ...]]:
+        """Return a fresh rule's claim on a source's value, whether it holds, and its assumption.
+
+        The value was returned after the last call before ``call`` that may act, which calls do
+        read off their annotations; or, where the rule names the calls that withdraw it, after
+        the last of those, the author's claim that no other changes what the sources read
+        (Mansoor et al. 2026, §4.1), which the link names.
+        """
+        if flow.withdrawn_by:
+            named = ", ".join(sorted(flow.withdrawn_by))
+            stale = dict(path.withdrawn).get(flow.name, frozenset())
+            claim = f"{said} after every call to {named} before {call.tool}"
+            sources = ", ".join(sorted(flow.sources))
+            assumed = (f"flow {flow.name}: only {named} change what {sources} read",)
+            return claim, returner not in stale, assumed
+        hinted = not all(c.trusted for c in self.contracts.values())
+        assumed = ("the read-only annotations of the calls before it",) if hinted else ()
+        claim = f"{said} after every call before {call.tool} that may act"
+        return claim, returner not in path.stale, assumed
 
     def literal(self, where: str, flow: Flow, const: Const) -> None:
         """Add the link of a literal a rule holds: proven only inside the endorsed set."""
@@ -1477,18 +1504,50 @@ def _acts(block: Block, contracts: Mapping[str, Contract]) -> bool:
     A call may act unless its tool's annotations say it is read-only; a tool no contract names
     may act.
     """
+    return _makes(block, contracts, lambda _, hints: "readOnlyHint" not in hints)
+
+
+def _makes(
+    block: Block, contracts: Mapping[str, Contract], reads: Callable[[str, frozenset[str]], bool]
+) -> bool:
+    """Return whether a call ``block`` may make, at any depth, is one ``reads`` holds of.
+
+    ``reads`` is given the tool and its hints, none for a tool no contract names.
+    """
     for call in block.calls:
         contract = contracts.get(call.tool)
-        if contract is None or "readOnlyHint" not in contract.hints:
+        if reads(call.tool, frozenset() if contract is None else contract.hints):
             return True
-        if call.on_error is not None and _acts(call.on_error, contracts):
+        if call.on_error is not None and _makes(call.on_error, contracts, reads):
             return True
     end = block.end
     if isinstance(end, Branch):
-        return _acts(end.then, contracts) or _acts(end.otherwise, contracts)
+        return _makes(end.then, contracts, reads) or _makes(end.otherwise, contracts, reads)
     if isinstance(end, For):
-        return _acts(end.body, contracts) or _acts(end.after, contracts)
+        return _makes(end.body, contracts, reads) or _makes(end.after, contracts, reads)
     return False
+
+
+def _withdrawn(
+    path: _Path,
+    flows: Sequence[Flow],
+    env: Mapping[Ref, _Held],
+    withdraws: Callable[[Flow], bool],
+) -> tuple[tuple[str, frozenset[int]], ...]:
+    """Return, for each fresh rule naming the calls that withdraw it, what they made stale.
+
+    It is the versions returned before the last such call: every value held where one is made.
+    """
+    held = dict(path.withdrawn)
+    returned = frozenset(value.returned for ref, value in env.items() if not ref.path)
+    return tuple(
+        (
+            flow.name,
+            held.get(flow.name, frozenset()) | (returned if withdraws(flow) else frozenset()),
+        )
+        for flow in flows
+        if flow.withdrawn_by
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1509,6 +1568,9 @@ class _Path:
     #: The reads that may show a call that answered with an error did not act: the call, the
     #: name the read is held under, and the postcondition's index.
     observed: frozenset[_Observed] = frozenset()
+    #: For each fresh rule naming the calls that withdraw it, the versions returned before the
+    #: last of those on the way here, by the rule's name (`_withdrawn`).
+    withdrawn: tuple[tuple[str, frozenset[int]], ...] = ()
 
 
 #: Whether a path may reach a bad state, read as a verdict on the policy holding.

@@ -419,7 +419,7 @@ class Gate:
             return None
         named = ", ".join(sorted(flow.sources))
         when = [
-            *(["since the last call that may act"] if flow.fresh else []),
+            *([_since(flow)] if flow.fresh else []),
             *([f"for this {flow.key}"] if flow.key else []),
         ]
         said = " and ".join(when)
@@ -435,12 +435,14 @@ class Gate:
         one is in flight, which `Gate.after` reads when the call's result arrives.
         """
         contract = self.contracts.get(tool)
-        if contract is None or "readOnlyHint" not in contract.hints:
+        hints = frozenset() if contract is None else contract.hints
+        if "readOnlyHint" not in hints:
             self._acts += 1
             self._preempting += tool in self.preempts
-            fresh = {flow.name for flow in self.flows if flow.fresh}
-            for held in [held for held in self.returned if held[0] in fresh]:
-                del self.returned[held]
+        # A rule naming the calls that withdraw it is withdrawn by those alone.
+        fresh = {flow.name for flow in self.flows if flow.withdraws(tool, hints)}
+        for held in [held for held in self.returned if held[0] in fresh]:
+            del self.returned[held]
         return self._acts, self._preempting > 0
 
     def landed(self, tool: str) -> None:
@@ -471,10 +473,10 @@ class Gate:
         if self.policed(tool):
             return True
         contract = self.contracts.get(tool)
-        acts = contract is not None and "readOnlyHint" not in contract.hints
+        hints = frozenset({"readOnlyHint"}) if contract is None else contract.hints
         return any(
             ((flow.fresh or flow.key) and (tool in flow.sources or tool == flow.tool))
-            or (flow.fresh and acts)
+            or flow.withdraws(tool, hints)
             for flow in self.flows
         )
 
@@ -976,6 +978,13 @@ def _unanswered(tool: str, error: Exception) -> types.CallToolResult:
         said = "its result was not read"
     text = types.TextContent(type="text", text=f"{tool} did not answer: {said}")
     return types.CallToolResult(content=[text], is_error=True)
+
+
+def _since(flow: Flow) -> str:
+    """Return the calls whose last one a fresh rule's value must postdate, as a refusal says."""
+    if not flow.withdrawn_by:
+        return "since the last call that may act"
+    return f"since the last call to {', '.join(sorted(flow.withdrawn_by))}"
 
 
 def _blocks(named: Iterable[str] | Mapping[str, Iterable[str]]) -> dict[str, frozenset[str]]:

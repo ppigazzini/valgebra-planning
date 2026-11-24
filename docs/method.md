@@ -211,7 +211,9 @@ verifier, which adds a link for it.
   inside the endorsed set: an identifier the program did not retrieve, the integrity leak of
   Sah et al. 2026, is refuted before the run. An `only` rule with `fresh` refutes a value its
   sources returned before a call that may act, as a task's `fresh` refutes an argument read
-  then; with `key`, an argument's name, a value from a source reaches the sink only from a call
+  then, or before a call it names where `fresh` lists the tools and hints that withdraw it, the
+  author's claim that no other call changes what the sources read, which each link it decides
+  names; with `key`, an argument's name, a value from a source reaches the sink only from a call
   that took at that argument the value the sink's call takes, so a distance measured for one
   object is refuted where it is passed for another. Both read the value a name holds on the
   path, not the name: each call's result, loop item and task input is a version of its own, so

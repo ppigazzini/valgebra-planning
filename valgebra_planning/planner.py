@@ -210,6 +210,9 @@ class _State:
     #: The calls on the path that answered with an error and may have acted: each tool, and the
     #: cells each argument it was given held.
     failed: tuple[tuple[str, tuple[tuple[str, frozenset[int]], ...]], ...] = ()
+    #: For each fresh rule naming the calls that withdraw it, the variables held before the last
+    #: of those on the path, by the rule's name.
+    withdrawn: tuple[tuple[str, frozenset[str]], ...] = ()
 
     def cells(self, ref: Ref) -> frozenset[int]:
         return dict(self.refs)[ref]
@@ -226,7 +229,12 @@ class _State:
 
     def signature(self) -> object:
         old = frozenset(cells for ref, cells in self.refs if ref.variable in self.stale)
-        return frozenset(cells for _, cells in self.refs), self.policed, self.tested, old
+        listed = tuple(
+            frozenset(cells for ref, cells in self.refs if ref.variable in names)
+            for _, names in self.withdrawn
+        )
+        held = frozenset(cells for _, cells in self.refs)
+        return held, self.policed, self.tested, old, listed
 
 
 @dataclass(slots=True)
@@ -596,7 +604,31 @@ class _Search:
                 for tool, given in made
                 if "readOnlyHint" not in self.contracts[tool].hints
             )
-        return state.but(made=made, failed=(*state.failed, (contract.name, record)), stale=stale)
+        return state.but(
+            made=made,
+            failed=(*state.failed, (contract.name, record)),
+            stale=stale,
+            withdrawn=self.withdrawn(state, contract),
+        )
+
+    def withdrawn(
+        self, state: _State, contract: Contract
+    ) -> tuple[tuple[str, frozenset[str]], ...]:
+        """Return what each fresh rule naming its withdrawing calls holds stale after a call.
+
+        A call the rule names makes every variable held before it stale for that rule.
+        """
+        held = dict(state.withdrawn)
+        names = frozenset(ref.variable for ref, _ in state.refs if ref not in self.literals)
+        return tuple(
+            (
+                flow.name,
+                held.get(flow.name, frozenset())
+                | (names if flow.withdraws(contract.name, contract.hints) else frozenset()),
+            )
+            for flow in self.flows
+            if flow.withdrawn_by
+        )
 
     def repeats(
         self, state: _State, contract: Contract, bindings: tuple[tuple[str, Ref], ...]
@@ -800,6 +832,7 @@ class _Search:
             origins=(*state.origins, (result, contract.name)),
             stale=stale,
             given=(*state.given, (result, bindings)),
+            withdrawn=self.withdrawn(state, contract),
         )
 
     def agree(self, state: _State, ref: Ref, slot: Slot) -> bool:
@@ -822,13 +855,15 @@ class _Search:
     ) -> bool:
         """Return whether a source's value was returned when a rule reading that requires.
 
-        With ``fresh``, after the last call on the path that may act; with ``key``, by a call
+        With ``fresh``, after the last call on the path that may act, or that the rule names
+        where it names the calls that withdraw it; with ``key``, by a call
         that took at the key the reference this call takes there. A value from elsewhere is the
         rest of the rule's.
         """
         if not (flow.fresh or flow.key) or origin not in flow.sources:
             return True
-        if flow.fresh and ref.variable in state.stale:
+        stale = dict(state.withdrawn).get(flow.name, ()) if flow.withdrawn_by else state.stale
+        if flow.fresh and ref.variable in stale:
             return False
         source = dict(dict(state.given).get(ref.variable, ())).get(flow.key)
         return not flow.key or (source is not None and source == dict(bindings).get(flow.key))

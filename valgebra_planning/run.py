@@ -229,8 +229,10 @@ class _Runner:
     last: tuple[str, dict[str, Any], Any] | None = None
     #: How many calls were made, each attempt of a retried one counted.
     made: int = 0
-    #: The place and tool of the last call made that may act, whatever it answered.
+    #: The place and tool of the last call made that may act, whatever it answered, and, for a
+    #: fresh rule naming the calls that withdraw it, of the last of those, by the rule's name.
     acted: tuple[int, str] = (-1, "")
+    withdrawn: dict[str, tuple[int, str]] = field(default_factory=dict)
     #: Where the values the tests on the path to this point read came from, and those of the
     #: paths reaching the end of an iteration of the loop being run.
     tested: frozenset[str] = frozenset()
@@ -465,9 +467,11 @@ class _Runner:
         origin = env[ref.variable][1]
         if (flow.fresh or flow.key) and origin.name in flow.sources:
             said = f"flow {flow.name}: {ref} from {origin.name} was returned"
-            at, acting = self.acted
+            listed = flow.withdrawn_by
+            at, acting = self.withdrawn.get(flow.name, (-1, "")) if listed else self.acted
             if flow.fresh and at > origin.made:
-                return f"{said} before {acting}, which may act"
+                why = "which the rule names" if flow.withdrawn_by else "which may act"
+                return f"{said} before {acting}, {why}"
             given = origin.arguments or {}
             if flow.key and (
                 flow.key not in given
@@ -493,13 +497,9 @@ class _Runner:
             message = f"{call.tool} is no tool the run was given"
             self.broken.append(message)
             return Run(None, None, tuple(self.broken), message, Refusal("given", call.tool))
-        acts = "readOnlyHint" not in self.contracts[call.tool].hints
         unanswered, error = False, None
         for _ in range(ATTEMPTS if call.retry else 1):
-            # A call that may act may have acted whatever it answers.
-            if acts:
-                self.acted = (self.made, call.tool)
-            self.made += 1
+            self.sent(call.tool)
             answer = yield (call.tool, arguments)
             if not isinstance(answer, _Raised):
                 return (answer,)
@@ -545,6 +545,19 @@ class _Runner:
             return None
         text = str(error)
         return text if allowed.is_valid(text) else None
+
+    def sent(self, tool: str) -> None:
+        """Count a call made: the last that may act, and the last each fresh rule's list names.
+
+        A call that may act may have acted whatever it answers, so it is counted when made.
+        """
+        hints = self.contracts[tool].hints
+        if "readOnlyHint" not in hints:
+            self.acted = (self.made, tool)
+        for flow in self.flows:
+            if flow.withdrawn_by and flow.withdraws(tool, hints):
+                self.withdrawn[flow.name] = (self.made, tool)
+        self.made += 1
 
     def erred(self, call: Call, arguments: dict[str, Any], *, unanswered: bool) -> Run | None:
         """Hold each policy where a call that answered with an error, or with none, leaves it.

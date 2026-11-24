@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from valgebra_planning._valgebra import Validator, compile_schema
-from valgebra_planning.contracts import Contract, flag, keys_read, scope_of
+from valgebra_planning.contracts import MCP_HINTS, Contract, flag, keys_read, scope_of
 
 __all__ = ["Flow", "read_flow"]
 
@@ -61,6 +61,22 @@ class Flow:
     #: Whom a proxy holds what the sources returned for: every client together, or each
     #: principal a token names apart; a program runs as one principal.
     scope: str = "shared"
+    #: The tools and hints whose calls withdraw what a ``fresh`` rule's sources returned, the
+    #: author's claim that no other call changes what they read; empty, every call that may act.
+    withdrawn_by: frozenset[str] = frozenset()
+
+    def withdraws(self, tool: str, hints: frozenset[str]) -> bool:
+        """Return whether a call to ``tool`` withdraws what the rule's sources returned.
+
+        Under ``fresh`` a call that may act does, its annotations saying it is not read-only
+        (Mansoor et al. 2026, §4.1); where the rule names the calls that withdraw it, only a call
+        to a tool it names or carrying a hint it names does.
+        """
+        if not self.fresh:
+            return False
+        if not self.withdrawn_by:
+            return "readOnlyHint" not in hints
+        return tool in self.withdrawn_by or bool(hints & self.withdrawn_by)
 
     def holds(self, origin: str | None) -> bool:
         """Return whether a value from ``origin`` is held to the rule; None is a literal."""
@@ -83,7 +99,8 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
 
     It holds ``name``, ``sources``, ``sink`` as ``tool.argument``, and optionally the
     ``endorsed`` JSON Schema, ``implicit`` and ``only``, and with ``only``, ``fresh`` and
-    ``key``. A source is a tool's name or a task input's. A key it does not read is a
+    ``key``, ``fresh`` true or the tools and hints whose calls withdraw what the sources
+    returned. A source is a tool's name or a task input's. A key it does not read is a
     `ValueError` naming it, and so are a sink that names no argument and ``fresh`` or ``key``
     without ``only``, which would admit a value a rule refusing its sources' values refuses; a
     flag that is no boolean, and a ``key`` that is no argument's name, is a `TypeError`.
@@ -100,7 +117,8 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
         message = f"{where}: the sink {spec['sink']!r} is no tool.argument"
         raise ValueError(message)
     implicit, only = flag(spec, "implicit", where), flag(spec, "only", where)
-    fresh, key = flag(spec, "fresh", where), spec.get("key", "")
+    fresh, withdrawn_by = _fresh(spec.get("fresh", False), where)
+    key = spec.get("key", "")
     if not isinstance(key, str):
         message = f"{where}: 'key' is an argument's name, not {key!r}"
         raise TypeError(message)
@@ -121,7 +139,22 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
         fresh=fresh,
         key=key,
         scope=scope_of(spec, where),
+        withdrawn_by=withdrawn_by,
     )
+
+
+def _fresh(given: object, where: str) -> tuple[bool, frozenset[str]]:
+    """Return whether a rule reads freshness, and the tools and hints its list names.
+
+    ``fresh`` is a boolean, or a list of tools and hints whose calls withdraw what the sources
+    returned, which reads freshness against those calls alone.
+    """
+    if isinstance(given, bool):
+        return given, frozenset()
+    if isinstance(given, list) and given and all(isinstance(name, str) for name in given):
+        return True, frozenset(given)
+    message = f"{where}: 'fresh' is a boolean or a list of tools and hints, not {given!r}"
+    raise TypeError(message)
 
 
 def check_flow(
@@ -145,4 +178,8 @@ def check_flow(
     for source in sorted(flow.sources - contracts.keys() - inputs):
         named = "no tool listed and no task's input" if inputs else "no tool listed"
         message = f"{where}: the source {source!r} names {named}"
+        raise ValueError(message)
+    hints = MCP_HINTS.union(*(listed.hints for listed in contracts.values()))
+    for name in sorted(flow.withdrawn_by - contracts.keys() - hints):
+        message = f"{where}: 'fresh' names {name!r}, no tool listed and no hint"
         raise ValueError(message)

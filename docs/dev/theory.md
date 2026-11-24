@@ -348,13 +348,14 @@ to pass an authentication step commits an integrity leak (Sah et al. 2026, §4.3
 a flow rule holds every origin but its sources: a literal, a task input or a result of a tool
 it does not name reaches the sink only inside the endorsed set. With `fresh`, a value its
 sources returned before a call that may act reaches the sink no more, an action changing what a
-reading before it reported (Mansoor et al. 2026, §4.1); with `key`, a value reaches the sink only
+reading before it reported (Mansoor et al. 2026, §4.1), or before a call the rule names where it
+lists the calls that withdraw it, an assumption each link it decides names; with `key`, a value reaches the sink only
 from a source call that took at that argument the value the sink's call takes, the trace sliced
 by the key's value (Roşu and Chen 2012, Def. 11). **[LOAD-BEARING: grounded-identifiers]**
 
-IMPLEMENTED-BY: flows.py, verify.py::_Walk.current, proxy.py::Gate.made
+IMPLEMENTED-BY: flows.py, flows.py::Flow.withdraws, verify.py::_Walk.current, verify.py::_Walk.fresh_read, proxy.py::Gate.made
 
-HELD-BY: test_only_refutes_an_identifier_written_into_the_program, test_only_refutes_an_input_or_a_tool_it_does_not_name, test_a_rule_reads_fresh_and_key_with_only_alone, test_a_fresh_keyed_rule_admits_the_latest_reading_of_the_same_object, test_the_planner_grasps_at_the_distance_measured_for_its_object, test_a_proxy_admits_a_fresh_keyed_rule_s_latest_reading_of_the_same_object, test_a_fresh_rule_lets_a_value_inside_the_endorsed_set_through_after_an_action, test_a_proxy_lets_a_value_inside_a_fresh_rule_s_endorsed_set_through_after_an_action, test_only_lets_a_literal_inside_the_endorsed_set_through, test_the_planner_grounds_every_identifier_a_rule_names, test_a_task_naming_an_input_as_a_rule_s_source_tool_is_refused
+HELD-BY: test_only_refutes_an_identifier_written_into_the_program, test_only_refutes_an_input_or_a_tool_it_does_not_name, test_a_rule_reads_fresh_and_key_with_only_alone, test_a_fresh_keyed_rule_admits_the_latest_reading_of_the_same_object, test_the_planner_grasps_at_the_distance_measured_for_its_object, test_a_proxy_admits_a_fresh_keyed_rule_s_latest_reading_of_the_same_object, test_a_fresh_rule_lets_a_value_inside_the_endorsed_set_through_after_an_action, test_a_proxy_lets_a_value_inside_a_fresh_rule_s_endorsed_set_through_after_an_action, test_only_lets_a_literal_inside_the_endorsed_set_through, test_the_planner_grounds_every_identifier_a_rule_names, test_a_task_naming_an_input_as_a_rule_s_source_tool_is_refused, test_a_listed_rule_is_withdrawn_by_the_calls_it_names, test_a_replayed_grasp_keeps_the_reading_a_listed_rule_does_not_withdraw
 
 **A value's provenance is the path's, not its name's.** A `fresh` or `key` rule reads when and
 for what a value was returned, facts of the value: CaMeL tags each value with its provenance

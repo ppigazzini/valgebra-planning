@@ -735,6 +735,13 @@ first. Both read what the server says: a tool annotated read-only that moves the
 nothing. Before the run, the planner and the verifier read the same flow, and refute a program
 passing a distance read before a call that may act, or one returned for another object.
 
+Every call that may act withdraws a distance under `"fresh": true`, a grasp the robot answered
+"replayed" among them, though no grasp moves the robot. A rule may name the calls that do,
+`"fresh": ["walk_to"]`, tools or hints: a distance then reaches the grasp after any other call,
+and a walk still withdraws it. The list is the author's claim that nothing else changes what a
+pose reads, so every link it decides names it, and `check` names each tool that may act and the
+list leaves out.
+
 ## A contract a plan can mean
 
 The planner and the critic pass a value to an argument wherever valgebra proves it inside the
