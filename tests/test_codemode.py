@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import dataclasses
 import json
 from pathlib import Path
 from typing import Any
@@ -10,8 +11,9 @@ import pytest
 from valgebra_planning.codemode import PREAMBLE, repair, stubs
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import ProgramError, critique, read_program
+from valgebra_planning.library import read_library
 from valgebra_planning.planner import plan
-from valgebra_planning.program import render
+from valgebra_planning.program import alias, aliases, render
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 LISTING = json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
@@ -279,3 +281,60 @@ def test_a_program_error_names_the_form_the_reader_reads(source: str, says: str)
     with pytest.raises(ProgramError) as refused:
         read_program(source)
     assert says in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    ("name", "called"),
+    [
+        ("find_parcel", "find_parcel"),
+        ("g1.grasp", "g1_grasp"),
+        ("get-run", "get_run"),
+        ("class", "class_"),
+        ("3d.scan", "_3d_scan"),
+    ],
+)
+def test_a_name_python_does_not_spell_is_called_by_its_alias(name: str, called: str) -> None:
+    assert alias(name) == called
+    assert called.isidentifier()
+
+
+def test_a_dotted_library_is_planned_written_and_read_back_by_its_aliases() -> None:
+    # MCP allows dots in a tool's name, and a proxy may prefix each with its server's.
+    dotted = {
+        f"parcels.{name}": dataclasses.replace(contract, name=f"parcels.{name}")
+        for name, contract in TOOLS.items()
+    }
+    planned = plan(dotted, SETTLE).program
+    assert planned is not None
+    text = render(planned)
+    assert "parcels_find_parcel(" in text
+    assert "parcels." not in text
+    checked = critique(text, dotted, SETTLE)
+    assert checked.accepted
+    assert {call.tool for call in checked.program.calls} <= set(dotted)
+    written = stubs(dotted)
+    ast.parse(written)
+    assert "def parcels_find_parcel(" in written
+    assert "The tool 'parcels.find_parcel', called by this name." in written
+
+
+@pytest.mark.parametrize("names", [["g1.grasp", "g1_grasp"], ["a-b", "a.b"], ["class", "class_"]])
+def test_two_tools_one_alias_spells_are_refused_naming_both(names: list[str]) -> None:
+    with pytest.raises(ValueError, match="are both called"):
+        aliases(names)
+
+
+def test_an_attribute_call_is_refused_where_its_last_name_was_read() -> None:
+    with pytest.raises(ProgramError, match="line 1: a tool is called by its name"):
+        read_program("c1 = g1.find_parcel(tracking=tracking)\nreturn c1\n")
+    assert read_program("c1 = tools.find_parcel(tracking=tracking)\nreturn c1\n")
+
+
+def test_a_library_whose_aliases_collide_is_refused_at_load(tmp_path: Path) -> None:
+    listing = json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))
+    twin = next(tool for tool in listing["tools"] if tool["name"] == "find_parcel")
+    listing["tools"].append({**twin, "name": "find-parcel"})
+    (tmp_path / "tools.json").write_text(json.dumps(listing), encoding="utf-8")
+    (tmp_path / "tasks.json").write_text('{"tasks": []}', encoding="utf-8")
+    with pytest.raises(ValueError, match="'find_parcel' and 'find-parcel' are both called"):
+        read_library(tmp_path)

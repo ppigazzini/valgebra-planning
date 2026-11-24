@@ -32,7 +32,19 @@ from valgebra_planning.contracts import Contract, Postcondition, Task
 from valgebra_planning.flows import Flow
 from valgebra_planning.mining import SlotKey, Types
 from valgebra_planning.policy import Policy
-from valgebra_planning.program import Block, Branch, Call, Const, For, Next, Ref, Return, Stop
+from valgebra_planning.program import (
+    Block,
+    Branch,
+    Call,
+    Const,
+    For,
+    Next,
+    Ref,
+    Return,
+    Stop,
+    aliases,
+    named,
+)
 from valgebra_planning.verify import Link, Verification, verify
 
 __all__ = ["Critique", "ProgramError", "critique", "read_program"]
@@ -92,11 +104,21 @@ def _json(value: Any) -> bool:
 
 
 def _tool(node: ast.expr) -> str:
+    """Read the name a tool is called by: an identifier, its alias where the name is none.
+
+    A typed tool API's namespace, ``tools.find_parcel``, is read as the name after it. Any
+    other attribute is refused, where its last name was read: ``g1.grasp`` called ``grasp``,
+    a tool of another name, while a tool named ``g1.grasp`` is called by its alias.
+    """
     if isinstance(node, ast.Name):
         return node.id
-    if isinstance(node, ast.Attribute):
+    if (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "tools"
+    ):
         return node.attr
-    raise _fail(node, "a tool is called by its name")
+    raise _fail(node, "a tool is called by its name, or by its alias where the name has a dot")
 
 
 def _named(node: ast.expr) -> str | None:
@@ -559,9 +581,10 @@ def critique(
     ``errors``, ``policies``, ``flows`` and ``postconditions`` are held as
     `valgebra_planning.verify.verify` holds them. Mined ``types`` decide nothing: a binding
     crossing two types the observed calls show is a note, and the program is accepted or not on
-    its links alone. Raises `ProgramError` for a program the reader does not read.
+    its links alone. Raises `ProgramError` for a program the reader does not read. A tool
+    whose name Python does not spell is called by its alias (`valgebra_planning.program.alias`).
     """
-    program = read_program(source)
+    program = named(read_program(source), aliases(contracts))
     checked = verify(
         program,
         contracts,

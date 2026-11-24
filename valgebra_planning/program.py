@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import json
 import keyword
-from dataclasses import dataclass
+import re
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, replace
 from typing import Any
 
 __all__ = [
@@ -125,7 +127,7 @@ class Branch:
     def against(self) -> str:
         """Return the set as a program writes it."""
         if self.tool:
-            return f"{self.tool}.{self.argument}"
+            return f"{alias(self.tool)}.{self.argument}"
         # Each value as a Python literal, as a call writes a constant, so the test reads back.
         return "(" + "".join(f"{v!r}, " for v in self.values).rstrip(" ") + ")"
 
@@ -156,6 +158,64 @@ class Block:
     end: Return | Stop | Branch | For | Next
 
 
+def alias(name: str) -> str:
+    """Return the identifier a program calls a tool by: its name, where Python spells one.
+
+    MCP allows a tool's name dots and hyphens, and a proxy may prefix one with its server's
+    (MCP 2026-07-28, server/tools), so ``g1.grasp`` and ``get-run`` name tools no Python call
+    spells. Such a name is called by an alias: each character outside ``[A-Za-z0-9_]`` written
+    ``_``, a leading digit taking a leading ``_`` and a keyword a trailing ``_``, as
+    ``g1_grasp``, ``get_run`` and ``class_``.
+    """
+    if name.isidentifier() and not keyword.iskeyword(name):
+        return name
+    spelled = re.sub(r"[^A-Za-z0-9_]", "_", name)
+    if not spelled or spelled[0].isdigit():
+        spelled = "_" + spelled
+    return spelled + "_" if keyword.iskeyword(spelled) else spelled
+
+
+def aliases(names: Iterable[str]) -> dict[str, str]:
+    """Return each tool's name by the alias a program calls it by; collisions are a `ValueError`.
+
+    Two names one alias spells, or an alias spelling another tool's own name, would make one
+    call read as two tools, so the library is refused naming both.
+    """
+    named: dict[str, str] = {}
+    listed = set(names)
+    for name in sorted(listed):
+        spelled = alias(name)
+        other = named.get(spelled) or (spelled if spelled != name and spelled in listed else None)
+        if other is not None:
+            message = f"tools {other!r} and {name!r} are both called {spelled!r} in a program"
+            raise ValueError(message)
+        named[spelled] = name
+    return named
+
+
+def named(block: Block, names: Mapping[str, str]) -> Block:
+    """Return ``block`` with each tool an alias calls written by its name (`aliases`)."""
+    calls = tuple(
+        replace(
+            call,
+            tool=names.get(call.tool, call.tool),
+            on_error=None if call.on_error is None else named(call.on_error, names),
+        )
+        for call in block.calls
+    )
+    end = block.end
+    if isinstance(end, Branch):
+        end = replace(
+            end,
+            tool=names.get(end.tool, end.tool),
+            then=named(end.then, names),
+            otherwise=named(end.otherwise, names),
+        )
+    elif isinstance(end, For):
+        end = replace(end, body=named(end.body, names), after=named(end.after, names))
+    return Block(calls, end)
+
+
 def render(block: Block, indent: str = "") -> str:
     """Return the program as Python-like text, one step a line.
 
@@ -166,7 +226,7 @@ def render(block: Block, indent: str = "") -> str:
         raise TypeError(message)
     lines = []
     for call in block.calls:
-        made = f"{call.tool}(" + ", ".join(f"{name}={ref}" for name, ref in call.bindings) + ")"
+        made = f"{alias(call.tool)}(" + ", ".join(f"{n}={ref}" for n, ref in call.bindings) + ")"
         line = f"{call.result} = " + (f"retry({made})" if call.retry else made)
         if call.on_error is None:
             lines.append(f"{indent}{line}")

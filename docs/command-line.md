@@ -20,7 +20,10 @@ A library is a directory (`valgebra_planning/library.py` reads it):
 | a file `types` names | `{"calls": [...]}`, each an observed call: `tool`, `arguments`, `result`, and `"planned": true` where a planned program made it, whose arguments then link nothing; or `{"inputs": {...}}`, the values a run started with, which types each task input it shows; a tool listed without an `outputSchema` gets one shaped from its results there, an assumption every binding resting on it names |
 
 A tool without an `outputSchema` can be called, and nothing it returns can fill another call's
-argument: its result is a set no argument is proven to hold. `examples/parcels` is a library
+argument: its result is a set no argument is proven to hold. A tool whose name Python does not
+spell, as MCP allows a dotted or hyphened one, is called in a program by its alias, each
+character outside `[A-Za-z0-9_]` written `_`: `g1.grasp` is `g1_grasp`. Two tools one alias
+spells are refused naming both. `examples/parcels` is a library
 holding every file.
 
 A rule means what its keys say. A key no reader reads, in a file, a task, a policy, a transition or

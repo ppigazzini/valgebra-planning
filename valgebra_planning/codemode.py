@@ -19,6 +19,7 @@ from typing import Any, Literal
 
 from valgebra_planning.contracts import Contract, Task
 from valgebra_planning.critic import Critique, ProgramError, critique
+from valgebra_planning.program import alias
 
 __all__ = ["Repair", "feedback", "repair", "stub", "stubs"]
 
@@ -80,8 +81,11 @@ def stub(contract: Contract) -> str:
         if returns is None
         else f"Returns, as JSON Schema: {json.dumps(returns, sort_keys=True)}"
     )
+    called = alias(contract.name)
+    if called != contract.name:
+        doc.insert(0, f"The tool {contract.name!r}, called by this name.")
     body = "\n\n".join(f"    {line}" for line in doc)
-    signature = f"def {contract.name}(*, {arguments})" if arguments else f"def {contract.name}()"
+    signature = f"def {called}(*, {arguments})" if arguments else f"def {called}()"
     return f'{signature} -> {_hint(returns)}:\n    """{body.strip()}\n    """\n    ...\n'
 
 

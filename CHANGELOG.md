@@ -6,6 +6,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A tool whose name Python does not spell is called by an alias. MCP allows a tool's name dots
+  and hyphens, and a proxy may prefix each with its server's, so `g1.grasp` named a tool no
+  program could call, and the reader read `g1.grasp(...)` as a call of `grasp`. `alias` writes
+  each character outside `[A-Za-z0-9_]` as `_`, a leading digit taking a leading `_` and a keyword
+  a trailing one; `stubs` and `render` write it, the critic reads it back as the tool's name, an
+  attribute call other than `tools.name` is refused, and a library two of whose tools one alias
+  spells is refused at load naming both.
+
 ### Fixed
 
 - The program text reads as Python runs it. An `if` with no `else` before more statements made

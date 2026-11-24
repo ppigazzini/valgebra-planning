@@ -40,6 +40,7 @@ from valgebra_planning.contracts import (
 from valgebra_planning.flows import Flow, read_flow
 from valgebra_planning.mining import Types, infer_outputs, mine
 from valgebra_planning.policy import Policy, read_policy
+from valgebra_planning.program import aliases
 
 __all__ = [
     "Library",
@@ -277,6 +278,9 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
         )
         raise ValueError(msg)
     tools = {name: replace(contract, trusted=trusted) for name, contract in tools.items()}
+    # A program calls a tool Python does not spell by its alias; two tools one alias spells
+    # would read as one, so the library is refused naming both.
+    aliases(tools)
     declared = document.get("postconditions", [])
     if not isinstance(declared, list):
         msg = f"tools.json: 'postconditions' is a list, not {type(declared).__name__}"
