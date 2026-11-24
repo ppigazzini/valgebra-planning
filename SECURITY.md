@@ -16,7 +16,7 @@ fail closed. Please report, privately:
 - **A program accepted that can pass a value outside a tool's argument.** The verifier or the
   critic accepts a program, and some outputs inside the tools' output schemas lead it to call a
   tool with an argument record outside that tool's input schema, or to break a rule its task
-  names: a policy, a flow rule, a retry or an error handled.
+  names: a policy, a flow rule, a retry, an error handled or a constant its task fixes.
 - **A check passed on.** With `enforce` left on, the runner makes a call, binds a result or
   returns a value whose check broke; or the proxy forwards a call, or returns a result, that
   breaks a contract, a policy step or a flow rule, or answers a result whose output schema it

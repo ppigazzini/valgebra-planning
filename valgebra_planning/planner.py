@@ -353,7 +353,13 @@ class _Search:
         return None
 
     def call(self, state: _State, contract: Contract, depth: int, *, weak: bool) -> Block | None:
-        required = [slot for slot in contract.arguments if slot.required]
+        # An argument the task fixes is written whether the tool requires it or not: left out,
+        # the tool reads its own default, which no task fixed.
+        required = [
+            slot
+            for slot in contract.arguments
+            if slot.required or (contract.name, slot.path[0]) in self.fixed
+        ]
         full: dict[str, list[Ref]] = {}
         partial: dict[str, list[Ref]] = {}
         for slot in required:

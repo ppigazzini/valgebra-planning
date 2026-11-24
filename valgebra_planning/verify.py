@@ -1235,14 +1235,18 @@ class _Walk:
         """Add a link for each argument the task fixes: the call passes the task's constant.
 
         A task's intent fixes the value, as the action a confirmation asks about, so a program
-        passing another, a literal or a held value that may differ, is refuted there.
+        passing another, a literal or a held value that may differ, is refuted there, and so is
+        one leaving the argument out: the tool then reads its own default, which no task fixed.
         """
         given = dict(call.bindings)
         for tool, argument, value in self.task.constants:
-            if tool != call.tool or argument not in given:
+            if tool != call.tool:
                 continue
-            ref = given[argument]
             claim = f"{call.tool}.{argument} is the task's {Const.of(value)}"
+            ref = given.get(argument)
+            if ref is None:
+                self.links.append(Link(where, claim, "refuted"))
+                continue
             if isinstance(ref, Const):
                 same = ref == Const.of(value)
                 found = () if same else (ref.value,)

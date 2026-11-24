@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import random
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -12,6 +13,7 @@ from valgebra_planning.cells import abstract
 from valgebra_planning.contracts import Contract, read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.flows import read_flow
+from valgebra_planning.library import read_library
 from valgebra_planning.mining import mine
 from valgebra_planning.planner import plan, predicates
 from valgebra_planning.policy import read_policy
@@ -573,6 +575,28 @@ def test_a_program_passing_another_value_than_the_task_fixes_is_refuted() -> Non
     links = verify(read_program(source), _enumerated(), task).links
     (wrong,) = [link for link in links if link.claim.startswith("confirm_with_user.action is")]
     assert (wrong.verdict, wrong.counterexample) == ("refuted", ("walk",))
+
+
+def test_a_constant_on_an_optional_argument_is_written_and_held() -> None:
+    """An argument the task fixes is the task's whether the tool requires it or not.
+
+    Left out, the tool reads its own default, which no task fixed: the robot's confirmation
+    takes its action as an optional argument, so the plan writes it and the verifier refutes a
+    call leaving it out.
+    """
+    robot = read_library(Path(__file__).parent.parent / "examples" / "robot-skills")
+    task = robot.problem("confirm a grasp").task
+    found = plan(robot.tools, task)
+    assert found.program is not None
+    assert "confirm_with_user(object_id=o, action='grasp')" in render(found.program)
+    assert verify(found.program, robot.tools, task).proven
+    claim = "confirm_with_user.action is the task's 'grasp'"
+    for source, verdict in (
+        ("c1 = confirm_with_user(object_id=o)\nreturn c1.confirmed\n", "refuted"),
+        ('c1 = confirm_with_user(object_id=o, action="grasp")\nreturn c1.confirmed\n', "proven"),
+    ):
+        links = verify(read_program(source), robot.tools, task).links
+        assert [link.verdict for link in links if link.claim == claim] == [verdict]
 
 
 def test_a_constant_at_a_sink_an_only_flow_holds_is_refused() -> None:

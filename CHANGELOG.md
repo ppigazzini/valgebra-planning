@@ -89,6 +89,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A task's constant holds on an optional argument. The planner wrote the arguments a tool
+  requires, so a constant the task fixes on an optional one, as the action a confirmation asks
+  about, was never written, and the verifier skipped a call leaving it out: the tool read its own
+  default, `confirm_with_user(object_id=o)` asking about no action, and `search_actions` reading
+  every event. The planner writes each argument the task fixes, required or not, and the verifier
+  refutes a call leaving one out. `SECURITY.md` names a constant a task fixes among the rules a
+  program accepted must not break.
+
 - A weak program reaches the return it counts. A return under a test no value meets, as
   `if c1.status in ("lost",):` where the status is `spoken` or `queued`, is proven of no value,
   and counted the program weak though it only stops; `repair(accept="weak")` ended on it.

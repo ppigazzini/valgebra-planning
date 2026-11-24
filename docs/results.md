@@ -66,14 +66,14 @@ scan's item for that object. Each task is planned and verified as the parcels' a
 | move a joint | weak | 4 of 4 | 1 | 12 (0) |
 | say | weak | 2 of 2 | 1 | 13 (0) |
 | sweep a scan | strong | 4 of 4 | 0 | 12 (0) |
-| confirm a grasp | strong | 2 of 2 | 0 | 13 (0) |
+| confirm a grasp | strong | 4 of 4 | 0 | 13 (0) |
 
 - A pick under `measured` measures the object and grasps it at once. Under `scanned` no program
   is found within 4 calls and tests, and under a policy refusing every grasp none can be.
 - A joint's speed is read from the pose estimate and tested into the bound before the move; the
   speech stops where the status is not `spoken`.
-- The confirmation is asked with the object alone: the action the task fixes,
-  `confirm_with_user.action`, is an optional argument, and the planner leaves it out.
+- The confirmation is asked with the action the task fixes, `confirm_with_user.action`, though
+  the tool takes it as an optional argument.
 
 The library also holds 24 programs written as an agent writes one (`programs.json`). Each is
 read, critiqued under its task's rules, and run where a row of the file scripts the tools'
@@ -105,7 +105,7 @@ where a stop the task tolerates is left, and `proven, no return` where no execut
 | a test against a complex number | sweep a scan | refused, line 2 |  |
 | an argument named for a keyword | sweep a scan | refused, line 1 |  |
 | a grasp at a reading the walk has made stale | pick, measured | refuted: `flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act` | refused: estimate_pose, walk_to |
-| a confirmation leaving out the action the task fixes | confirm a grasp | accepted |  |
+| a confirmation leaving out the action the task fixes | confirm a grasp | refuted: `confirm_with_user.action is the task's 'grasp'` |  |
 
 - Five programs grasp at a reading or a detection through a name the program rebinds before the
   grasp: in an error block, after a second detection, in a branch the grasp is not on, and in a
@@ -126,7 +126,8 @@ where a stop the task tolerates is left, and `proven, no return` where no execut
   block, are made for each item.
 - Five texts are refused by their line: `in` against a string, a test listing bytes, an ellipsis
   or a complex number, and an argument named `from`.
-- A confirmation leaving out the action the task fixes is accepted.
+- A confirmation leaving out the action the task fixes is refuted: the tool would read its own
+  default.
 
 ## Libraries of growing size
 

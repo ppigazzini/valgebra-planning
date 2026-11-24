@@ -158,8 +158,8 @@
       "tests": 0,
       "stops": 0,
       "steps": 1,
-      "links": 2,
-      "proven": 2,
+      "links": 4,
+      "proven": 4,
       "refuted": 0,
       "undecided": 0,
       "assumed": 0
@@ -573,14 +573,18 @@
     {
       "program": "a confirmation leaving out the action the task fixes",
       "task": "confirm a grasp",
-      "accepted": true,
-      "verified": true,
-      "weak": true,
-      "links": 2,
+      "accepted": false,
+      "verified": false,
+      "weak": false,
+      "links": 3,
       "proven": 2,
-      "refuted": [],
+      "refuted": [
+        ": confirm_with_user.action is the task's 'grasp'"
+      ],
       "undecided": [],
-      "notes": []
+      "notes": [
+        "refuted: confirm_with_user.action is the task's 'grasp'"
+      ]
     }
   ]
 }

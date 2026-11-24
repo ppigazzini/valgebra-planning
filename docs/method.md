@@ -404,7 +404,8 @@ ones.
   constant but those its task fixes, tests no key but an acted postcondition's, and loops over
   no array. A program written elsewhere may do all three, and each is checked like any value. A task fixes the constants its
   intent gives in `constants`, as the action a confirmation asks about: the planner writes each
-  where its argument is, the verifier holds every call to the tool to it, and a flow rule judges
+  where its argument is, required or not, the verifier holds every call to the tool to it and
+  refutes one leaving it out, since the tool then reads its own default, and a flow rule judges
   it as the literal it is. A choice the planner should not make, as which hand grasps, is a task
   input, typed by its enum.
 - **No Python door.** A tool is read from the JSON Schema its server publishes, never from a
