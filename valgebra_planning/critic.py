@@ -267,15 +267,22 @@ def _block(
 def read_program(source: str) -> Block:
     """Read a program from Python source: one function, or a block of statements.
 
-    Raises `ProgramError` naming the line of a construct it does not read.
+    Raises `ProgramError` naming the line of a construct it does not read, and the line of
+    text Python cannot parse, as Python names it.
     """
     try:
         module = ast.parse(source)
-    except SyntaxError:
-        # A bare block may `return` outside a function, which Python refuses to parse.
-        module = ast.parse(
-            "def plan():\n" + "\n".join("    " + line for line in source.splitlines())
-        )
+    except SyntaxError as unparsed:
+        # A block indented whole, as one copied from inside a function is, parses as a
+        # function's body; a bare `return` parses on its own.
+        try:
+            module = ast.parse(
+                "def plan():\n" + "\n".join("    " + line for line in source.splitlines())
+            )
+        except SyntaxError:
+            line = unparsed.lineno if unparsed.lineno is not None else "?"
+            what = f"line {line}: {unparsed.msg}"
+            raise ProgramError(what) from unparsed
     body = module.body
     if len(body) == 1 and isinstance(body[0], (ast.FunctionDef, ast.AsyncFunctionDef)):
         body = body[0].body

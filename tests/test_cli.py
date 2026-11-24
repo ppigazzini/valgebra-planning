@@ -101,6 +101,15 @@ def test_a_program_the_reader_refuses_exits_2(
     assert str(bad) in capsys.readouterr().err
 
 
+def test_a_program_python_cannot_parse_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bad = tmp_path / "bad.py"
+    bad.write_text("c1 = find_parcel(\nreturn c1\n", encoding="utf-8")
+    assert main(["critique", PARCELS, "--task", "return a parcel", str(bad)]) == 2
+    assert "line 1: '(' was never closed" in capsys.readouterr().err
+
+
 # `--server` is split as a POSIX shell splits it, so the interpreter's path is quoted.
 SERVER = shlex.join([sys.executable, str(Path(__file__).parent / "parcel_server.py")])
 

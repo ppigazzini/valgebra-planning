@@ -6,6 +6,15 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Text Python cannot parse is refused by its own line. `read_program` parsed a text again as a
+  function's body when Python refused it, and the second parse's `SyntaxError` escaped, its line
+  one past the text's: no `ProgramError`, so `repair` raised in its first round and the command
+  line exited 1 with a traceback. Text neither parse reads is a `ProgramError` naming the line and
+  message of the first, `line 1: '(' was never closed`, which `repair` hands back for a round and
+  the command line exits 2 on. A block indented whole still reads as a function's body.
+
 ## [0.0.7] - 2026-11-24
 
 A release of the proxy and the planner. Four defects of 0.0.6 that let a proxy admit a call a

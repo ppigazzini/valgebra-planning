@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -217,3 +218,23 @@ def test_a_test_of_listed_values_renders_as_python_and_reads_back(values: tuple[
     )
     text = render(program)
     assert render(read_program(text)) == text
+
+
+@pytest.mark.parametrize(
+    ("source", "named"),
+    [
+        ("c1 = find_parcel(parcel_id=parcel_id\nreturn c1\n", "line 1: '(' was never closed"),
+        ("c1 = find_parcel(parcel_id=parcel_id)\n  return c1\n", "line 2: unexpected indent"),
+    ],
+)
+def test_text_python_cannot_parse_is_refused_by_its_own_line(source: str, named: str) -> None:
+    """A `SyntaxError` both readings raise is a `ProgramError` at the source's line.
+
+    The reader parses the text as written, and again as a function's body, which reads a
+    block indented whole; text neither reading parses is named by the first one's line and
+    message, not the wrapper's line below it.
+    """
+    with pytest.raises(ProgramError, match=re.escape(named)):
+        read_program(source)
+    indented = "    c1 = find_parcel(parcel_id=parcel_id)\n    return c1\n"
+    assert read_program(indented) == read_program(indented.replace("    ", ""))

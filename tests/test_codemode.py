@@ -69,6 +69,21 @@ def test_a_program_the_reader_refuses_is_handed_back_as_the_reason() -> None:
     assert told[1].startswith("the program is not read: line 1")
 
 
+def test_text_python_cannot_parse_is_handed_back_as_the_reason() -> None:
+    # A proposal that is no Python spends a round as any program the reader refuses does,
+    # its reason naming the proposal's own line.
+    told: list[str | None] = []
+
+    def propose(feedback: str | None) -> str:
+        told.append(feedback)
+        return "c1 = find_parcel(\nreturn c1\n" if feedback is None else NAIVE
+
+    repaired = repair(propose, TOOLS, SETTLE, rounds=2)
+    assert len(repaired.rounds) == 2
+    assert told[1] is not None
+    assert told[1].startswith("the program is not read: line 1: '(' was never closed")
+
+
 def test_the_rounds_run_out_on_a_program_never_mended() -> None:
     repaired = repair(lambda _: NAIVE, TOOLS, SETTLE, rounds=3)
     assert not repaired.accepted

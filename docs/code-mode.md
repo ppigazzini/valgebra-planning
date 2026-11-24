@@ -15,7 +15,8 @@ The same steps have [a command line](command-line.md); what a link means is
 hold and one worked program for a task unlike any library's. A program the reader does not read
 is refused naming the line and the form it reads there: a call left unbound is answered with the
 assignment to write, `c2 = notify(...)`, and the stubs handed back as a program with the line to
-leave out.
+leave out. Text Python cannot parse is refused the same way, by its own line and Python's message,
+`line 1: '(' was never closed`, so `repair` hands it back for a round and the command line exits 2.
 
 Run from the repository root:
 
