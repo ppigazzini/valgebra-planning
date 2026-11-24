@@ -75,12 +75,12 @@ extra.
 | `valgebra_planning.policy` | `Monitor`, `Policy`, `Reach`, `Snapshot`, `Transition`, `read_policy` | |
 | `valgebra_planning.flows` | `Flow`, `read_flow` | |
 | `valgebra_planning.mining` | `SlotKey`, `Types`, `infer_outputs`, `mine` | |
-| `valgebra_planning.library` | `Library`, `Problem`, `after_violation`, `asserts_format`, `error_texts`, `forwards_elicitation`, `non_text_blocks`, `read_library`, `reads_closed` | |
+| `valgebra_planning.library` | `Library`, `Problem`, `after_violation`, `asserts_format`, `error_texts`, `forwards_elicitation`, `non_text_blocks`, `preempts`, `read_library`, `reads_closed` | |
 | `valgebra_planning.privilege` | `Change`, `Rule`, `Update`, `allowed`, `as_policy`, `describe`, `read_privileges`, `read_rules`, `updates` | |
 | `valgebra_planning.vacuity` | `Certainty`, `Finding`, `vacuities` | |
 | `valgebra_planning.meaning` | `findings` | |
 | `valgebra_planning.servers` | `MAX_PAGES`, `connect`, `read_listing`, `read_server`, `refused_by_client`, `run_on_server` | the `mcp` extra |
-| `valgebra_planning.proxy` | `Gate`, `http_app`, `proxy`, `read_proxy`, `serve`, `serve_http`, `spelled_out` | the `mcp` extra |
+| `valgebra_planning.proxy` | `Gate`, `ProxyRules`, `http_app`, `proxy`, `read_proxy`, `serve`, `serve_http`, `spelled_out` | the `mcp` extra |
 
 A module's `__all__` holds what a caller calls, the types those calls take and return, and the
 defaults a caller passes, `DEPTH` among them. Every other name a module defines serves the

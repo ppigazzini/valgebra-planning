@@ -39,7 +39,7 @@ import json
 import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack
 from urllib.parse import urlsplit
 
 import uvicorn
@@ -54,13 +54,22 @@ from mcp.server.transport_security import TransportSecuritySettings
 from valgebra_planning._valgebra import Unsupported, Validator, compile_schema, json_key, read_tool
 from valgebra_planning.contracts import Contract, contract_names, failures
 from valgebra_planning.flows import Flow, check_flow
-from valgebra_planning.policy import Monitor, Policy, check_policy
+from valgebra_planning.policy import Monitor, Policy, Snapshot, check_policy
 from valgebra_planning.servers import refused_by_client
 
 if TYPE_CHECKING:
     from starlette.applications import Starlette
 
-__all__ = ["Gate", "http_app", "proxy", "read_proxy", "serve", "serve_http", "spelled_out"]
+__all__ = [
+    "Gate",
+    "ProxyRules",
+    "http_app",
+    "proxy",
+    "read_proxy",
+    "serve",
+    "serve_http",
+    "spelled_out",
+]
 
 #: The keywords whose value is one schema, in JSON Schema 2020-12 and draft-07.
 _ONE = frozenset(
@@ -111,6 +120,72 @@ def _principal() -> tuple[str, str | None, str | None] | None:
     return None if token is None else principal_components(token)
 
 
+class ProxyRules(TypedDict, total=False):
+    """The rules a proxy holds each call to and the roles it gives tools, as `proxy` takes them.
+
+    `read_proxy` and `serve` pass each on to `proxy`: ``policies`` and ``flows``, the tools of
+    ``after_violation`` called after a violation, those of ``preempts`` sent at once, those of
+    ``non_text_blocks`` answering their blocks other than text, the set ``error_texts`` holds
+    each error's text to, and those of ``forwards_elicitation`` forwarding a request for a
+    person's answer.
+    """
+
+    policies: Sequence[Policy]
+    flows: Sequence[Flow]
+    after_violation: Iterable[str]
+    preempts: Iterable[str]
+    non_text_blocks: Iterable[str]
+    error_texts: Mapping[str, object] | None
+    forwards_elicitation: Iterable[str]
+
+
+@dataclass(slots=True)
+class _Window:
+    """A call held in order that is in flight, and the preempting calls that overtook it.
+
+    ``pre`` is each monitor's states before the call stepped it and ``made`` its states once it
+    did, taken when a preempting call first overtakes it, by the monitor's identity; ``events``
+    is each step the overtaking calls took, in order: its kind, ``call``, ``result``, ``error``
+    or ``unread``, the tool, its arguments, its hints, the result where it is one, and the
+    monitors it stepped.
+    """
+
+    tool: str
+    arguments: dict[str, Any]
+    hints: frozenset[str]
+    pre: dict[int, Snapshot]
+    made: dict[int, Snapshot] | None = None
+    events: list[tuple[str, str, dict[str, Any], frozenset[str], Any, frozenset[int]]] = field(
+        default_factory=list
+    )
+
+    def replayed(
+        self, monitor: Monitor, snapshot: Snapshot, step: str = "", value: Any = None
+    ) -> Monitor:
+        """Return ``monitor``'s policy from ``snapshot``, the call's own ``step``, the events.
+
+        ``step`` is the call's outcome taken first: ``result``, its result ``value``, or
+        ``any``, its result read as any; with none, the events alone.
+        """
+        replay = Monitor.at(monitor.policy, snapshot)
+        if step == "result":
+            replay.returned(self.tool, self.arguments, value, self.hints)
+        elif step == "any":
+            replay.imaged(self.tool, self.arguments, self.hints)
+        for kind, tool, arguments, hints, answer, stepped in self.events:
+            if id(monitor) not in stepped:
+                continue
+            if kind == "call":
+                replay.observe(tool, arguments, hints)
+            elif kind == "result":
+                replay.returned(tool, arguments, answer, hints)
+            elif kind == "error":
+                replay.errored()
+            else:
+                replay.unread(tool, arguments, hints)
+        return replay
+
+
 @dataclass(slots=True)
 class Gate:
     """The checks a proxy holds each call to, and the values each untrusted tool returned."""
@@ -139,6 +214,15 @@ class Gate:
     #: What the sources of a rule of ``scope`` ``"principal"`` returned, by principal, as
     #: ``seen`` holds it for the shared rules.
     seen_by: dict[object, dict[object, set[str]]] = field(default_factory=dict)
+    #: The tools a call is made to at once, past the order a policy's calls hold, as a robot's
+    #: stop; every tool of ``after_violation`` is one too.
+    preempts: frozenset[str] = frozenset()
+    #: The call held in order that is in flight, where a policy reads it: the gate's own.
+    _window: _Window | None = field(default=None, init=False, repr=False)
+    #: How many calls that may act were made, and how many preempting ones are in flight: a
+    #: value a source returned while one may have acted is no reading after it.
+    _acts: int = field(default=0, init=False, repr=False)
+    _preempting: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
         """Refuse a tool named for its answers or its calls that the proxy lacks, or a policy reads.
@@ -162,8 +246,9 @@ class Gate:
             for name in sorted({n for n in names if names.count(n) > 1}):
                 msg = f"two {kinds} are named {name!r}: a name is one rule's"
                 raise ValueError(msg)
+        self.preempts |= self.after_violation
         named = self.non_text_blocks | self.error_texts.keys() | self.forwards_elicitation
-        for tool in sorted(named - self.contracts.keys()):
+        for tool in sorted((named | self.preempts) - self.contracts.keys()):
             msg = f"{tool} is named for its answers, and the proxy holds no such tool"
             raise ValueError(msg)
         for tool in sorted(self.after_violation):
@@ -259,7 +344,7 @@ class Gate:
         the client's files reaching the call held to no contract.
         """
         if self.policed(tool):
-            self.errored()
+            self.errored(tool)
         asked: dict[str, Any] = {}
         for name, request in (result.input_requests or {}).items():
             if not isinstance(request, types.ElicitRequest):
@@ -301,19 +386,37 @@ class Gate:
         said = " and ".join(when)
         return f"flow {flow.name}: {flow.sink} holds a value none of {named} returned {said}"
 
-    def made(self, tool: str) -> None:
+    def made(self, tool: str) -> tuple[int, bool]:
         """Withdraw every value a ``fresh`` rule's sources returned: ``tool`` may act.
 
         A call whose annotations do not say it is read-only may change what a reading reported
         (Mansoor et al. 2026, §4.1), so a value read before it reaches a fresh rule's sink no more.
         Every principal's calls reach the one server, so each principal's values are withdrawn.
+        Return the call's ticket: how many calls that may act were made, and whether a preempting
+        one is in flight, which `Gate.after` reads when the call's result arrives.
         """
         contract = self.contracts.get(tool)
-        if contract is not None and "readOnlyHint" in contract.hints:
-            return
-        fresh = {flow.name for flow in self.flows if flow.fresh}
-        for held in [held for held in self.returned if held[0] in fresh]:
-            del self.returned[held]
+        if contract is None or "readOnlyHint" not in contract.hints:
+            self._acts += 1
+            self._preempting += tool in self.preempts
+            fresh = {flow.name for flow in self.flows if flow.fresh}
+            for held in [held for held in self.returned if held[0] in fresh]:
+                del self.returned[held]
+        return self._acts, self._preempting > 0
+
+    def landed(self, tool: str) -> None:
+        """Read that a preempting call that may act is in flight no more."""
+        contract = self.contracts.get(tool)
+        if tool in self.preempts and (contract is None or "readOnlyHint" not in contract.hints):
+            self._preempting -= 1
+
+    def current(self, ticket: tuple[int, bool] | None) -> bool:
+        """Return whether no call that may act overlapped the call holding ``ticket``.
+
+        Calls a fresh rule reads hold the order, so only a preempting call overlaps one: one in
+        flight when it was sent, or one made since, may have acted after its source read.
+        """
+        return ticket is None or (ticket == (self._acts, False) and not self._preempting)
 
     @staticmethod
     def holder(flow: Flow) -> tuple[str, object]:
@@ -390,18 +493,114 @@ class Gate:
             # No policy reads the call, so it steps none and leaves the states each held before
             # the last call a policy reads, which that call's error reads.
             return None
-        # A refused call is never made, so no policy steps on it: the session goes on as before.
+        return self.stepped(tool, arguments, contract.hints)
+
+    def stepped(self, tool: str, arguments: dict[str, Any], hints: frozenset[str]) -> str | None:
+        """Step each policy on a call it reads; return why it is refused, or None.
+
+        A refused call is never made, so no policy steps on it: the session goes on as before.
+        A preempting call overtaking the call in flight is also read where it acts before that
+        call (`Gate.ahead`).
+        """
         watched = self.watching()
         states = [monitor.snapshot() for monitor in watched]
+        overtaking = self._window is not None and tool in self.preempts
+        orders: list[tuple[Monitor, Snapshot]] = []
         for monitor in watched:
-            if monitor.observe(tool, arguments, contract.hints):
+            refused = monitor.observe(tool, arguments, hints)
+            if not refused and overtaking:
+                refused, order = self.ahead(monitor, tool, arguments, hints)
+                orders += [] if order is None else [(monitor, order)]
+            if refused:
                 for kept, snapshot in zip(watched, states, strict=True):
                     kept.restore(snapshot)
                 # Name the calls that move the policy on from where the refusal leaves it, so an
                 # agent reads what admits the call, not the state alone.
-                ways = monitor.ways_out(tool, contract.hints)
+                ways = monitor.ways_out(tool, hints)
                 return "; ".join([monitor.violations[-1], *ways])
+        self.opened(tool, arguments, hints, list(zip(watched, states, strict=True)))
+        for monitor, order in orders:
+            monitor.join(order)
         return None
+
+    def opened(
+        self,
+        tool: str,
+        arguments: dict[str, Any],
+        hints: frozenset[str],
+        before: list[tuple[Monitor, Snapshot]],
+    ) -> None:
+        """Keep a call a policy read in its window: the call in flight, or one overtaking it.
+
+        A call held in order opens the window, its monitors' states before it kept; a
+        preempting call overtaking it is one of its events, the states after the call in flight
+        kept at the first.
+        """
+        if tool not in self.preempts:
+            self._window = _Window(tool, arguments, hints, {id(m): s for m, s in before})
+            return
+        if self._window is None:
+            return
+        if self._window.made is None:
+            self._window.made = {id(m): s for m, s in before}
+        stepped = frozenset(id(monitor) for monitor, _ in before)
+        self._window.events.append(("call", tool, arguments, hints, None, stepped))
+
+    def overtaken(self, tool: str, kind: str, arguments: Mapping[str, Any], value: Any) -> bool:
+        """Read an outcome of a call in the window; return whether the window closed on it.
+
+        An outcome of a preempting call is one of the window's events. The call in flight's own
+        closes the window: beside the order the gate took, each overtaking call before its
+        outcome, the gate holds the order where it came first (Bertoli et al. 2006, §3): from
+        the states after it was sent, its outcome, then each overtaking call. A call that may
+        not have acted, its outcome an error or unread, is also read from the states before it,
+        and its result read as any where unread; the monitor's own error reading, which reads
+        the last call it stepped, is not taken for it.
+        """
+        window = self._window
+        if window is None or (tool != window.tool and tool not in self.preempts):
+            return False
+        hints = self.contracts[tool].hints
+        if tool != window.tool:
+            stepped = frozenset(id(monitor) for monitor in self.watching())
+            window.events.append((kind, tool, dict(arguments), hints, value, stepped))
+            return False
+        self._window = None
+        for monitor in self.watching():
+            pre, made = window.pre.get(id(monitor)), (window.made or {}).get(id(monitor))
+            if pre is None:
+                continue
+            if kind != "result":
+                monitor.join(window.replayed(monitor, pre).snapshot())
+            if kind == "unread":
+                monitor.imaged(tool, arguments, hints)
+            if made is not None and kind in ("result", "unread"):
+                step = "result" if kind == "result" else "any"
+                monitor.join(window.replayed(monitor, made, step, value).snapshot())
+        return True
+
+    def ahead(
+        self, monitor: Monitor, tool: str, arguments: dict[str, Any], hints: frozenset[str]
+    ) -> tuple[bool, Snapshot | None]:
+        """Return whether a preempting call is refused where it acts before the call in flight.
+
+        The call in flight was stepped when it was sent, and a call overtaking it may act before
+        its effect: from the states before it, each overtaking call is stepped, then it (Bertoli
+        et al. 2006, §3). The states that order leaves are returned beside the verdict, None
+        where ``monitor`` read no call in flight; the call reaching a bad state there is refused
+        as any other step into one, and the call in flight reaching one is held, since it was
+        sent.
+        """
+        window = self._window
+        pre = None if window is None else window.pre.get(id(monitor))
+        if window is None or pre is None:
+            return False, None
+        replay = window.replayed(monitor, pre)
+        if replay.observe(tool, arguments, hints):
+            monitor.violations.append(replay.violations[-1])
+            return True, None
+        replay.observe(window.tool, window.arguments, window.hints)
+        return False, replay.snapshot()
 
     def flowing(self, tool: str, arguments: dict[str, Any]) -> str | None:
         """Return the flow rule a call breaks, or None."""
@@ -429,8 +628,34 @@ class Gate:
             return f"flow {flow.name}: {flow.sink} holds a value {named} returned"
         return None
 
-    def errored(self) -> None:
-        """Hold each policy in the states before the last call too: it answered with an error."""
+    def stepped_on(
+        self, tool: str, arguments: dict[str, Any], value: Any, hints: frozenset[str]
+    ) -> str | None:
+        """Step each policy on a call's result; return the bad state one may reach, or None.
+
+        Where the result closes the window of a call preempting calls overtook, the order where
+        it came first is held too (`Gate.overtaken`), and a bad state only that order reaches
+        refuses the result as one the result steps into does.
+        """
+        watched = self.watching()
+        held = [monitor.held() for monitor in watched]
+        for monitor in watched:
+            if monitor.returned(tool, arguments, value, hints):
+                self.overtaken(tool, "result", arguments, value)
+                return monitor.violations[-1]
+        if not self.overtaken(tool, "result", arguments, value):
+            return None
+        for monitor, before in zip(watched, held, strict=True):
+            if bad := sorted((monitor.held() - before) & monitor.policy.bad):
+                message = f"{monitor.policy.name}: {tool} may have returned into {bad[0]}"
+                monitor.violations.append(message)
+                return message
+        return None
+
+    def errored(self, tool: str) -> None:
+        """Hold each policy in the states before the call too: it answered with an error."""
+        if self.overtaken(tool, "error", {}, None):
+            return
         for monitor in self.watching():
             monitor.errored()
 
@@ -441,19 +666,25 @@ class Gate:
         or no result answered it. Every later call is refused where any such state reaches a bad
         one, and none is made once one is bad.
         """
-        if not self.policed(tool):
+        if not self.policed(tool) or self.overtaken(tool, "unread", arguments, None):
             return
         hints = self.contracts[tool].hints
         for monitor in self.watching():
             monitor.unread(tool, arguments, hints)
 
     def after(
-        self, tool: str, value: Any, arguments: Mapping[str, Any] | None = None
+        self,
+        tool: str,
+        value: Any,
+        arguments: Mapping[str, Any] | None = None,
+        ticket: tuple[int, bool] | None = None,
     ) -> str | None:
         """Return why a result may not be passed on, or None; remember untrusted tools' values.
 
         Each policy steps on the result with the call's ``arguments``. A result refused is not
-        read: each policy then holds every state a result of the call may reach (`unread`).
+        read: each policy then holds every state a result of the call may reach (`unread`). A
+        fresh rule keeps no value its source returned while a preempting call may have acted
+        (`Gate.current`, from the call's ``ticket``).
         """
         contract = self.contracts[tool]
         if contract.returns is not None and not contract.returns.is_valid(value):
@@ -462,17 +693,18 @@ class Gate:
                 return f"{tool} returned a key its output schema does not declare, read closed"
             detail = failures(contract.returns, value, contract_names(contract))
             return f"{tool} returned a value outside its contract ({detail})"
-        for monitor in self.watching():
-            if monitor.returned(tool, arguments or {}, value, contract.hints):
-                return monitor.violations[-1]
+        refused = self.stepped_on(tool, dict(arguments or {}), value, contract.hints)
+        if refused is not None:
+            return refused
         principal = _principal()
         for scope in sorted({flow.scope for flow in self.flows if tool in flow.sources}):
             seen = self.seen if scope != "principal" else self.seen_by.setdefault(principal, {})
             for leaf in _leaves(value):
                 seen.setdefault(json_key(leaf), set()).add(tool)
         leaves = {json_key(leaf) for leaf in _leaves(value)}
+        current = self.current(ticket)
         for flow in self.flows:
-            if tool in flow.sources and (flow.fresh or flow.key):
+            if tool in flow.sources and (flow.fresh or flow.key) and (current or not flow.fresh):
                 kept = self.returned.setdefault(self.holder(flow), {})
                 # A keyed rule holds the latest value a source returned for each key.
                 at = json_key((arguments or {}).get(flow.key)) if flow.key else None
@@ -627,18 +859,19 @@ def _read(
     tool: str,
     arguments: dict[str, Any],
     result: types.CallToolResult | types.InputRequiredResult,
+    ticket: tuple[int, bool] | None = None,
 ) -> types.CallToolResult | types.InputRequiredResult:
     """Return what the agent is answered with, the upstream's answer checked."""
     if isinstance(result, types.InputRequiredResult):
         return gate.forwarded(tool, result)
     if result.is_error:
         if gate.policed(tool):
-            gate.errored()
+            gate.errored(tool)
         return gate.erred(tool, result)
     value = result.structured_content
     if value is None:
         value = "".join(getattr(block, "text", "") for block in result.content)
-    refused = gate.after(tool, value, arguments)
+    refused = gate.after(tool, value, arguments, ticket)
     if refused is not None:
         return _refusal(refused)
     return gate.answered(tool, result, value)
@@ -655,7 +888,7 @@ async def _checked(
     refused = gate.before(params.name, arguments)
     if refused is not None:
         return _refusal(refused)
-    gate.made(params.name)
+    ticket = gate.made(params.name)
     try:
         result = await _made(gate, upstream, params, resumed)
     except BaseException as error:
@@ -664,10 +897,14 @@ async def _checked(
         # reached before anything else reads it. A cancel, an exit or a group of them reaches
         # the server's task as itself, after the gate holds them.
         gate.unread(params.name, arguments)
+        gate.landed(params.name)
         if not isinstance(error, Exception):
             raise
         return _unanswered(params.name, error)
-    return _read(gate, params.name, arguments, result)
+    try:
+        return _read(gate, params.name, arguments, result, ticket)
+    finally:
+        gate.landed(params.name)
 
 
 def _unanswered(tool: str, error: Exception) -> types.CallToolResult:
@@ -698,6 +935,7 @@ def proxy(
     policies: Sequence[Policy] = (),
     flows: Sequence[Flow] = (),
     after_violation: Iterable[str] = (),
+    preempts: Iterable[str] = (),
     non_text_blocks: Iterable[str] = (),
     error_texts: Mapping[str, object] | None = None,
     forwards_elicitation: Iterable[str] = (),
@@ -714,6 +952,8 @@ def proxy(
 
     Once a result takes a policy to a bad state every later call is refused but one to a tool
     of ``after_violation``, as a robot's stop; `Gate` refuses such a tool a policy reads. A
+    call to a tool of ``preempts`` or ``after_violation`` is sent at once, past that order, and
+    a policy reading one holds every order it may take beside a call it overtook. A
     result's text is the checked value alone, and a block that is not text is kept only for a
     tool of ``non_text_blocks`` (`Gate.answered`). An error's text is passed on where it lies
     in the JSON Schema ``error_texts`` gives its tool, and is otherwise a fixed text naming the
@@ -731,6 +971,7 @@ def proxy(
         [Monitor(policy) for policy in policies],
         flows,
         after_violation=frozenset(after_violation),
+        preempts=frozenset(preempts),
         non_text_blocks=frozenset(non_text_blocks),
         error_texts={tool: compile_schema(schema) for tool, schema in (error_texts or {}).items()},
         forwards_elicitation=frozenset(forwards_elicitation),
@@ -743,7 +984,9 @@ def proxy(
     async def called(
         _: Any, params: types.CallToolRequestParams
     ) -> types.CallToolResult | types.InputRequiredResult:
-        if not gate.ordered(params.name):
+        # A preempting call, as a robot's stop, is sent at once, past the order: it acts while a
+        # call held in order is in flight, and the gate reads it in either order (`Gate.ahead`).
+        if params.name in gate.preempts or not gate.ordered(params.name):
             return await _checked(gate, upstream, params)
         async with held:
             return await _checked(gate, upstream, params)
@@ -757,15 +1000,10 @@ def proxy(
 async def read_proxy(
     upstream: Client,
     *,
-    policies: Sequence[Policy] = (),
-    flows: Sequence[Flow] = (),
     assert_format: bool = False,
     closed_results: bool = False,
     spell_out: bool = False,
-    after_violation: Iterable[str] = (),
-    non_text_blocks: Iterable[str] = (),
-    error_texts: Mapping[str, object] | None = None,
-    forwards_elicitation: Iterable[str] = (),
+    **rules: Unpack[ProxyRules],
 ) -> Server[Any]:
     """Return the proxy in front of the server ``upstream`` is connected to, its listing read once.
 
@@ -777,11 +1015,8 @@ async def read_proxy(
     `valgebra_planning.servers.read_server` reads them, so a proxy held to a library's rules
     reads the server's tools as the library does. With ``spell_out``, each tool is listed as
     `spelled_out` returns it, and one it returns None for is listed as published, with a
-    `UserWarning` naming it; the gate holds every call to the published schemas. A call to a
-    tool of ``after_violation`` is admitted after a violation, and a tool of
-    ``non_text_blocks`` answers its blocks other than text, and an error's text is held to
-    ``error_texts``, and a tool of ``forwards_elicitation`` forwards a request for a person's
-    answer, as `proxy` reads them.
+    `UserWarning` naming it; the gate holds every call to the published schemas. The
+    ``rules`` are `proxy`'s (`ProxyRules`).
     """
     from valgebra_planning.servers import read_listing, read_server  # noqa: PLC0415
 
@@ -797,53 +1032,30 @@ async def read_proxy(
         if spell_out
         else published
     )
-    return proxy(
-        upstream,
-        listing,
-        contracts,
-        policies=policies,
-        flows=flows,
-        after_violation=after_violation,
-        non_text_blocks=non_text_blocks,
-        error_texts=error_texts,
-        forwards_elicitation=forwards_elicitation,
-    )
+    return proxy(upstream, listing, contracts, **rules)
 
 
 async def serve(
     upstream: Client,
     *,
-    policies: Sequence[Policy] = (),
-    flows: Sequence[Flow] = (),
     assert_format: bool = False,
     closed_results: bool = False,
     spell_out: bool = False,
-    after_violation: Iterable[str] = (),
-    non_text_blocks: Iterable[str] = (),
-    error_texts: Mapping[str, object] | None = None,
-    forwards_elicitation: Iterable[str] = (),
+    **rules: Unpack[ProxyRules],
 ) -> None:
     """Serve the proxy over stdio in front of the server ``upstream`` is connected to.
 
     The proxy is `read_proxy`'s, its tools read with ``assert_format`` and ``closed_results``,
-    listed spelled out with ``spell_out``, those of ``after_violation`` called after a
-    violation, those of ``non_text_blocks`` answering their blocks other than text, and each
-    error's text held to ``error_texts``, and a request for a person's answer forwarded for a
-    tool of ``forwards_elicitation``.
+    listed spelled out with ``spell_out``, and held to ``rules`` (`ProxyRules`).
     """
     from mcp.server.stdio import stdio_server  # noqa: PLC0415 - only a served proxy needs it
 
     server = await read_proxy(
         upstream,
-        policies=policies,
-        flows=flows,
         assert_format=assert_format,
         closed_results=closed_results,
         spell_out=spell_out,
-        after_violation=after_violation,
-        non_text_blocks=non_text_blocks,
-        error_texts=error_texts,
-        forwards_elicitation=forwards_elicitation,
+        **rules,
     )
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())

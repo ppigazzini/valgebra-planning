@@ -66,6 +66,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
   where a flow's source may also be a task's input. A flow's sink is read at its last dot, so a
   tool MCP names with a dot, `g1.grasp.distance`, is `g1.grasp`'s.
 
+### Changed
+
+- `read_proxy` and `serve` take the rules and the tool roles `proxy` takes as one set of keywords,
+  `ProxyRules`, passed on to it, `preempts` among them; a call naming them by keyword reads the
+  same. `Gate.errored` takes `tool`, the tool whose call answered with an error, since a call a
+  preempting one overtook is read from the states before it, not the last call stepped.
+
 ### Added
 
 - `Run.error`: a run ended by an error no block handles keeps the error's text where it lies in the
@@ -102,6 +109,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
   spells is refused at load naming both.
 
 ### Fixed
+
+- A preempting call is sent past the order. A call a policy or an ordered rule reads holds the
+  proxy's gate from its check to its result, and a fresh rule orders every call that may act, so
+  a robot's stop waited behind the walk it should end, answered a second after it was sent.
+  `"preempts"` in `tools.json` names the tools sent at once, every `"afterViolation"` tool among
+  them, and a policy may read one: it holds each order the stop and the call in flight may take,
+  the stop acting before the call's effect, the order the gate took, and the call answering
+  before the stop acts. A refusal in any refuses the stop, a bad state only one reaches refuses
+  the call's result, and a fresh rule keeps no value its source returned while a preempting call
+  that may act was in flight.
 
 - A call that timed out may have acted with any result. `run_on_server` raised a timeout, as any
   protocol error, as the tool error a call answering with an error raises, and the run held each

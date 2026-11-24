@@ -371,7 +371,12 @@ checks a result against the output schema the server declares before the proxy d
 holds the value, so it is answered with a refusal naming the tool alone, as `run_on_server` ends the
 run on the `result` check naming it. A call a policy reads holds the gate from its check to its
 result, so each policy reads such calls in the order they act, and a call no policy reads waits on
-none. A refused call steps no policy, a call the server answers with
+none. A call to a tool of `"preempts"` or `"afterViolation"`, as a robot's stop, is sent at once,
+past that order, since it must act while the call it ends is in flight, and each policy holds
+every order the two may take: the stop acting before the call's effect, from the states before
+the call, the order the gate took, and the call answering before the stop acts. A refusal in any
+of them refuses the stop, and a bad state only one reaches refuses the call's result. A fresh rule
+keeps no value its source returned while a preempting call that may act was in flight. A refused call steps no policy, a call the server answers with
 an error leaves each policy in the states before and after it, and a call made whose outcome the
 gate does not read, any way a sent call ends but a result read, its result refused, the call
 canceled or answered by no result, or an exception the client raises, leaves each in every state

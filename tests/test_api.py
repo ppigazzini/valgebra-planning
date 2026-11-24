@@ -83,9 +83,10 @@ def test_each_listed_name_is_defined_in_its_module(stem: str) -> None:
 
 
 def _annotations(value: object) -> list[str]:
-    """Return the annotation text of a function, or of a class's fields and public methods."""
+    """Return the annotation text of a function, or of a class's public fields and methods."""
     if inspect.isclass(value):
-        texts = list(getattr(value, "__annotations__", {}).values())
+        fields = getattr(value, "__annotations__", {}).items()
+        texts = [text for name, text in fields if not name.startswith("_")]
         for name, member in vars(value).items():
             if not name.startswith("_") and inspect.isfunction(member):
                 texts += member.__annotations__.values()

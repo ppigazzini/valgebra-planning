@@ -369,6 +369,28 @@ class Monitor:
             {key: instance.snapshot() for key, instance in self.instances.items()},
         )
 
+    @classmethod
+    def at(cls, policy: Policy, snapshot: Snapshot) -> Monitor:
+        """Return a monitor of ``policy`` holding the states ``snapshot`` holds."""
+        monitor = cls(policy)
+        monitor.restore(snapshot)
+        return monitor
+
+    def join(self, snapshot: Snapshot) -> None:
+        """Hold beside these states every one ``snapshot`` holds, every instance's among them.
+
+        Two orders the same calls may have taken are two executions the run may be on, so the
+        belief holds the states each leaves (Bertoli et al. 2006, §3).
+        """
+        state, also, _, _, instances = snapshot
+        self.also = (self.also | also | {state}) - {self.state}
+        for key, held in instances.items():
+            instance = self.instances.get(key)
+            if instance is None:
+                self.instances[key] = Monitor.at(self.policy, held)
+            else:
+                instance.join(held)
+
     def restore(self, snapshot: Snapshot) -> None:
         """Return to the states `snapshot` holds, every instance's among them."""
         state, also, before, value, instances = snapshot
@@ -516,6 +538,28 @@ class Monitor:
             (instance, instance.also | {instance.state}) for instance in self.stepping(arguments)
         ]
         self.errored()
+        return self.reach(tool, arguments, hints, left)
+
+    def imaged(self, tool: str, arguments: Mapping[str, Any], hints: frozenset[str]) -> bool:
+        """Hold every state a transition reading the call's result reaches beside those held.
+
+        The call was made and stepped, and its result is not read: this is `unread` with the
+        states before the call left out, for a call known to have been made. Return whether a
+        bad state may now be held, recording it.
+        """
+        left = [
+            (instance, instance.also | {instance.state}) for instance in self.stepping(arguments)
+        ]
+        return self.reach(tool, arguments, hints, left)
+
+    def reach(
+        self,
+        tool: str,
+        arguments: Mapping[str, Any],
+        hints: frozenset[str],
+        left: list[tuple[Monitor, frozenset[str]]],
+    ) -> bool:
+        """Hold each state a transition reading a result reaches from ``left``; flag a bad one."""
         for instance, held in left:
             reached = frozenset(
                 transition.target

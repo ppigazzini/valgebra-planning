@@ -4,7 +4,8 @@ A library is a directory. ``tools.json`` holds a server's ``tools/list`` result,
 [...]}``, ``"trusted": true`` where the server's annotations are trusted, and
 ``"closedResults": true`` where each whole result is read closed, an assumption about the
 server (`valgebra_planning.contracts.read_contract`), ``"afterViolation"``, the tools a proxy
-calls after a violation (`after_violation`), ``"nonTextBlocks"``, the tools whose blocks other
+calls after a violation (`after_violation`), ``"preempts"``, the tools a proxy sends at once,
+past the order a policy's calls hold (`preempts`), ``"nonTextBlocks"``, the tools whose blocks other
 than text a proxy keeps (`non_text_blocks`), ``"errorTexts"``, the set each tool's
 error text lies in to be passed on (`error_texts`), and ``"forwardsElicitation"``, the tools whose
 request for a person's answer a proxy forwards (`forwards_elicitation`). ``tasks.json``
@@ -50,6 +51,7 @@ __all__ = [
     "error_texts",
     "forwards_elicitation",
     "non_text_blocks",
+    "preempts",
     "read_library",
     "reads_closed",
 ]
@@ -131,6 +133,7 @@ _TOOLS_KEYS = frozenset(
         "closedResults",
         "postconditions",
         "afterViolation",
+        "preempts",
         "nonTextBlocks",
         "errorTexts",
         "forwardsElicitation",
@@ -174,6 +177,17 @@ def after_violation(directory: Path) -> frozenset[str]:
     holds when it is built.
     """
     return _named(directory, "afterViolation")
+
+
+def preempts(directory: Path) -> frozenset[str]:
+    """Return the tools a proxy sends at once, past the order: ``"preempts": [...]``.
+
+    A call a policy reads holds the proxy's gate in order until it is answered, and a robot's
+    stop must act while such a call is in flight; a proxy sends these at once, and a policy
+    reading one holds every order it may take beside the call it overtook. Every tool of
+    ``"afterViolation"`` is one too.
+    """
+    return _named(directory, "preempts")
 
 
 def non_text_blocks(directory: Path) -> frozenset[str]:

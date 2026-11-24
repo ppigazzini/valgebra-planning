@@ -51,6 +51,7 @@ from valgebra_planning.library import (
     error_texts,
     forwards_elicitation,
     non_text_blocks,
+    preempts,
     read_library,
     reads_closed,
 )
@@ -354,6 +355,7 @@ def _proxy(args: argparse.Namespace) -> int:
     asserted = directory is not None and asserts_format(directory)
     closing = directory is not None and reads_closed(directory)
     left_open = frozenset() if directory is None else after_violation(directory)
+    first = frozenset() if directory is None else preempts(directory)
     kept = frozenset() if directory is None else non_text_blocks(directory)
     errors = {} if directory is None else error_texts(directory)
     asking = frozenset() if directory is None else forwards_elicitation(directory)
@@ -369,6 +371,7 @@ def _proxy(args: argparse.Namespace) -> int:
                     closed_results=closing,
                     spell_out=args.spell_out,
                     after_violation=left_open,
+                    preempts=first,
                     non_text_blocks=kept,
                     error_texts=errors,
                     forwards_elicitation=asking,
@@ -382,6 +385,7 @@ def _proxy(args: argparse.Namespace) -> int:
                 closed_results=closing,
                 spell_out=args.spell_out,
                 after_violation=left_open,
+                preempts=first,
                 non_text_blocks=kept,
                 error_texts=errors,
                 forwards_elicitation=asking,
