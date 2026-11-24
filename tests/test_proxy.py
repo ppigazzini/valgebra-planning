@@ -1732,3 +1732,38 @@ def test_a_call_stepped_between_the_rounds_keeps_every_state() -> None:
     walked, grasped = _resumed_walk("look", policy=looking)
     assert not walked.is_error
     assert _refused(grasped).startswith("refused: one walk: grasp reached violated")
+
+
+@pytest.mark.parametrize(
+    ("asked", "answer", "refused"),
+    [
+        (ASKED, types.ElicitResult(action="decline", content={"confirmed": True}), "no acceptance"),
+        (ASKED, types.ElicitResult(action="cancel", content={"confirmed": True}), "no acceptance"),
+        (ASKED, types.ElicitResult(action="decline"), None),
+        (ASKED, types.ElicitResult(action="accept", content={"confirmed": True}), None),
+        (
+            {"type": "object", "properties": {"on": {"type": "string", "format": "date"}}},
+            types.ElicitResult(action="accept", content={"on": "not a date"}),
+            "outside the schema",
+        ),
+        (
+            {"type": "object", "properties": {"on": {"type": "string", "format": "date"}}},
+            types.ElicitResult(action="accept", content={"on": "2026-11-24"}),
+            None,
+        ),
+    ],
+    ids=[
+        "decline-with-content",
+        "cancel-with-content",
+        "decline",
+        "accept",
+        "not-a-date",
+        "a-date",
+    ],
+)
+def test_a_person_s_answer_is_held_on_every_action(
+    asked: dict[str, Any], answer: types.ElicitResult, refused: str | None
+) -> None:
+    """Content is present only where the person accepted, and a form's formats are asserted."""
+    said = Gate.answers("confirm_with_user", {"yes": answer}, {"yes": asked})
+    assert (said is None) if refused is None else (refused in (said or ""))

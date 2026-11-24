@@ -477,7 +477,8 @@ ones.
   each policy holds the states before it; the server's state travels unread inside the proxy's,
   which the mcp SDK's request-state boundary seals under a key the process alone holds and binds
   to the call, the principal the token names, its client, issuer and subject, and an expiry; and
-  the answers that resume it reach the server only inside the schema each form asked under. The
+  the answers that resume it reach the server only inside the schema each form asked under, its
+  `format` asserted, and a decline or a cancel only with no content. The
   resumed call retries the request its first round made (MCP 2026-07-28), so it is held to the
   contract and the flow rules and steps no policy again, and once it is answered with a result
   each policy no other call stepped meanwhile leaves the states before it, the one call having

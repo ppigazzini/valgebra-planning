@@ -110,6 +110,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A person's answer is held on every action. A forwarded request's answers were held to the
+  form's schema only where the person accepted, so a decline or a cancel carrying content passed
+  it on to the server, though content is present only on an acceptance (MCP 2026-07-28,
+  `ElicitResult`); and the form was read with `format` an annotation, so `"not a date"` filled a
+  date. A decline or a cancel with content is refused, and an accepted form is read with `format`
+  asserted.
+
 - A resumed call steps each policy once. A call whose server asked for a person's answer is
   resumed by a retry of the same request, and the proxy checked each round as a new call, so a
   walk confirmed by a person stepped a one-walk policy twice and was refused, and a grasp a walk

@@ -319,8 +319,11 @@ class Gate:
         """Return why the answers to a forwarded request are refused, or None.
 
         Each answers a request that was asked, with a person's answer; one a person accepted lies
-        in the schema its form asked under, as the elicitation page asks a client to check, and
-        one to a URL holds no content. Each failure names the request's key, never the answer.
+        in the schema its form asked under, its ``format`` asserted, since a form's string types
+        are told apart by their formats, as the elicitation page asks a client to check, and one
+        to a URL holds no content. A decline or a cancel holds none, content being present only
+        where the person accepted (MCP 2026-07-28, ``ElicitResult``). Each failure names the
+        request's key, never the answer.
         """
         for name, response in (given or {}).items():
             if name not in asked:
@@ -328,11 +331,14 @@ class Gate:
             if not isinstance(response, types.ElicitResult):
                 return f"{tool} answers {name} with no person's answer"
             if response.action != "accept":
+                if response.content is not None:
+                    return f"{tool} answers {name} with content and no acceptance"
                 continue
             schema = asked[name]
             if schema is None and response.content is not None:
                 return f"{tool} answers {name}, a URL, with content"
-            if schema is not None and not compile_schema(schema).is_valid(response.content):
+            form = None if schema is None else compile_schema(schema, assert_format=True)
+            if form is not None and not form.is_valid(response.content):
                 return f"{tool} answers {name} outside the schema it was asked under"
         return None
 
