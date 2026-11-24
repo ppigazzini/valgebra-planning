@@ -173,7 +173,7 @@ task. A call the server answers by asking for input is answered with a tool erro
 tool `tools.json` names under `"forwardsElicitation"`: a request for a person's answer, a form or
 a URL, is forwarded with its state sealed by the mcp SDK's request-state boundary, bound to the
 call and the principal its token names, and the answers that resume it reach the server only
-inside the schema each form asked under. An agent connects to the proxy as to any stdio server, and no agent
+inside the schema each form asked under, the resumed call stepping each policy no second time. An agent connects to the proxy as to any stdio server, and no agent
 changes.
 
 ```bash

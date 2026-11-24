@@ -1643,3 +1643,92 @@ def test_two_rules_of_one_name_are_refused() -> None:
     twin = read_policy({"name": "p", "initial": "s", "bad": ["v"], "transitions": []})
     with pytest.raises(ValueError, match="two policies are named 'p'"):
         Gate(TOOLS, [Monitor(twin), Monitor(twin)], [])
+
+
+ASKING_ROBOT = [
+    _robot_tool("walk_to", {"object_id": {"type": "string"}}, {"arrived": {"type": "boolean"}}),
+    _robot_tool("grasp", {"object_id": {"type": "string"}}, {"grasped": {"type": "boolean"}}),
+    _robot_tool("look", {}, {"seen": {"type": "boolean"}}),
+]
+ASKING_TOOLS = {contract.name: contract for contract in map(read_contract, ASKING_ROBOT)}
+WALKS = [
+    {"from": "idle", "tool": "walk_to", "to": "walked"},
+    {"from": "walked", "tool": "walk_to", "to": "violated"},
+    {"from": "idle", "tool": "grasp", "to": "violated"},
+]
+
+
+def _resumed_walk(*between: str, policy: Any, asks: int = 1) -> list[Any]:
+    """Walk, the robot asking a person ``asks`` times, call each of ``between``, then grasp."""
+    yes: types.InputResponses = {
+        "yes": types.ElicitResult(action="accept", content={"confirmed": True})
+    }
+
+    async def listed(_: Any, __: Any) -> types.ListToolsResult:
+        return types.ListToolsResult(tools=[types.Tool.model_validate(t) for t in ASKING_ROBOT])
+
+    async def called(_: Any, params: types.CallToolRequestParams) -> Any:
+        rounds = int(params.request_state or "0")
+        if params.name == "walk_to" and rounds < asks:
+            asked = types.ElicitRequest(
+                params=types.ElicitRequestFormParams(message="Walk?", requested_schema=ASKED)
+            )
+            state = str(rounds + 1)
+            return types.InputRequiredResult(input_requests={"yes": asked}, request_state=state)
+        answer = {"walk_to": {"arrived": True}, "grasp": {"grasped": True}, "look": {"seen": True}}
+        return types.CallToolResult(content=[], structured_content=answer[params.name])
+
+    async def session() -> list[Any]:
+        async with Client(Server("robot", on_list_tools=listed, on_call_tool=called)) as up:
+            front = proxy(
+                up,
+                (await up.list_tools()).tools,
+                ASKING_TOOLS,
+                policies=[policy],
+                forwards_elicitation=["walk_to"],
+            )
+            async with Client(front) as client:
+                walked = await client.session.call_tool(*WALK, allow_input_required=True)
+                for name in between:
+                    await client.call_tool(name, {})
+                while isinstance(walked, types.InputRequiredResult):
+                    walked = await client.session.call_tool(
+                        *WALK,
+                        input_responses=yes,
+                        request_state=walked.request_state,
+                        allow_input_required=True,
+                    )
+                return [walked, await client.call_tool("grasp", {"object_id": "obj_1"})]
+
+    return asyncio.run(session())
+
+
+def test_a_resumed_call_steps_each_policy_once() -> None:
+    """A resumed call retries the request its first round made: one call, one step.
+
+    The walk asked a person before it moved; resumed, it is the first walk, admitted, and once
+    it answered, the grasp a walk must precede is admitted too.
+    """
+    once = read_policy(
+        {"name": "one walk", "initial": "idle", "bad": ["violated"], "transitions": WALKS}
+    )
+    for asks in (1, 2):
+        walked, grasped = _resumed_walk(policy=once, asks=asks)
+        assert not walked.is_error
+        assert not grasped.is_error
+
+
+def test_a_call_stepped_between_the_rounds_keeps_every_state() -> None:
+    # A look between the rounds steps the policy too, so the resumed walk's first round may still
+    # be one never completed: the grasp keeps waiting on it.
+    looking = read_policy(
+        {
+            "name": "one walk",
+            "initial": "idle",
+            "bad": ["violated"],
+            "transitions": [*WALKS, {"from": "idle", "tool": "look", "to": "idle"}],
+        }
+    )
+    walked, grasped = _resumed_walk("look", policy=looking)
+    assert not walked.is_error
+    assert _refused(grasped).startswith("refused: one walk: grasp reached violated")

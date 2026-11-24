@@ -223,6 +223,11 @@ class Gate:
     #: value a source returned while one may have acted is no reading after it.
     _acts: int = field(default=0, init=False, repr=False)
     _preempting: int = field(default=0, init=False, repr=False)
+    #: Each round a forwarded call ended with, by the state it was forwarded with: each
+    #: monitor reading it, its states once the call stepped it and once its error reading did.
+    _rounds: dict[str, list[tuple[Monitor, Snapshot, Snapshot]]] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         """Refuse a tool named for its answers or its calls that the proxy lacks, or a policy reads.
@@ -332,7 +337,7 @@ class Gate:
         return None
 
     def forwarded(
-        self, tool: str, result: types.InputRequiredResult
+        self, tool: str, result: types.InputRequiredResult, resumed: str | None = None
     ) -> types.CallToolResult | types.InputRequiredResult:
         """Return the upstream's request for input as the proxy forwards it, or a tool error.
 
@@ -341,9 +346,22 @@ class Gate:
         form or a URL, is forwarded with a state holding the upstream's own and the schema each
         form asked an answer under (None for a URL), which the server's request-state boundary
         seals (`proxy`); a sampling or a request for roots is not forwarded, a model's text or
-        the client's files reaching the call held to no contract.
+        the client's files reaching the call held to no contract. The states the call's step
+        reached are kept under the state it is forwarded with, a round it ``resumed`` carrying
+        the first round's on, for `Gate.completed`.
         """
+        earlier = (
+            {}
+            if resumed is None
+            else {id(m): (m, s, e) for m, s, e in self._rounds.pop(resumed, [])}
+        )
+        made: list[tuple[Monitor, Snapshot]] = []
         if self.policed(tool):
+            for monitor in self.watching():
+                kept = earlier.get(id(monitor))
+                # A monitor no other call stepped since the round before holds the same call.
+                stepped = kept[1] if kept and monitor.snapshot() == kept[2] else monitor.snapshot()
+                made.append((monitor, stepped))
             self.errored(tool)
         asked: dict[str, Any] = {}
         for name, request in (result.input_requests or {}).items():
@@ -359,7 +377,21 @@ class Gate:
                 else None
             )
         state = json.dumps({"state": result.request_state, "asked": asked}, sort_keys=True)
+        self._rounds[state] = [(m, stepped, m.snapshot()) for m, stepped in made]
         return types.InputRequiredResult(input_requests=result.input_requests, request_state=state)
+
+    def completed(self, resumed: str) -> None:
+        """Read a resumed call answered with a result: the one call it is was made.
+
+        A resumed call is a retry of the request its first round made (MCP 2026-07-28), so each
+        policy reading it was stepped by that round alone, and the states before the call its
+        error reading held while the call might be abandoned are left now: each monitor no
+        other call stepped since returns to the states the call's step reached, and the result
+        then steps it. A monitor another call stepped keeps the states it holds, every one.
+        """
+        for monitor, stepped, ended in self._rounds.pop(resumed, []):
+            if monitor.snapshot() == ended:
+                monitor.restore(stepped)
 
     def returned_for(self, flow: Flow, arguments: Mapping[str, Any], value: Any) -> str | None:
         """Return why a rule with ``fresh`` or ``key`` refuses ``value`` at its sink, or None.
@@ -475,8 +507,12 @@ class Gate:
                 return f"{monitor.policy.name} holds {held[0]}: no call is made after it"
         return None
 
-    def before(self, tool: str, arguments: dict[str, Any]) -> str | None:
-        """Return why a call may not be made, or None."""
+    def before(self, tool: str, arguments: dict[str, Any], *, resumed: bool = False) -> str | None:
+        """Return why a call may not be made, or None.
+
+        A ``resumed`` round is held to the contract and the flow rules and steps no policy:
+        the one call it retries was stepped by its first round.
+        """
         contract = self.contracts.get(tool)
         if contract is None:
             return f"{tool} is no tool the proxy holds"
@@ -489,7 +525,7 @@ class Gate:
         flowing = self.flowing(tool, arguments)
         if flowing is not None:
             return flowing
-        if not self.policed(tool):
+        if resumed or not self.policed(tool):
             # No policy reads the call, so it steps none and leaves the states each held before
             # the last call a policy reads, which that call's error reads.
             return None
@@ -860,10 +896,15 @@ def _read(
     arguments: dict[str, Any],
     result: types.CallToolResult | types.InputRequiredResult,
     ticket: tuple[int, bool] | None = None,
+    resumed: str | None = None,
 ) -> types.CallToolResult | types.InputRequiredResult:
-    """Return what the agent is answered with, the upstream's answer checked."""
+    """Return what the agent is answered with, the upstream's answer checked.
+
+    ``resumed`` is the state a resumed round was forwarded with: answered with a result, the
+    one call it retries was made (`Gate.completed`).
+    """
     if isinstance(result, types.InputRequiredResult):
-        return gate.forwarded(tool, result)
+        return gate.forwarded(tool, result, resumed)
     if result.is_error:
         if gate.policed(tool):
             gate.errored(tool)
@@ -871,6 +912,8 @@ def _read(
     value = result.structured_content
     if value is None:
         value = "".join(getattr(block, "text", "") for block in result.content)
+    if resumed is not None:
+        gate.completed(resumed)
     refused = gate.after(tool, value, arguments, ticket)
     if refused is not None:
         return _refusal(refused)
@@ -885,7 +928,7 @@ async def _checked(
     resumed = _answered_input(gate, params)
     if isinstance(resumed, types.CallToolResult):
         return resumed
-    refused = gate.before(params.name, arguments)
+    refused = gate.before(params.name, arguments, resumed=resumed is not None)
     if refused is not None:
         return _refusal(refused)
     ticket = gate.made(params.name)
@@ -901,8 +944,9 @@ async def _checked(
         if not isinstance(error, Exception):
             raise
         return _unanswered(params.name, error)
+    state = params.request_state if resumed is not None else None
     try:
-        return _read(gate, params.name, arguments, result, ticket)
+        return _read(gate, params.name, arguments, result, ticket, state)
     finally:
         gate.landed(params.name)
 

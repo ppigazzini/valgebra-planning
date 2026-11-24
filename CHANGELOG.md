@@ -110,6 +110,15 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A resumed call steps each policy once. A call whose server asked for a person's answer is
+  resumed by a retry of the same request, and the proxy checked each round as a new call, so a
+  walk confirmed by a person stepped a one-walk policy twice and was refused, and a grasp a walk
+  must precede stayed refused after the walk answered, the states before the walk held from its
+  first round. A resumed round is held to the contract and the flow rules and steps no policy, and
+  once it is answered with a result each policy no other call stepped meanwhile returns to the
+  states the call's step reached, before the result steps it; one another call stepped keeps
+  every state it holds. `Gate.completed` reads it, and `Gate.before` takes `resumed`.
+
 - A preempting call is sent past the order. A call a policy or an ordered rule reads holds the
   proxy's gate from its check to its result, and a fresh rule orders every call that may act, so
   a robot's stop waited behind the walk it should end, answered a second after it was sent.
