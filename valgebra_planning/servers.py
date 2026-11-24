@@ -145,12 +145,13 @@ async def run_on_server(
     enforce: bool = True,
     postconditions: Sequence[Postcondition] = (),
     flows: Sequence[Flow] = (),
+    error_texts: Mapping[str, object] | None = None,
 ) -> Run:
     """Run ``program`` against the server ``client`` is connected to, failing closed.
 
     The checks are `valgebra_planning.run.run`'s, ``postconditions`` and ``flows`` among
-    them. Canceling the task that awaits it cancels the call in flight and sends no call after
-    it.
+    them, and an error's text is kept in `Run.error` inside the set ``error_texts`` gives.
+    Canceling the task that awaits it cancels the call in flight and sends no call after it.
     """
     loop = asyncio.get_running_loop()
     # The lock orders a call's send against the cancel: a call is sent before the cancel, and
@@ -199,6 +200,7 @@ async def run_on_server(
             enforce=enforce,
             postconditions=postconditions,
             flows=flows,
+            error_texts=error_texts,
         )
     except asyncio.CancelledError:
         with guard:

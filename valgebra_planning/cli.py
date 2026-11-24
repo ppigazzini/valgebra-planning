@@ -227,6 +227,7 @@ def _run(
                 policies=problem.policies,
                 postconditions=problem.postconditions,
                 flows=problem.flows,
+                error_texts=error_texts(directory),
             )
             return row | {
                 "outcome": result.outcome,
@@ -234,6 +235,7 @@ def _run(
                 "value": result.value,
                 "stopped": result.stopped,
                 "refused": result.refused,
+                "error": result.error,
                 "broken": list(result.broken),
                 "blame": blame(result, library.tools, proven=row["proven"]),
             }
@@ -252,7 +254,8 @@ def _run(
             )
         )
         cause = [f"cause: {row['blame']}"] if row["blame"] else []
-        print("\n".join([_text(row), "", ended, *row["broken"], *cause]))
+        said = [f"its error: {row['error']}"] if row["error"] else []
+        print("\n".join([_text(row), "", ended, *row["broken"], *said, *cause]))
     return 0 if row.get("ok", False) else 1
 
 

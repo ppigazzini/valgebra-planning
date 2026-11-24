@@ -22,7 +22,7 @@ from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeVar
 
-from valgebra_planning._valgebra import JSON, Validator, json_key
+from valgebra_planning._valgebra import JSON, Validator, compile_schema, json_key
 from valgebra_planning.contracts import (
     Contract,
     Postcondition,
@@ -174,7 +174,8 @@ class Run:
     - ``refused``: a check broke with contracts enforced, ``refused`` names it, ``why`` says
       which, and ``value`` is None;
     - ``error``: a tool answered with an error no block handles, ``stopped`` names the call,
-      and ``value`` is None;
+      ``error`` holds its text where it lies in the set the library names for the tool, and
+      ``value`` is None;
     - ``ended``: the program ended an iteration outside a loop, and ``value`` is None;
     - ``canceled``: `arun` was canceled while a call was awaited, ``stopped`` names the call and
       each obligation a policy may leave pending, and ``value`` is None.
@@ -190,6 +191,9 @@ class Run:
     refused: str | None = None
     #: Which check ended the run, for `blame`; one field, so a run nothing ends pays for one.
     why: Refusal | None = None
+    #: The text of the error no block handled, where it lies in the set the library names for
+    #: the tool under ``"errorTexts"``, as a proxy passes one on; None for any other.
+    error: str | None = None
 
     @property
     def outcome(self) -> Outcome:
@@ -219,6 +223,8 @@ class _Runner:
     broken: list[str] = field(default_factory=list)
     postconditions: tuple[Postcondition, ...] = ()
     flows: tuple[Flow, ...] = ()
+    #: The set each tool's error text lies in to be kept, compiled from ``"errorTexts"``.
+    error_texts: Mapping[str, Validator[Any]] = field(default_factory=dict)
     #: The last call made that may act, where it returned: its tool, arguments and result.
     last: tuple[str, dict[str, Any], Any] | None = None
     #: How many calls were made, each attempt of a retried one counted.
@@ -488,7 +494,7 @@ class _Runner:
             self.broken.append(message)
             return Run(None, None, tuple(self.broken), message, Refusal("given", call.tool))
         acts = "readOnlyHint" not in self.contracts[call.tool].hints
-        unanswered = False
+        unanswered, error = False, None
         for _ in range(ATTEMPTS if call.retry else 1):
             # A call that may act may have acted whatever it answers.
             if acts:
@@ -499,6 +505,7 @@ class _Runner:
                 return (answer,)
             if isinstance(answer.error, ToolError):
                 unanswered |= isinstance(answer.error, UnansweredError)
+                error = answer.error
                 continue
             if isinstance(answer.error, RefusedResultError):
                 # No result is handed back, so no run goes on past the call, enforced or not.
@@ -523,7 +530,21 @@ class _Runner:
             return (yield from self.block(call.on_error, env))
         self.broken.append(f"{call.tool} answered with an error nothing handles")
         stopped = f"an error of {call.tool}"
-        return Run(None, stopped, tuple(self.broken), None, Refusal("error", call.tool, call.retry))
+        why = Refusal("error", call.tool, call.retry)
+        return Run(None, stopped, tuple(self.broken), None, why, self.texted(call.tool, error))
+
+    def texted(self, tool: str, error: ToolError | None) -> str | None:
+        """Return an error's text where it lies in the set the library names for the tool.
+
+        No contract bounds what a server writes in an error, so a text is kept only where the
+        library lists it, as the failures a tool reports; a call no result answered has none
+        of the tool's, its message the client's.
+        """
+        allowed = self.error_texts.get(tool)
+        if allowed is None or error is None or isinstance(error, UnansweredError):
+            return None
+        text = str(error)
+        return text if allowed.is_valid(text) else None
 
     def erred(self, call: Call, arguments: dict[str, Any], *, unanswered: bool) -> Run | None:
         """Hold each policy where a call that answered with an error, or with none, leaves it.
@@ -610,6 +631,7 @@ def run(
     enforce: bool = True,
     postconditions: Sequence[Postcondition] = (),
     flows: Sequence[Flow] = (),
+    error_texts: Mapping[str, object] | None = None,
 ) -> Run:
     """Run ``program`` on ``inputs``, calling ``tools`` by name, checking every contract.
 
@@ -623,11 +645,14 @@ def run(
     ends the run at that call. A read a postcondition covers is held to what it says the read
     shows, a broken check like a broken contract, and so is each of ``flows`` on where each
     value reaching its sink came from, before the call is made and after its argument record.
-    Raises `ValueError` for a task naming an input as a tool.
+    An error no block handles ends the run keeping its text in `Run.error` where it lies in the
+    JSON Schema ``error_texts`` gives its tool, as a proxy passes one on. Raises `ValueError` for
+    a task naming an input as a tool.
     """
     unclashed(task, contracts)
     runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
     runner.postconditions, runner.flows = tuple(postconditions), tuple(flows)
+    runner.error_texts = _compiled(error_texts)
     steps = _program(runner, program, inputs)
     try:
         tool, arguments = next(steps)
@@ -635,6 +660,11 @@ def run(
             tool, arguments = steps.send(_made(tools[tool], arguments))
     except StopIteration as ended:
         return ended.value
+
+
+def _compiled(error_texts: Mapping[str, object] | None) -> dict[str, Validator[Any]]:
+    """Return each tool's error text set compiled, as a proxy compiles ``"errorTexts"``."""
+    return {tool: compile_schema(schema) for tool, schema in (error_texts or {}).items()}
 
 
 def _made(tool: Callable[..., Any], arguments: dict[str, Any]) -> Any:
@@ -682,6 +712,7 @@ async def arun(
     enforce: bool = True,
     postconditions: Sequence[Postcondition] = (),
     flows: Sequence[Flow] = (),
+    error_texts: Mapping[str, object] | None = None,
 ) -> Run:
     """Run ``program`` as `run` does, awaiting each call a tool answers with an awaitable.
 
@@ -696,6 +727,7 @@ async def arun(
     unclashed(task, contracts)
     runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
     runner.postconditions, runner.flows = tuple(postconditions), tuple(flows)
+    runner.error_texts = _compiled(error_texts)
     steps = _program(runner, program, inputs)
     try:
         tool, arguments = next(steps)

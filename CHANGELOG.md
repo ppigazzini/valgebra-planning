@@ -60,6 +60,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- `Run.error`: a run ended by an error no block handles keeps the error's text where it lies in the
+  set `"errorTexts"` names for the tool, as a proxy passes one on, and drops any other, so a
+  caller reads why `get_spsa` failed, "run 0 is no tune", without a server's text reaching it
+  unbounded. `run`, `arun` and `run_on_server` take `error_texts`, and `valgebra-planning run`
+  passes the library's and prints the text. A call no result answered keeps none.
+
 - `run`, `arun` and `run_on_server` take `flows` and hold each flow rule before a call is made,
   after its argument record and before each policy, and `valgebra-planning run` holds a task's.
   A run binds each name to the call that returned its value, on its own path, so it holds a rule

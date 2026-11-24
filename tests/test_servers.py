@@ -220,6 +220,31 @@ def test_a_call_no_result_answered_reaches_every_state_it_may_have() -> None:
     assert "confirmed" in (result.refused or "")
 
 
+def test_a_run_on_a_server_keeps_an_error_s_text_inside_its_set() -> None:
+    contracts = {"confirm": read_contract(CONFIRM)}
+    task = read_task("confirm an order", {"order": {"type": "integer"}}, {"type": "boolean"})
+    program = read_program("c1 = confirm(order=order)\nreturn c1.ok\n")
+
+    async def listed(_: Any, __: Any) -> types.ListToolsResult:
+        return types.ListToolsResult(tools=[types.Tool.model_validate(CONFIRM)])
+
+    async def called(_: Any, __: types.CallToolRequestParams) -> types.CallToolResult:
+        text = types.TextContent(type="text", text="order 1 is closed")
+        return types.CallToolResult(content=[text], is_error=True)
+
+    async def ran(texts: dict[str, Any] | None) -> Any:
+        server = Server("closed", on_list_tools=listed, on_call_tool=called)
+        async with Client(server) as client:
+            return await run_on_server(
+                program, contracts, task, {"order": 1}, client, error_texts=texts
+            )
+
+    assert asyncio.run(ran({"confirm": {"const": "order 1 is closed"}})).error == (
+        "order 1 is closed"
+    )
+    assert asyncio.run(ran(None)).error is None
+
+
 #: A string no schema declares and no code spells: a part of a value the client refuses.
 HIDDEN = "HIDDEN-41"
 

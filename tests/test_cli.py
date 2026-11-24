@@ -138,6 +138,24 @@ def test_run_plans_and_runs_a_task_against_a_live_server() -> None:
     assert row["value"].startswith("lbl_")
 
 
+def test_run_prints_an_error_s_text_inside_its_set(tmp_path: Path) -> None:
+    # The parcel lost, the lookup's error ends the run: its text is printed where the library
+    # lists it for the tool, and a fixed account of the error otherwise.
+    shutil.copytree(PARCELS, tmp_path, dirs_exist_ok=True)
+    listing = json.loads((Path(PARCELS) / "tools.json").read_text(encoding="utf-8"))
+    lost = shlex.join([sys.executable, str(Path(__file__).parent / "parcel_server.py"), "--lost"])
+    inputs = '{"tracking": "AB123456789IT"}'
+    for texts, printed in (({"find_parcel": {"pattern": "^no parcel "}}, True), ({}, False)):
+        (tmp_path / "tools.json").write_text(
+            json.dumps({**listing, "errorTexts": texts}), encoding="utf-8"
+        )
+        argv = ["run", str(tmp_path), "--task", "return a parcel", "--inputs", inputs]
+        ran = _command(*argv, "--server", lost)
+        assert ran.returncode == 1, ran.stderr
+        assert ("its error: no parcel AB123456789IT" in ran.stdout) is printed
+        assert ("no parcel" in ran.stdout) is printed
+
+
 def test_plan_reads_the_tools_of_a_live_server(capsys: pytest.CaptureFixture[str]) -> None:
     live = _command("plan", PARCELS, "--task", "return a parcel", "--server", SERVER, "--json")
     assert live.returncode == 0, live.stderr

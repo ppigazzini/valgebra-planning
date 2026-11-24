@@ -124,10 +124,12 @@ uv run valgebra-planning run examples/parcels --task "settle a parcel" \
 (`valgebra_planning/servers.py`): each call is a `tools/call`, its `structuredContent` the value it
 returns, an `isError` result, a protocol error or a request for input a tool error, and the run
 fails closed on any argument record, policy step or result outside its contract. It prints how the
-run ended, and the cause of a break (the server, an assumption, or the program), and exits 1 unless
-it returned a value with no break. With `--timeout`, `run` and `proxy` give each call that many
-seconds to be answered, after which it fails as a tool error; with none, a call waits for its
-answer. A call a policy reads holds the proxy's gate until it is answered or fails, so the
+run ended, the text of an error no block handled where it lies in the set `"errorTexts"` names for
+the tool, as a proxy passes one on, and the cause of a break (the server, an assumption, or the
+program), and exits 1 unless it returned a value with no break. With `--timeout`, `run` and `proxy`
+give each call that many seconds to be answered, after which it fails as a tool error, one no
+result answered, so each policy holds every state the call may have reached; with none, a call
+waits for its answer. A call a policy reads holds the proxy's gate until it is answered or fails, so the
 timeout bounds how long it keeps the next such call waiting. `--depth` sets the calls and tests a path of the planned program may take, as for
 `plan`. A canceled run sends no call after the cancel. `tests/parcel_server.py` serves the example's
 tools over stdio.

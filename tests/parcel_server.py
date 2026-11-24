@@ -1,10 +1,10 @@
 """Serve the parcel tools over stdio, for the command line's tests.
 
-    python tests/parcel_server.py [--note]
+    python tests/parcel_server.py [--note | --lost]
 
-``find_parcel`` answers a delivered parcel of 500 g, and with ``--note`` a ``note`` beside it,
-a key its output schema does not declare; every other tool answers the first value drawn from
-its own output schema with seed 0.
+``find_parcel`` answers a delivered parcel of 500 g, with ``--note`` a ``note`` beside it, a key
+its output schema does not declare, and with ``--lost`` an error, "no parcel AB123456789IT";
+every other tool answers the first value drawn from its own output schema with seed 0.
 """
 
 from __future__ import annotations
@@ -51,6 +51,9 @@ async def listed(_: Any, __: Any) -> types.ListToolsResult:
 
 async def called(_: Any, params: types.CallToolRequestParams) -> types.CallToolResult:
     """Answer one call."""
+    if params.name == "find_parcel" and "--lost" in sys.argv:
+        lost = types.TextContent(type="text", text="no parcel AB123456789IT")
+        return types.CallToolResult(content=[lost], is_error=True)
     value = answer(params.name)
     text = types.TextContent(type="text", text=json.dumps(value))
     return types.CallToolResult(content=[text], structured_content=value)

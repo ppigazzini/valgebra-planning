@@ -945,3 +945,57 @@ def test_a_call_no_result_answered_into_a_bad_state_ends_the_run() -> None:
     ran = run(program, ROBOT.tools, task, GIVEN, {"grasp": grasp}, policies=[dropped])
     assert ran.why == Refusal("policy", "grasp")
     assert ran.refused == "never drop: grasp may have returned into dropped"
+
+
+SPSA = read_contract(
+    {
+        "name": "get_spsa",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"run_id": {"type": "string"}},
+            "required": ["run_id"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {"iter": {"type": "integer"}},
+            "required": ["iter"],
+        },
+    }
+)
+TUNE = read_task("tune", {"run_id": {"type": "string"}}, {"type": "integer"})
+
+
+@pytest.mark.parametrize(
+    ("raised", "texts", "kept"),
+    [
+        (ToolError("run 0 is no tune"), {"get_spsa": {"enum": ["run 0 is no tune"]}}, True),
+        (ToolError("run 0 is no tune"), None, False),
+        (ToolError("token sk-123 expired"), {"get_spsa": {"enum": ["run 0 is no tune"]}}, False),
+        (UnansweredError("run 0 is no tune"), {"get_spsa": {"enum": ["run 0 is no tune"]}}, False),
+    ],
+    ids=["listed", "no-set", "outside", "unanswered"],
+)
+def test_a_run_keeps_an_error_s_text_inside_its_set(
+    raised: ToolError, texts: dict[str, Any] | None, *, kept: bool
+) -> None:
+    """An error no block handles ends the run with its text where the library lists it.
+
+    No contract bounds what a server writes in an error, so the text is kept as a proxy passes
+    one on: only inside the set ``"errorTexts"`` names for the tool, and never for a call no
+    result answered, whose message is the client's.
+    """
+    program = read_program("c1 = get_spsa(run_id=run_id)\nreturn c1.iter\n")
+
+    def get_spsa(**_: Any) -> Any:
+        raise raised
+
+    ran = run(
+        program,
+        {"get_spsa": SPSA},
+        TUNE,
+        {"run_id": "0"},
+        {"get_spsa": get_spsa},
+        error_texts=texts,
+    )
+    assert ran.outcome == "error"
+    assert ran.error == ("run 0 is no tune" if kept else None)
