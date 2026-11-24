@@ -130,6 +130,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- An annotation hides no member of an enum from the planner. It read a field's members, to test
+  a result into the goal or to split on a policy's guard, only where the field's schema held
+  nothing but `type`, `required`, `enum` or `const`, so a `description`, a `title` or any other
+  annotation beside them left the field unnamed and the program unplanned. Annotations constrain
+  no instance and are read past.
+
 - A person's answer is held on every action. A forwarded request's answers were held to the
   form's schema only where the person accepted, so a decline or a cancel carrying content passed
   it on to the server, though content is present only on an acceptance (MCP 2026-07-28,

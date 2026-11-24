@@ -909,6 +909,44 @@ def test_a_listed_field_is_tested_into_the_goal_on_the_members_it_lists(
     assert all(link.verdict == "proven" for link in checked.links)
 
 
+#: An annotation and a value of it, each constraining no instance (JSON Schema 2020-12
+#: Validation, §9; Core, §8.3).
+_NOTED = [
+    ("description", "how the say ended"),
+    ("title", "status"),
+    ("default", "spoken"),
+    ("deprecated", False),
+    ("readOnly", True),
+    ("writeOnly", False),
+    ("examples", ["spoken"]),
+    ("$comment", "the robot's speech status"),
+]
+
+
+@pytest.mark.parametrize(("keyword", "value"), _NOTED, ids=[k for k, _ in _NOTED])
+def test_an_annotation_hides_no_member_of_an_enum(keyword: str, value: object) -> None:
+    """A field listing its members beside an annotation is tested into the goal as a bare one.
+
+    The annotation constrains no instance, so the members the planner may name are the field's
+    own, as for the say a server describes.
+    """
+    noted = {**SAYING, keyword: value}
+    assert planner._listing({"properties": {"status": noted}}) == (
+        ("status",),
+        tuple(SAYING["enum"]),
+    )
+    task = read_task("say", {"text": {"type": "string"}}, {"const": "spoken"})
+    found = plan({"say": _said(noted)["say"]}, task, depth=4)
+    assert found.program is not None
+    assert render(found.program) == (
+        "c1 = say(text=text)\n"
+        "if c1.status in ('spoken',):\n"
+        "    return c1.status\n"
+        "else:\n"
+        "    stop(c1.status)"
+    )
+
+
 def test_no_input_and_no_field_listing_no_members_is_tested_into_the_goal() -> None:
     task = read_task("forge", {"text": {"type": "string"}}, {"const": "spoken"})
     found = plan({"transcribe": _said(SAYING)["transcribe"]}, task, depth=4)

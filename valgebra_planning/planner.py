@@ -99,10 +99,12 @@ def _listing(schema: object) -> tuple[tuple[str, ...], tuple[Any, ...]] | None:
 
     A guard of the form ``{"properties": {"confirmed": {"const": true}}}``, a property at a time
     down to a `const` or an `enum`, is a test a program writes: ``if c3.confirmed in (True,):``.
+    An annotation constrains no instance (JSON Schema 2020-12 Validation, §9), so a
+    ``description`` or a ``title`` beside the members hides none of them.
     """
     path: list[str] = []
     while isinstance(schema, dict):
-        keys = set(schema) - {"type", "required"}
+        keys = set(schema) - {"type", "required"} - ANNOTATIONS
         properties = schema.get("properties")
         if keys == {"properties"} and isinstance(properties, dict) and len(properties) == 1:
             ((name, schema),) = properties.items()
