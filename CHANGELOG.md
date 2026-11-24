@@ -55,18 +55,18 @@ All notable changes to valgebra-planning are recorded here. The format follows
   endorsed set, as a value from elsewhere does. The proxy holds the calls such a rule reads in
   order, as a policy's. Either key without `only` is refused, since it would admit what a rule
   refusing its sources' values refuses.
-- A proxy forwards a request for a person's answer for a tool its library names. A call its
-  server answered by asking for input, as a robot's confirmation asks the user through MCP's
-  elicitation, was answered with a tool error, so no motion under a consent rule was ever made
-  through the proxy. For a tool `tools.json` names under `"forwardsElicitation"` (`forwards_elicitation=`
-  on `proxy`, `read_proxy` and `serve`), a request for a person's answer, a form or a URL, is
-  returned to the proxy's client: the round is read as a call that answered with an error, the
-  server's state travels unread inside the proxy's own, which the mcp SDK's request-state boundary
-  seals with AES-GCM under a key the process alone holds and binds to the call, the principal its
-  token names, its client, issuer and subject, and an expiry, and the answers that resume it reach
-  the server only inside the schema each form asked under. A sampling or a request for roots is
-  still refused, and a state the boundary did not seal so is answered with a protocol error: one
-  operator's request is not resumed by another's through the client they share.
+- A proxy forwards a request for a person's answer for a tool its library names. A call its server
+  answered by asking for input, as a robot's confirmation asks the user through MCP's elicitation,
+  was answered with a tool error, so no motion under a consent rule was ever made through the proxy.
+  For a tool `tools.json` names under `"forwardsElicitation"` (`forwards_elicitation=` on `proxy`,
+  `read_proxy` and `serve`), a request for a person's answer, a form or a URL, is returned to the
+  proxy's client: the round is read as a call that answered with an error, the server's state
+  travels unread inside the proxy's own, which the mcp SDK's request-state boundary seals with
+  AES-GCM under a key the process alone holds and binds to the call, the principal its token names,
+  its client, issuer and subject, and an expiry, and the answers that resume it reach the server
+  only inside the schema each form asked under. A sampling or a request for roots is still refused,
+  and a state the boundary did not seal so is answered with a protocol error: one operator's request
+  is not resumed by another's through the client they share.
 - `Repair.met` reads whether the last program a repair took met the mode it ran in, which
   `Repair.accept` holds: a repair under `accept="weak"` ends on a weak program, and
   `Repair.accepted`, which reads strict acceptance as the code-mode page uses the word, is false
@@ -84,14 +84,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
-- `Plan.reason` names what keeps the goal out of reach. It named every required argument no
-  tool returns a value for among every tool kept, those of a tool only a policy names beside the
-  rest, and not a result field that meets the goal and lies outside it: a say aimed at the status
-  `spoken` named a walk's argument, of a tool only a policy names, among those of tools on its
-  path, and not `say.status`. It
-  now names the arguments of tools on a path toward the goal that no result guarantees, then in a
-  clause of their own those of tools only a policy names, and each result field that meets the
-  goal, lies outside it and lists no members, which the planner tests into the goal on none.
+- `Plan.reason` names what keeps the goal out of reach. It named every required argument no tool
+  returns a value for among every tool kept, those of a tool only a policy names beside the rest,
+  and not a result field that meets the goal and lies outside it: a say aimed at the status `spoken`
+  named a walk's argument, of a tool only a policy names, among those of tools on its path, and not
+  `say.status`. It now names the arguments of tools on a path toward the goal that no result
+  guarantees, then in a clause of their own those of tools only a policy names, and each result
+  field that meets the goal, lies outside it and lists no members, which the planner tests into the
+  goal on none.
 - A proxy's refusal on a policy names the calls that move the policy on. A refusal read "freight
   approved first: book_freight_return reached violated", the rule and the state, not the call
   that would admit the booking. `Monitor.ways_out` names each transition from a state the run

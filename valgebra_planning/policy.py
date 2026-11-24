@@ -133,8 +133,9 @@ class Policy:
         keeps the source, as does a call no guard of the state surely matches. A bad state is
         never left. A state's transitions are read in file order, each on what the earlier ones
         leave: the record outside each earlier guard on the call, and the result outside each
-        earlier guard on the result whose guard on the call surely holds, so the walk takes no
-        transition the monitor's first match would not (D'Antoni and Veanes 2017, §2). A
+        earlier guard on the result whose guard on the call surely holds, so a state's guards meet
+        in nothing, a deterministic automaton (D'Antoni and Veanes 2017, §2), and the walk takes
+        no transition the monitor's first match would not. A
         transition reading the result is stepped after those reading the call, from the states
         they leave: where ``result`` holds the set the result lies in, as in one case of a split
         on it, its guard is read against that set; otherwise it is taken possibly at most, no
