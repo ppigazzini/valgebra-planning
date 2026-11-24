@@ -20,6 +20,8 @@ is refused naming the line and the form it reads there: a call left unbound is a
 assignment to write, `c2 = notify(...)`, and the stubs handed back as a program with the line to
 leave out. Text Python cannot parse is refused the same way, by its own line and Python's message,
 `line 1: '(' was never closed`, so `repair` hands it back for a round and the command line exits 2.
+A test against a tool or an argument the library lacks, `if x in grasp_object.distance_m:`,
+reads no set: it is refuted as a call to that tool is, and neither side it guards is walked.
 
 Run from the repository root:
 

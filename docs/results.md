@@ -90,7 +90,7 @@ where a stop the task tolerates is left, and `proven, no return` where no path r
 | a branch rebinds the reading the other side grasps at | pick, measured | refuted: `flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes` | refused: estimate_pose, detect |
 | the same branch, the faulty grasp on the side the test names | pick, measured | refuted: `flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes` |  |
 | a loop rebinds the reading the grasp after it reads | pick, measured | refuted: `flow measured: c2.distance_m from estimate_pose was returned for the object_id grasp takes` | refused: estimate_pose, scan, estimate_pose |
-| a grasp tested against a tool no library holds | pick, never grasping | accepted |  |
+| a grasp tested against a tool no library holds | pick, never grasping | refuted: `grasp_object is a tool` |  |
 | a grasp tested against an argument the grasp lacks | pick, never grasping | refuted: `grasp.distance is an argument` |  |
 | a failed grasp retried on the walked-to object's other name | pick | refuted: `grasp may be retried` |  |
 | a failed grasp retried on the object as given | pick | refuted: `grasp may be retried` |  |
@@ -115,8 +115,8 @@ where a stop the task tolerates is left, and `proven, no return` where no path r
   input. Each is refused at its grasp when run on the path the scripted answers take, and so is
   the stale reading: a run binds each name to the call that returned it and holds the rule on
   the values, so the grasp is never made.
-- A test against a tool the library lacks walks neither branch, so its program is accepted; one
-  against an argument the grasp lacks is refuted.
+- A test against a tool the library lacks is refuted, as one against an argument the grasp lacks
+  is: neither reads a set, and neither side either guards is walked.
 - A failed grasp retried on the walked-to object's other name is refuted, as the same retry on
   the object as given is: the grasp may have acted, and the other name may hold the same object.
 - A stop on a field the result may lack is proven, and a return under a status the result never

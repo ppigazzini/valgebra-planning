@@ -114,6 +114,30 @@ def test_a_missing_argument_an_unknown_value_and_an_unknown_tool_are_refuted() -
     }
 
 
+def test_a_test_against_a_tool_or_an_argument_the_library_lacks_is_refuted() -> None:
+    # A test reading no set walks neither branch, so a program whose every call and return
+    # stands behind it would pass with nothing proven: the test is refuted, as a call is.
+    for tool, argument, claim in (
+        ("ship", "order_id", "ship is a tool"),
+        ("refund", "order", "refund.order is an argument"),
+    ):
+        tested = Block(
+            (FIND,),
+            Branch(
+                Ref("order_id"),
+                tool,
+                argument,
+                Block((Call("refund", (("order_id", Ref("order_id")),), "c2"),), Return(Ref("c2"))),
+                Block((), Stop(Ref("order_id"))),
+            ),
+        )
+        links = verify(tested, TOOLS, TASK).links
+        assert [(link.claim, link.verdict) for link in links if link.verdict != "proven"] == [
+            (claim, "refuted")
+        ]
+        assert {link.where for link in links} == {""}
+
+
 def test_a_record_the_input_schema_relates_is_asked_whole() -> None:
     card = read_task("pay", {"card": {"type": "string"}, "iban": {"type": "string"}}, True)
     both = Block(

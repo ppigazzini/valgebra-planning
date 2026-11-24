@@ -8,6 +8,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Security
 
+- A test against a tool the library lacks is refuted. `if x in grasp_object.distance_m:` read no
+  set, added no link and walked neither side, so a program whose every call stood behind such a
+  test was accepted with nothing proven, a grasp under a policy refusing every grasp among them.
+  It is refuted as a call to no tool is, as a test against an argument the tool lacks already
+  was.
+
 - A retry is read by the values it may repeat. A call to a tool that may have acted, made again in
   its error block, was a retry only on the same names: a grasp retried on the walked-to object's
   other name, or a booking made again on a parcel read again after the error, was proven, though

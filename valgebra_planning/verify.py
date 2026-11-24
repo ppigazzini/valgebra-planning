@@ -1248,9 +1248,17 @@ class _Walk:
         return None
 
     def argument(self, tool: str, name: str, where: str) -> Slot | None:
+        """Return the slot of ``tool.name``, or None with the link it fails added.
+
+        A tool the library lacks is refuted as a call to it is, and an argument the tool lacks
+        as one: a test against either reads no set, so neither branch it guards is walked.
+        """
         contract = self.contracts.get(tool)
+        if contract is None:
+            self.links.append(Link(where, f"{tool} is a tool", "refuted"))
+            return None
         try:
-            return None if contract is None else contract.argument(name)
+            return contract.argument(name)
         except KeyError:
             self.links.append(Link(where, f"{tool}.{name} is an argument", "refuted"))
             return None

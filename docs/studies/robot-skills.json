@@ -366,14 +366,18 @@
     {
       "program": "a grasp tested against a tool no library holds",
       "task": "pick, never grasping",
-      "accepted": true,
-      "verified": true,
+      "accepted": false,
+      "verified": false,
       "weak": false,
-      "links": 1,
+      "links": 2,
       "proven": 1,
-      "refuted": [],
+      "refuted": [
+        ": grasp_object is a tool"
+      ],
       "undecided": [],
-      "notes": []
+      "notes": [
+        "refuted: grasp_object is a tool"
+      ]
     },
     {
       "program": "a grasp tested against an argument the grasp lacks",
