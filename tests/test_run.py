@@ -999,3 +999,20 @@ def test_a_run_keeps_an_error_s_text_inside_its_set(
     )
     assert ran.outcome == "error"
     assert ran.error == ("run 0 is no tune" if kept else None)
+
+
+def test_a_run_s_flow_refusal_carries_the_rule_s_reason() -> None:
+    reasoned = read_flow(
+        {
+            "name": "measured",
+            "sources": ["estimate_pose"],
+            "sink": "grasp.distance_m",
+            "only": True,
+            "reason": "grasp only at a distance the pose measured",
+        }
+    )
+    ran = _held("c1 = grasp(object_id=o, distance_m=d)\nreturn c1.grasp_id\n", flows=[reasoned])
+    assert ran.refused == (
+        "flow measured: d from d reaches grasp.distance_m: grasp only at a distance the pose "
+        "measured"
+    )

@@ -150,6 +150,10 @@ the call never reaches the server, or its result the agent. The server's tools a
 library reads its own listing, with its `assertFormat` and `closedResults`. The error names each failure's path
 and code, as `run_id: string_pattern_mismatch`, and never the value: a key the tool's schemas do
 not declare is written `*`, so no part of a refused result reaches the agent through the error.
+A policy's refusal names the calls that admit the refused one, a result by the test a program
+writes, `from unasked, confirm with status 'yes' leads to yes`, a call that leads back left out,
+and each call that moves the policy on where none admits it at once; a flow rule's refusal ends
+with the rule's `reason`, its author's words in `flows.json`.
 With `--spell-out`, each tool is listed with its input schema spelled out for a model's chat
 template, which may drop a `const` or a `pattern`: each `const` is written as its value's
 `type`, a one-value `enum` and a `description`, `{"type": "string", "enum": ["delivered"],

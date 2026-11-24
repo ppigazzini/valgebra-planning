@@ -852,3 +852,51 @@ def test_a_policy_names_its_scope_shared_or_principal() -> None:
     assert read_policy(spec | {"scope": "principal"}).scope == "principal"
     with pytest.raises(ValueError, match="'scope' is 'shared' or 'principal', not 'everyone'"):
         read_policy(spec | {"scope": "everyone"})
+
+
+def test_a_way_out_names_its_result_as_a_test_and_leads_out() -> None:
+    """A refused walk names the call that admits it, by the answer it needs.
+
+    The confirmation's yes leads out and is named as the test a program writes; its no leads
+    back to where the walk is refused, and is left out.
+    """
+    consent = read_policy(
+        {
+            "name": "a walk needs a yes",
+            "initial": "unasked",
+            "bad": ["refused"],
+            "transitions": [
+                {"from": "unasked", "tool": "walk", "to": "refused"},
+                {
+                    "from": "unasked",
+                    "tool": "confirm",
+                    "result": {"properties": {"status": {"const": "yes"}}},
+                    "to": "yes",
+                },
+                {
+                    "from": "unasked",
+                    "tool": "confirm",
+                    "result": {"properties": {"status": {"const": "no"}}},
+                    "to": "unasked",
+                },
+            ],
+        }
+    )
+    assert Monitor(consent).ways_out("walk") == [
+        "from unasked, confirm with status 'yes' leads to yes"
+    ]
+    # Where no call leads out at once, each call that moves the policy on is named.
+    twice = read_policy(
+        {
+            "name": "a walk needs two checks",
+            "initial": "unchecked",
+            "bad": ["refused"],
+            "transitions": [
+                {"from": "unchecked", "tool": "walk", "to": "refused"},
+                {"from": "once", "tool": "walk", "to": "refused"},
+                {"from": "unchecked", "tool": "check", "to": "once"},
+                {"from": "once", "tool": "check", "to": "twice"},
+            ],
+        }
+    )
+    assert Monitor(twice).ways_out("walk") == ["from unchecked, check leads to once"]

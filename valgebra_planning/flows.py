@@ -64,6 +64,12 @@ class Flow:
     #: The tools and hints whose calls withdraw what a ``fresh`` rule's sources returned, the
     #: author's claim that no other call changes what they read; empty, every call that may act.
     withdrawn_by: frozenset[str] = frozenset()
+    #: Why the rule holds, in its author's words, which a refusal under it carries.
+    reason: str = ""
+
+    def refused(self, message: str) -> str:
+        """Return a refusal under the rule, its ``reason`` after it: what an agent reads."""
+        return f"{message}: {self.reason}" if self.reason else message
 
     def withdraws(self, tool: str, hints: frozenset[str]) -> bool:
         """Return whether a call to ``tool`` withdraws what the rule's sources returned.
@@ -90,7 +96,7 @@ class Flow:
 
 #: The keys a flow rule reads.
 _FLOW_KEYS = frozenset(
-    {"name", "sources", "sink", "endorsed", "implicit", "only", "fresh", "key", "scope"}
+    {"name", "sources", "sink", "endorsed", "implicit", "only", "fresh", "key", "scope", "reason"}
 )
 
 
@@ -100,7 +106,8 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
     It holds ``name``, ``sources``, ``sink`` as ``tool.argument``, and optionally the
     ``endorsed`` JSON Schema, ``implicit`` and ``only``, and with ``only``, ``fresh`` and
     ``key``, ``fresh`` true or the tools and hints whose calls withdraw what the sources
-    returned. A source is a tool's name or a task input's. A key it does not read is a
+    returned, and ``reason``, why it holds, which a refusal under it carries. A source is a
+    tool's name or a task input's. A key it does not read is a
     `ValueError` naming it, and so are a sink that names no argument and ``fresh`` or ``key``
     without ``only``, which would admit a value a rule refusing its sources' values refuses; a
     flag that is no boolean, and a ``key`` that is no argument's name, is a `TypeError`.
@@ -126,6 +133,10 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
         message = f"{where}: 'fresh' and 'key' read a value's return, so they need 'only'"
         raise ValueError(message)
     endorsed = spec.get("endorsed")
+    reason = spec.get("reason", "")
+    if not isinstance(reason, str):
+        message = f"{where}: 'reason' is a text, not {reason!r}"
+        raise TypeError(message)
     return Flow(
         name=spec["name"],
         sources=frozenset(spec["sources"]),
@@ -140,6 +151,7 @@ def read_flow(spec: Mapping[str, Any], *, assert_format: bool = False) -> Flow:
         key=key,
         scope=scope_of(spec, where),
         withdrawn_by=withdrawn_by,
+        reason=reason,
     )
 
 

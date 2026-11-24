@@ -423,7 +423,9 @@ class Gate:
             *([f"for this {flow.key}"] if flow.key else []),
         ]
         said = " and ".join(when)
-        return f"flow {flow.name}: {flow.sink} holds a value none of {named} returned {said}"
+        return flow.refused(
+            f"flow {flow.name}: {flow.sink} holds a value none of {named} returned {said}"
+        )
 
     def made(self, tool: str) -> tuple[int, bool]:
         """Withdraw every value a ``fresh`` rule's sources returned: ``tool`` may act.
@@ -668,9 +670,11 @@ class Gate:
                 continue
             if flow.only:
                 named = ", ".join(sorted(flow.sources))
-                return f"flow {flow.name}: {flow.sink} holds a value none of {named} returned"
+                return flow.refused(
+                    f"flow {flow.name}: {flow.sink} holds a value none of {named} returned"
+                )
             named = ", ".join(sorted(sources))
-            return f"flow {flow.name}: {flow.sink} holds a value {named} returned"
+            return flow.refused(f"flow {flow.name}: {flow.sink} holds a value {named} returned")
         return None
 
     def stepped_on(

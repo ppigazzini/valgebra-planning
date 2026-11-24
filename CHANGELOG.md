@@ -75,6 +75,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- A policy's refusal names the way out it needs. It named each transition from a state the run
+  may be in, a result as read "by its result", so a walk waiting on a yes listed the yes and the
+  no alike, with neither answer. A way into a state that admits the refused call is named alone
+  where there is one, a result by the test a program writes, `confirm with status 'yes'`;
+  `policy.listing` reads a guard's field and members, as the planner's tests do. A flow rule may
+  carry a `reason`, its author's words, which its refusals end with, at the proxy and in a run.
+
 - `Plan.reason` names what keeps the goal out. It named the arguments only a tested input fills
   of tools a program could call on a path toward the goal, so a pick whose grasp no value of its
   hand could fill named nothing, the grasp being uncallable, and a say named a walk's command,

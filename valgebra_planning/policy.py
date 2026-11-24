@@ -47,6 +47,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, TypeAlias
 
 from valgebra_planning._valgebra import (
+    ANNOTATIONS,
     Validator,
     compile_schema,
     complement,
@@ -57,7 +58,7 @@ from valgebra_planning._valgebra import (
 )
 from valgebra_planning.contracts import MCP_HINTS, Contract, keys_read, scope_of
 
-__all__ = ["Monitor", "Policy", "Reach", "Snapshot", "Transition", "read_policy"]
+__all__ = ["Monitor", "Policy", "Reach", "Snapshot", "Transition", "listing", "read_policy"]
 
 Reach = Literal["never", "possibly", "surely"]
 
@@ -322,6 +323,40 @@ def _per(spec: Mapping[str, Any]) -> str:
     return per
 
 
+def _answered(schema: object) -> str:
+    """Return how a way out names the result a transition reads: the test a program writes."""
+    read = listing(schema)
+    if read is None or not read[0]:
+        return ", by its result,"
+    field, values = ".".join(read[0]), read[1]
+    said = repr(values[0]) if len(values) == 1 else f"in {values!r}"
+    return f" with {field} {said}"
+
+
+def listing(schema: object) -> tuple[tuple[str, ...], tuple[Any, ...]] | None:
+    """Return the one field a guard's schema reads and the members it lists, or None.
+
+    A guard of the form ``{"properties": {"confirmed": {"const": true}}}``, a property at a time
+    down to a `const` or an `enum`, is a test a program writes: ``if c3.confirmed in (True,):``.
+    An annotation constrains no instance (JSON Schema 2020-12 Validation, §9), so a
+    ``description`` or a ``title`` beside the members hides none of them.
+    """
+    path: list[str] = []
+    while isinstance(schema, dict):
+        keys = set(schema) - {"type", "required"} - ANNOTATIONS
+        properties = schema.get("properties")
+        if keys == {"properties"} and isinstance(properties, dict) and len(properties) == 1:
+            ((name, schema),) = properties.items()
+            path.append(name)
+        elif keys == {"const"}:
+            return tuple(path), (schema["const"],)
+        elif keys == {"enum"} and isinstance(schema["enum"], list):
+            return tuple(path), tuple(schema["enum"])
+        else:
+            return None
+    return None
+
+
 @dataclass(slots=True)
 class Monitor:
     """A policy stepped on concrete calls, as a run makes them.
@@ -499,11 +534,15 @@ class Monitor:
 
         Each is a transition from a state the run may be in to one that is not bad, on a call
         other than ``tool``'s, as `from start, approve_freight leads to approved`: the calls the
-        policy waits for. A transition reading a result is named by its tool and its result, and
-        one reading a hint by the hint; each is named once, in the order the policy lists them.
+        policy waits for. Those into a state that admits the refused call are named alone where
+        there are any, a no that leads back left out. A transition reading a result is named by
+        the test a program writes where its guard reads one field's members, `confirm with status
+        'yes'`, and otherwise as reading its result; one reading a hint by the hint; each is named
+        once, in the order the policy lists them.
         """
         held = self.held() - self.policy.bad
         named: list[str] = []
+        moves: list[str] = []
         for transition in self.policy.transitions:
             if (
                 transition.source not in held
@@ -513,11 +552,24 @@ class Monitor:
                 continue
             call = transition.tool or f"a call setting {transition.hint}"
             if transition.result is not None:
-                call += ", by its result,"
+                call += _answered(transition.result_schema)
             way = f"from {transition.source}, {call} leads to {transition.target}"
-            if way not in named:
+            if way not in named and self.admits(transition.target, tool, hints):
                 named.append(way)
-        return named
+            elif way not in moves:
+                moves.append(way)
+        # A way that leads the refused call out comes first; where none does in one call, each
+        # call that moves the policy on is named, the first of a longer way among them.
+        return named or moves
+
+    def admits(self, state: str, tool: str, hints: frozenset[str]) -> bool:
+        """Return whether no transition reading a call to ``tool`` takes ``state`` to a bad one."""
+        return not any(
+            transition.source == state
+            and transition.target in self.policy.bad
+            and transition.reads(tool, hints)
+            for transition in self.policy.transitions
+        )
 
     def errored(self) -> None:
         """Hold the states before the call observed last too: it answered with an error."""

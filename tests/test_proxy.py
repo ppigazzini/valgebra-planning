@@ -1242,7 +1242,7 @@ def test_a_person_s_answer_reaches_the_call_that_asked(*, yes: bool) -> None:
     else:
         assert _refused(walked) == (
             "refused: a walk follows a yes: walk_to reached violated; "
-            "from start, confirm_with_user, by its result, leads to ok"
+            "from start, confirm_with_user with confirmed True leads to ok"
         )
         assert made == ["confirm_with_user", "confirm_with_user"]
 
@@ -1793,3 +1793,23 @@ def test_a_person_s_answer_is_held_on_every_action(
     """Content is present only where the person accepted, and a form's formats are asserted."""
     said = Gate.answers("confirm_with_user", {"yes": answer}, {"yes": asked})
     assert (said is None) if refused is None else (refused in (said or ""))
+
+
+def test_a_flow_rule_s_refusal_carries_its_reason() -> None:
+    # An agent refused an identifier reads why the rule holds, as the robot's own gate says it.
+    reasoned = read_flow(
+        {
+            "name": "verified addresses",
+            "sources": ["verify_contact"],
+            "sink": "notify.email",
+            "only": True,
+            "reason": "notify only an address verify_contact returned",
+        }
+    )
+    _, (refused,) = _session([("notify", {"email": "a@b.c"})], flows=[reasoned])
+    assert _refused(refused) == (
+        "refused: flow verified addresses: notify.email holds a value none of verify_contact "
+        "returned: notify only an address verify_contact returned"
+    )
+    with pytest.raises(TypeError, match="'reason' is a text"):
+        read_flow({"name": "r", "sources": ["a"], "sink": "b.c", "reason": 1})

@@ -449,7 +449,7 @@ class _Runner:
                 if name == flow.argument:
                     why = self.flowed(flow, ref, arguments, env)
                     if why is not None:
-                        broken.append(why)
+                        broken.append(flow.refused(why))
         return broken
 
     def flowed(

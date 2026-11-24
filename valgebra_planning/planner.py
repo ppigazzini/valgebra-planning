@@ -51,6 +51,7 @@ from valgebra_planning.contracts import (
 from valgebra_planning.flows import Flow
 from valgebra_planning.mining import SlotKey, Types
 from valgebra_planning.policy import Policy
+from valgebra_planning.policy import listing as _listing
 from valgebra_planning.program import (
     Block,
     Branch,
@@ -92,30 +93,6 @@ class _Guard:
     path: tuple[str, ...]
     values: tuple[Any, ...]
     whole: Validator[Any]
-
-
-def _listing(schema: object) -> tuple[tuple[str, ...], tuple[Any, ...]] | None:
-    """Return the one field a guard's schema reads and the members it lists, or None.
-
-    A guard of the form ``{"properties": {"confirmed": {"const": true}}}``, a property at a time
-    down to a `const` or an `enum`, is a test a program writes: ``if c3.confirmed in (True,):``.
-    An annotation constrains no instance (JSON Schema 2020-12 Validation, §9), so a
-    ``description`` or a ``title`` beside the members hides none of them.
-    """
-    path: list[str] = []
-    while isinstance(schema, dict):
-        keys = set(schema) - {"type", "required"} - ANNOTATIONS
-        properties = schema.get("properties")
-        if keys == {"properties"} and isinstance(properties, dict) and len(properties) == 1:
-            ((name, schema),) = properties.items()
-            path.append(name)
-        elif keys == {"const"}:
-            return tuple(path), (schema["const"],)
-        elif keys == {"enum"} and isinstance(schema["enum"], list):
-            return tuple(path), tuple(schema["enum"])
-        else:
-            return None
-    return None
 
 
 def _members(schema: object) -> tuple[Any, ...] | None:
