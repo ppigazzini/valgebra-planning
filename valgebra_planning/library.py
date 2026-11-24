@@ -382,6 +382,7 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
             fallbacks=goals[1:],
             constants=spec.get("constants"),
             fresh=spec.get("fresh", ()),
+            reads=spec.get("reads", ()),
             assert_format=asserted,
         )
         fixes(task, tools)

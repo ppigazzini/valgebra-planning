@@ -86,6 +86,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A task names the inputs its answer must be read from: `reads` in `tasks.json` and `read_task`.
+  A goal's set says what kind of value answers, not whose: every run's events meet "the events
+  of a run", so the planner answered with `search_actions()`, reading no run. The verifier refutes
+  a return whose value was read from none of the inputs named, through the calls that returned it
+  and the items of their arrays, and the planner returns only such a value, writing an unread
+  input into the first optional argument it fills: `search_actions(run_id=run_id)`.
+
 - A fresh flow rule may name the calls that withdraw it: `"fresh"` takes a list of tools and hints
   beside `true`. Under `true` every call that may act withdraws what the sources returned, so a
   grasp the robot answered "replayed", which moves nothing, withdrew the pose before it and the

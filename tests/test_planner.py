@@ -956,3 +956,76 @@ def test_no_input_and_no_field_listing_no_members_is_tested_into_the_goal() -> N
         "; transcribe.text meets the goal and lies outside it, and lists no members a test into "
         "the goal could name"
     )
+
+
+SEARCH = read_contract(
+    {
+        "name": "search_actions",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"run_id": {"type": "string"}, "action": {"type": "string"}},
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"action": {"type": "string"}},
+                        "required": ["action"],
+                    },
+                }
+            },
+            "required": ["events"],
+        },
+    }
+)
+
+
+def test_a_task_names_the_inputs_a_program_must_read() -> None:
+    """The events of a run are events, and every run's events meet the goal's set too.
+
+    Naming the run as an input a program must read, the task plans the search on it, the
+    argument optional though it is, and a program reading it nowhere is refuted at its return.
+    """
+    goal = {"type": "array"}
+    loose = read_task("the events of a run", {"run_id": {"type": "string"}}, goal)
+    found = plan({"search_actions": SEARCH}, loose)
+    assert found.program is not None
+    assert render(found.program) == "c1 = search_actions()\nreturn c1.events"
+    task = read_task("the events of a run", {"run_id": {"type": "string"}}, goal, reads=["run_id"])
+    found = plan({"search_actions": SEARCH}, task)
+    assert found.program is not None
+    assert render(found.program) == "c1 = search_actions(run_id=run_id)\nreturn c1.events"
+    assert verify(found.program, {"search_actions": SEARCH}, task).proven
+    unread = read_program("c1 = search_actions()\nreturn c1.events\n")
+    links = verify(unread, {"search_actions": SEARCH}, task).links
+    assert [(link.claim, link.verdict) for link in links if "is read" in link.claim] == [
+        ("return c1.events is read from run_id", "refuted")
+    ]
+    # A search on an action of the run's events was read from the run, through the item it
+    # read and the search returning the item.
+    looped = read_program(
+        "c1 = search_actions(run_id=run_id)\nfor e in c1.events:\n"
+        "    c2 = search_actions(action=e.action)\n    return c2.events\nstop(c1)\n"
+    )
+    links = verify(looped, {"search_actions": SEARCH}, task).links
+    claim = "return c2.events is read from run_id"
+    assert [link.verdict for link in links if link.claim == claim] == ["proven"]
+    with pytest.raises(ValueError, match="it reads 'run', which is no input it names"):
+        read_task("t", {"run_id": {"type": "string"}}, goal, reads=["run"])
+
+
+def test_a_value_is_returned_only_where_it_was_read_from_each_input_required() -> None:
+    # The recent events meet the goal at once, and a label could fill the run's argument; the
+    # value returned is the run's events, read from the run in one call.
+    inputs = {
+        "label": {"type": "string"},
+        "recent": {"type": "array"},
+        "run_id": {"type": "string"},
+    }
+    task = read_task("the events of a run", inputs, {"type": "array"}, reads=["run_id"])
+    found = plan({"search_actions": SEARCH}, task)
+    assert found.program is not None
+    assert render(found.program) == "c1 = search_actions(run_id=run_id)\nreturn c1.events"

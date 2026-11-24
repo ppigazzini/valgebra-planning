@@ -153,6 +153,9 @@ class Task:
     preferred: tuple[tuple[Validator[Any], object], ...] = ()
     constants: tuple[tuple[str, str, Any], ...] = ()
     fresh: tuple[tuple[str, str], ...] = ()
+    #: The inputs a program must read before it returns: a value meeting the goal's set and
+    #: read from none of them is not the one the task asks.
+    reads: frozenset[str] = frozenset()
 
 
 def _root(schema: object) -> object:
@@ -459,6 +462,7 @@ def read_task(
     fallbacks: Sequence[object] = (),
     constants: Mapping[str, Any] | None = None,
     fresh: Sequence[str] = (),
+    reads: Sequence[str] = (),
     assert_format: bool = False,
 ) -> Task:
     """Read a task: the schema of each value the agent starts with, and of the goal.
@@ -469,7 +473,9 @@ def read_task(
     first where it can. ``constants`` maps ``tool.argument`` to the JSON value the task's intent
     fixes it to, as ``{"confirm_with_user.action": "grasp"}``. ``fresh`` names each
     ``tool.argument`` whose value is read after the last call before it that may act; one
-    both fixed and fresh is a `ValueError`, since a constant is read at no time. With
+    both fixed and fresh is a `ValueError`, since a constant is read at no time. ``reads`` names
+    the inputs a program must read before it returns, as the run whose events the task asks;
+    one that is no input is a `ValueError`. With
     ``assert_format``, ``format`` is read as an assertion, as `read_contract` reads it.
     """
     held = {}
@@ -497,6 +503,9 @@ def read_task(
                 "constant is read at no time"
             )
             raise ValueError(message)
+    for var in sorted(set(reads) - set(inputs)):
+        message = f"task {name!r}: it reads {var!r}, which is no input it names"
+        raise ValueError(message)
     return Task(
         name=name,
         held=held,
@@ -506,6 +515,7 @@ def read_task(
         preferred=goals if len(goals) > 1 else (),
         constants=tuple(fixed),
         fresh=read_fresh,
+        reads=frozenset(reads),
     )
 
 

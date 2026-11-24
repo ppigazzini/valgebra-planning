@@ -215,6 +215,10 @@ class _State:
     #: For each fresh rule naming the calls that withdraw it, the variables held before the last
     #: of those on the path, by the rule's name.
     withdrawn: tuple[tuple[str, frozenset[str]], ...] = ()
+    #: The inputs the task requires a program to read, and those of them a call or a test on
+    #: the path read.
+    reading: frozenset[str] = frozenset()
+    read: frozenset[str] = frozenset()
 
     def cells(self, ref: Ref) -> frozenset[int]:
         return dict(self.refs)[ref]
@@ -227,7 +231,8 @@ class _State:
 
     def narrowed(self, ref: Ref, cells: frozenset[int]) -> _State:
         refs = tuple((r, cells if r == ref else held) for r, held in self.refs)
-        return self.but(refs=refs, tested=self.tested | {self.origin(ref)})
+        read = self.read | ({ref.variable} & self.reading)
+        return self.but(refs=refs, tested=self.tested | {self.origin(ref)}, read=read)
 
     def signature(self) -> object:
         old = frozenset(cells for ref, cells in self.refs if ref.variable in self.stale)
@@ -236,7 +241,29 @@ class _State:
             for _, names in self.withdrawn
         )
         held = frozenset(cells for _, cells in self.refs)
-        return held, self.policed, self.tested, old, listed
+        fed = frozenset(cells for ref, cells in self.refs if self.fed(ref.variable))
+        return held, self.policed, self.tested, old, listed, self.read, fed
+
+    def fed(self, variable: str) -> bool:
+        """Return whether the value ``variable`` holds was read from every input required.
+
+        A call's result was read from every input its arguments were, through the variables
+        they read; an input from itself.
+        """
+        if not self.reading:
+            return True
+        given = dict(self.given)
+        seen, found, pending = set(), set(), [variable]
+        while pending:
+            name = pending.pop()
+            if name in seen:
+                continue
+            seen.add(name)
+            if name in given:
+                pending += [ref.variable for _, ref in given[name]]
+            else:
+                found.add(name)
+        return self.reading <= found
 
 
 @dataclass(slots=True)
@@ -341,8 +368,14 @@ class _Search:
         )
 
     def solve(self, state: _State, depth: int, *, weak: bool) -> Block | None:
+        # A value meeting the goal is returned only where it was read from each input required.
         goal = next(
-            (r for r, cells in state.refs if cells <= self.goal and r not in self.literals), None
+            (
+                r
+                for r, cells in state.refs
+                if cells <= self.goal and r not in self.literals and state.fed(r.variable)
+            ),
+            None,
         )
         if goal is not None and (not self.policies or self.settled(state)):
             return Block((), Return(goal))
@@ -365,10 +398,14 @@ class _Search:
     def call(self, state: _State, contract: Contract, depth: int, *, weak: bool) -> Block | None:
         # An argument the task fixes is written whether the tool requires it or not: left out,
         # the tool reads its own default, which no task fixed.
+        unread = state.reading - state.read
+        reading = self.reading(state, contract, unread)
         required = [
             slot
             for slot in contract.arguments
-            if slot.required or (contract.name, slot.path[0]) in self.fixed
+            if slot.required
+            or (contract.name, slot.path[0]) in self.fixed
+            or slot.path[0] in reading
         ]
         full: dict[str, list[Ref]] = {}
         partial: dict[str, list[Ref]] = {}
@@ -403,6 +440,28 @@ class _Search:
                 if block is not None:
                     return block
         return None
+
+    def reading(self, state: _State, contract: Contract, unread: frozenset[str]) -> set[str]:
+        """Return the optional arguments a call writes an input the task requires into.
+
+        An input no call has read yet is written into the first optional argument it fills: the
+        value the program returns must be read from it, and this call can read it.
+        """
+        reading: set[str] = set()
+        for var in sorted(unread):
+            slot = next(
+                (
+                    slot
+                    for slot in contract.arguments
+                    if not slot.required
+                    and slot.path[0] not in reading
+                    and any(r.variable == var and self.agree(state, r, slot) for r, _ in state.refs)
+                ),
+                None,
+            )
+            if slot is not None:
+                reading.add(slot.path[0])
+        return reading
 
     def direct(
         self,
@@ -835,6 +894,7 @@ class _Search:
             stale=stale,
             given=(*state.given, (result, bindings)),
             withdrawn=self.withdrawn(state, contract),
+            read=state.read | ({ref.variable for _, ref in bindings} & state.reading),
         )
 
     def agree(self, state: _State, ref: Ref, slot: Slot) -> bool:
@@ -1626,6 +1686,7 @@ def plan(
         frozenset(),
         1,
         tuple(frozenset({policy.initial}) for policy in policies),
+        reading=task.reads,
     )
 
     def reading(program: Block) -> object:

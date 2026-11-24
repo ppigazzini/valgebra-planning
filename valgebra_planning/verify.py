@@ -204,6 +204,10 @@ class _Walk:
     given: dict[int, tuple[tuple[str, _Key], ...]] = field(default_factory=dict)
     #: How many versions were given out: a version names one value on every path.
     versions: int = 0
+    #: Each task input's version, to the input's name, and each loop item's version, to the
+    #: version of the call that returned its array.
+    inputs: dict[int, str] = field(default_factory=dict)
+    items: dict[int, int] = field(default_factory=dict)
     #: Where each return some execution reaches stands (`Verification.returns`).
     returns: list[str] = field(default_factory=list)
 
@@ -219,6 +223,28 @@ class _Walk:
         """
         self.versions += 1
         return self.versions
+
+    def lineage(self, returned: int) -> set[str]:
+        """Return the task inputs the value a version names was read from.
+
+        An input's version is its own; a call's result was read from every input its arguments
+        were, through the versions they read (`_Walk.given`), and a loop's item from what its
+        array was.
+        """
+        seen, inputs, pending = set(), set(), [returned]
+        while pending:
+            version = pending.pop()
+            if version in seen:
+                continue
+            seen.add(version)
+            if version in self.inputs:
+                inputs.add(self.inputs[version])
+            if version in self.items:
+                pending.append(self.items[version])
+            for _, key in self.given.get(version, ()):
+                if isinstance(key, tuple):
+                    pending.append(key[0])
+        return inputs
 
     def keyed(self, env: Mapping[Ref, _Held], ref: Ref | Const | None) -> _Key:
         """Return what a binding reads, as a key compares it (`_Key`).
@@ -267,6 +293,13 @@ class _Walk:
             self.inclusion(where, claim, end.ref, held, self.task.goal, env)
             if self.reaches(env):
                 self.returns.append(where)
+        if self.task.reads:
+            root = env.get(Ref(end.ref.variable))
+            read = set() if root is None else self.lineage(root.returned)
+            for var in sorted(self.task.reads):
+                verdict: Verdict = "proven" if var in read else "refuted"
+                claim = f"return {end.ref} is read from {var}"
+                self.links.append(Link(where, claim, verdict))
         self.obeyed(where, path.states)
         self.ended(path)
 
@@ -321,6 +354,7 @@ class _Walk:
             version=self.version(),
             returned=held.returned if array is None else array.returned,
         )
+        self.items[inner[Ref(end.item)].version] = inner[Ref(end.item)].returned
         inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
         if _acts(end.body, self.contracts):
             stale = path.stale | {held.returned for ref, held in inner.items() if not ref.path}
@@ -1653,6 +1687,7 @@ def verify(
     walk.seed, walk.postconditions = seed, tuple(postconditions)
     # Each input is a value of its own, returned by no call: its version is its own.
     versions = {var: walk.version() for var in task.held}
+    walk.inputs = {version: var for var, version in versions.items()}
     env = {
         Ref(var, slot.path): _Held(slot.values, slot, version=versions[var], returned=versions[var])
         for var, slots in task.held.items()
