@@ -16,14 +16,16 @@ from valgebra_planning.verify import verify
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 TOOLS = {
     contract.name: contract
-    for contract in map(read_contract, json.loads((EXAMPLE / "tools.json").read_text())["tools"])
+    for contract in map(
+        read_contract, json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
+    )
 }
 TASK = next(
     read_task(spec["name"], spec["inputs"], spec["goal"])
-    for spec in json.loads((EXAMPLE / "tasks.json").read_text())["tasks"]
+    for spec in json.loads((EXAMPLE / "tasks.json").read_text(encoding="utf-8"))["tasks"]
     if spec["name"] == "notify a parcel's contact"
 )
-VERIFIED = read_flow(json.loads((EXAMPLE / "flows.json").read_text())["flows"][0])
+VERIFIED = read_flow(json.loads((EXAMPLE / "flows.json").read_text(encoding="utf-8"))["flows"][0])
 DIRECT = read_program(
     "c1 = find_parcel(tracking=tracking)\n"
     "c2 = notify(email=c1.parcel.contact)\n"
@@ -86,7 +88,10 @@ def test_a_test_narrowing_the_value_into_the_endorsed_set_lets_it_through() -> N
 
 def test_a_sink_called_under_a_test_on_an_untrusted_value_is_an_implicit_flow() -> None:
     implicit = read_flow(
-        {**json.loads((EXAMPLE / "flows.json").read_text())["flows"][0], "implicit": True}
+        {
+            **json.loads((EXAMPLE / "flows.json").read_text(encoding="utf-8"))["flows"][0],
+            "implicit": True,
+        }
     )
     branched = read_program(
         "c1 = find_parcel(tracking=tracking)\n"
@@ -109,7 +114,7 @@ def test_a_sink_called_under_a_test_on_an_untrusted_value_is_an_implicit_flow() 
 
 SETTLE = next(
     read_task(spec["name"], spec["inputs"], spec["goal"])
-    for spec in json.loads((EXAMPLE / "tasks.json").read_text())["tasks"]
+    for spec in json.loads((EXAMPLE / "tasks.json").read_text(encoding="utf-8"))["tasks"]
     if spec["name"] == "settle a parcel"
 )
 #: Sah et al. 2026's integrity leak: the identity an authentication tool is asked about is the

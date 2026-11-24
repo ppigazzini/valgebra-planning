@@ -21,14 +21,18 @@ from valgebra_planning.verify import verify
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 TOOLS = {
     contract.name: contract
-    for contract in map(read_contract, json.loads((EXAMPLE / "tools.json").read_text())["tools"])
+    for contract in map(
+        read_contract, json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
+    )
 }
 SETTLE = next(
     read_task(spec["name"], spec["inputs"], spec["goal"])
-    for spec in json.loads((EXAMPLE / "tasks.json").read_text())["tasks"]
+    for spec in json.loads((EXAMPLE / "tasks.json").read_text(encoding="utf-8"))["tasks"]
     if spec["name"] == "settle a parcel"
 )
-FREIGHT = read_policy(json.loads((EXAMPLE / "policies.json").read_text())["policies"][0])
+FREIGHT = read_policy(
+    json.loads((EXAMPLE / "policies.json").read_text(encoding="utf-8"))["policies"][0]
+)
 
 
 def _policy_links(program: Any, policy: Any = FREIGHT) -> dict[str, str]:
@@ -187,7 +191,7 @@ def test_a_bad_state_is_never_left() -> None:
     )
     task = next(
         read_task(spec["name"], spec["inputs"], spec["goal"])
-        for spec in json.loads((EXAMPLE / "tasks.json").read_text())["tasks"]
+        for spec in json.loads((EXAMPLE / "tasks.json").read_text(encoding="utf-8"))["tasks"]
         if spec["name"] == "notify a parcel's contact"
     )
     program = read_program(

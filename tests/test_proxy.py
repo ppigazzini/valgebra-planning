@@ -24,10 +24,12 @@ from valgebra_planning.policy import Monitor, read_policy
 from valgebra_planning.proxy import Gate, http_app, proxy, read_proxy, spelled_out
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
-LISTING = json.loads((EXAMPLE / "tools.json").read_text())["tools"]
+LISTING = json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
 TOOLS = {contract.name: contract for contract in map(read_contract, LISTING)}
-FREIGHT = read_policy(json.loads((EXAMPLE / "policies.json").read_text())["policies"][0])
-VERIFIED = read_flow(json.loads((EXAMPLE / "flows.json").read_text())["flows"][0])
+FREIGHT = read_policy(
+    json.loads((EXAMPLE / "policies.json").read_text(encoding="utf-8"))["policies"][0]
+)
+VERIFIED = read_flow(json.loads((EXAMPLE / "flows.json").read_text(encoding="utf-8"))["flows"][0])
 PARCEL = {
     "parcel_id": "pcl_1",
     "state": "delivered",

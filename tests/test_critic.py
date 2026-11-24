@@ -17,11 +17,13 @@ from valgebra_planning.program import Block, Branch, Ref, Return, Stop, render
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 TOOLS = {
     contract.name: contract
-    for contract in map(read_contract, json.loads((EXAMPLE / "tools.json").read_text())["tools"])
+    for contract in map(
+        read_contract, json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
+    )
 }
 TASKS = {
     spec["name"]: read_task(spec["name"], spec["inputs"], spec["goal"])
-    for spec in json.loads((EXAMPLE / "tasks.json").read_text())["tasks"]
+    for spec in json.loads((EXAMPLE / "tasks.json").read_text(encoding="utf-8"))["tasks"]
 }
 
 
@@ -91,9 +93,11 @@ def test_a_construct_the_reader_does_not_read_is_refused_by_line() -> None:
         read_program("if a == b:\n    return a\nelse:\n    return b\n")
 
 
-FREIGHT = read_policy(json.loads((EXAMPLE / "policies.json").read_text())["policies"][0])
-VERIFIED = read_flow(json.loads((EXAMPLE / "flows.json").read_text())["flows"][0])
-OBSERVED = json.loads((EXAMPLE / "observed.json").read_text())["calls"]
+FREIGHT = read_policy(
+    json.loads((EXAMPLE / "policies.json").read_text(encoding="utf-8"))["policies"][0]
+)
+VERIFIED = read_flow(json.loads((EXAMPLE / "flows.json").read_text(encoding="utf-8"))["flows"][0])
+OBSERVED = json.loads((EXAMPLE / "observed.json").read_text(encoding="utf-8"))["calls"]
 DIRECT_NOTICE = """\
 c1 = find_parcel(tracking=tracking)
 c2 = notify(email=c1.parcel.contact)

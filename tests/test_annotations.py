@@ -16,11 +16,13 @@ from valgebra_planning.verify import verify
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 TOOLS = {
     contract.name: contract
-    for contract in map(read_contract, json.loads((EXAMPLE / "tools.json").read_text())["tools"])
+    for contract in map(
+        read_contract, json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
+    )
 }
 SETTLE = next(
     read_task(spec["name"], spec["inputs"], spec["goal"])
-    for spec in json.loads((EXAMPLE / "tasks.json").read_text())["tasks"]
+    for spec in json.loads((EXAMPLE / "tasks.json").read_text(encoding="utf-8"))["tasks"]
     if spec["name"] == "settle a parcel"
 )
 RETRIED = "c1 = retry(find_parcel(tracking=tracking))\nreturn c1.parcel.parcel_id\n"
@@ -144,7 +146,7 @@ def test_a_retry_rests_on_its_annotations_and_on_its_errors_being_transient() ->
 def test_a_trusted_server_waives_the_annotations_and_keeps_the_errors(tmp_path: Path) -> None:
     library = tmp_path / "parcels"
     shutil.copytree(EXAMPLE, library)
-    listed = json.loads((library / "tools.json").read_text())
+    listed = json.loads((library / "tools.json").read_text(encoding="utf-8"))
     (library / "tools.json").write_text(json.dumps({**listed, "trusted": True}), encoding="utf-8")
     trusted = read_library(library)
     problem = next(p for p in trusted.problems if p.errors)

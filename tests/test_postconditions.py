@@ -413,18 +413,22 @@ def test_a_postcondition_covering_nothing_or_narrowing_nothing_is_found() -> Non
 def test_a_library_reads_its_postconditions_and_each_task_is_held_to_them(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": SPECS, "postconditions": [ARRIVED]}))
+    (tmp_path / "tools.json").write_text(
+        json.dumps({"tools": SPECS, "postconditions": [ARRIVED]}), encoding="utf-8"
+    )
     task = {"name": "pick", "inputs": INPUTS, "goal": GRASPED}
-    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}))
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}), encoding="utf-8")
     library = read_library(tmp_path)
     assert [post.name for post in library.postconditions] == [NAMED]
     assert library.problem("pick").postconditions == library.postconditions
-    (tmp_path / "pick.py").write_text(DIRECT)
+    (tmp_path / "pick.py").write_text(DIRECT, encoding="utf-8")
     main(["critique", str(tmp_path), "--task", "pick", str(tmp_path / "pick.py")])
     out = capsys.readouterr().out
     assert f"assumed: {NAMED}" in out
     assert "refuted" not in out
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": SPECS, "postconditions": {}}))
+    (tmp_path / "tools.json").write_text(
+        json.dumps({"tools": SPECS, "postconditions": {}}), encoding="utf-8"
+    )
     with pytest.raises(TypeError, match="'postconditions' is a list, not dict"):
         read_library(tmp_path)
 
@@ -712,10 +716,10 @@ def test_the_command_line_plans_a_library_s_block_and_proves_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     (tmp_path / "tools.json").write_text(
-        json.dumps({"tools": BOOKING_SPECS, "postconditions": [BOOKED]})
+        json.dumps({"tools": BOOKING_SPECS, "postconditions": [BOOKED]}), encoding="utf-8"
     )
     task = {"name": "send", "inputs": {"parcel_id": PARCEL}, "goal": LABEL, "errors": True}
-    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}))
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}), encoding="utf-8")
     assert main(["plan", str(tmp_path), "--json"]) == 0
     (row,) = json.loads(capsys.readouterr().out)
     assert 'if "label_id" in c1:' in row["program"]

@@ -23,7 +23,9 @@ from mcp.server.stdio import stdio_server
 from valgebra_planning._valgebra import Sampler
 from valgebra_planning.contracts import read_contract
 
-LISTING = json.loads((Path(__file__).parent.parent / "examples/parcels/tools.json").read_text())
+LISTING = json.loads(
+    (Path(__file__).parent.parent / "examples/parcels/tools.json").read_text(encoding="utf-8")
+)
 TOOLS = {contract.name: contract for contract in map(read_contract, LISTING["tools"])}
 PARCEL = {
     "parcel_id": "pcl_1",

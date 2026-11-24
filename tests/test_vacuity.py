@@ -16,7 +16,9 @@ def _planted(tmp_path: Path, name: str, change: Any) -> Path:
     library = tmp_path / "parcels"
     shutil.copytree(PARCELS, library)
     path = library / name
-    path.write_text(json.dumps(change(json.loads(path.read_text()))), encoding="utf-8")
+    path.write_text(
+        json.dumps(change(json.loads(path.read_text(encoding="utf-8")))), encoding="utf-8"
+    )
     return library
 
 
@@ -140,9 +142,11 @@ def test_a_result_the_closed_reading_empties_is_found(tmp_path: Path) -> None:
         "inputSchema": {"type": "object", "properties": {}, "required": []},
         "outputSchema": {"type": "object", "required": ["id"]},
     }
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": [unnamed]}))
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [unnamed]}), encoding="utf-8")
     assert _found(tmp_path) == set()
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": [unnamed], "closedResults": True}))
+    (tmp_path / "tools.json").write_text(
+        json.dumps({"tools": [unnamed], "closedResults": True}), encoding="utf-8"
+    )
     said = "no result is returned read closed, though its output schema admits one"
     assert _found(tmp_path) == {("tool lookup", said, "proven")}
 

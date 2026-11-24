@@ -14,12 +14,14 @@ from valgebra_planning.verify import verify
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 TOOLS = {
     contract.name: contract
-    for contract in map(read_contract, json.loads((EXAMPLE / "tools.json").read_text())["tools"])
+    for contract in map(
+        read_contract, json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
+    )
 }
-OBSERVED = json.loads((EXAMPLE / "observed.json").read_text())["calls"]
+OBSERVED = json.loads((EXAMPLE / "observed.json").read_text(encoding="utf-8"))["calls"]
 TASK = next(
     read_task(spec["name"], spec["inputs"], spec["goal"])
-    for spec in json.loads((EXAMPLE / "tasks.json").read_text())["tasks"]
+    for spec in json.loads((EXAMPLE / "tasks.json").read_text(encoding="utf-8"))["tasks"]
     if spec["name"] == "notify a parcel's contact"
 )
 

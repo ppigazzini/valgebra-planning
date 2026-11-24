@@ -223,9 +223,9 @@ def test_a_task_naming_an_input_as_a_tool_is_refused_wherever_it_meets_the_tools
 
 
 def test_a_library_whose_task_names_an_input_as_a_tool_is_refused(tmp_path: Path) -> None:
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": [LOOKUP]}))
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [LOOKUP]}), encoding="utf-8")
     task = {"name": "posing", "inputs": {"find_order": {"type": "string"}}, "goal": {}}
-    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}))
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}), encoding="utf-8")
     with pytest.raises(ValueError, match="names an input as a tool: find_order"):
         read_library(tmp_path)
 
@@ -360,7 +360,7 @@ def test_a_library_file_holding_a_key_no_reader_reads_is_refused_by_name(
 ) -> None:
     written = {"tools.json": {"tools": [LOOKUP]}, "tasks.json": {"tasks": [ASKED]}} | files
     for name, document in written.items():
-        (tmp_path / name).write_text(json.dumps(document))
+        (tmp_path / name).write_text(json.dumps(document), encoding="utf-8")
     with pytest.raises(refused, match=match):
         read_library(tmp_path)
 
@@ -368,8 +368,8 @@ def test_a_library_file_holding_a_key_no_reader_reads_is_refused_by_name(
 def test_a_task_s_goals_are_read_in_the_order_it_prefers_them(tmp_path: Path) -> None:
     first, second = {"type": "integer"}, {"type": "string"}
     ordered = {"name": "p", "inputs": {}, "goals": [first, second]}
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": [LOOKUP]}))
-    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [ordered]}))
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [LOOKUP]}), encoding="utf-8")
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [ordered]}), encoding="utf-8")
     (problem,) = read_library(tmp_path).problems
     assert [schema for _, schema in problem.task.preferred] == [first, second]
     assert problem.task.goal.is_valid(1)
@@ -378,8 +378,10 @@ def test_a_task_s_goals_are_read_in_the_order_it_prefers_them(tmp_path: Path) ->
 
 
 def test_a_task_s_depth_is_read_with_the_task(tmp_path: Path) -> None:
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": [LOOKUP]}))
-    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [{**ASKED, "depth": 9}, ASKED]}))
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [LOOKUP]}), encoding="utf-8")
+    (tmp_path / "tasks.json").write_text(
+        json.dumps({"tasks": [{**ASKED, "depth": 9}, ASKED]}), encoding="utf-8"
+    )
     first, second = read_library(tmp_path).problems
     assert (first.depth, second.depth) == (9, None)
 
@@ -420,15 +422,17 @@ def test_a_format_is_read_as_an_assertion_in_every_set_a_contract_holds_where_as
 
 
 def test_a_library_asserting_format_tests_free_text_before_it_fills_an_id(tmp_path: Path) -> None:
-    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [HEARD]}))
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": [GRASP_BY_ID]}))
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [HEARD]}), encoding="utf-8")
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [GRASP_BY_ID]}), encoding="utf-8")
     assert not asserts_format(tmp_path)
     loose = read_library(tmp_path)
     unguarded = plan(loose.tools, loose.problems[0].task)
     assert unguarded.strong
     assert unguarded.program is not None
     assert render(unguarded.program) == "c1 = grasp(object_id=heard)\nreturn c1.ok"
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": [GRASP_BY_ID], "assertFormat": True}))
+    (tmp_path / "tools.json").write_text(
+        json.dumps({"tools": [GRASP_BY_ID], "assertFormat": True}), encoding="utf-8"
+    )
     assert asserts_format(tmp_path)
     strict = read_library(tmp_path)
     guarded = plan(strict.tools, strict.problems[0].task)
@@ -438,10 +442,10 @@ def test_a_library_asserting_format_tests_free_text_before_it_fills_an_id(tmp_pa
 
 
 def test_a_live_server_s_tools_are_trusted_where_the_library_says_so(tmp_path: Path) -> None:
-    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [ASKED]}))
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [ASKED]}), encoding="utf-8")
     live = {"find_order": read_contract(LOOKUP)}
     assert not read_library(tmp_path, live).tools["find_order"].trusted
-    (tmp_path / "tools.json").write_text(json.dumps({"trusted": True}))
+    (tmp_path / "tools.json").write_text(json.dumps({"trusted": True}), encoding="utf-8")
     assert read_library(tmp_path, live).tools["find_order"].trusted
 
 
@@ -542,10 +546,12 @@ def test_a_whole_result_read_closed_fills_no_argument_its_declared_keys_miss() -
 
 
 def test_a_library_reads_results_closed_where_it_says_so(tmp_path: Path) -> None:
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": [DETECTED]}))
+    (tmp_path / "tools.json").write_text(json.dumps({"tools": [DETECTED]}), encoding="utf-8")
     assert not reads_closed(tmp_path)
     assert read_library(tmp_path).tools["detect_object"].declared is None
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": [DETECTED], "closedResults": True}))
+    (tmp_path / "tools.json").write_text(
+        json.dumps({"tools": [DETECTED], "closedResults": True}), encoding="utf-8"
+    )
     assert reads_closed(tmp_path)
     assert read_library(tmp_path).tools["detect_object"].declared is not None
     shut = {"detect_object": read_contract(DETECTED, closed_results=True)}

@@ -65,6 +65,7 @@ def main() -> int:
         cwd=ROOT,
         capture_output=True,
         text=True,
+        encoding="locale",
         check=True,
     ).stdout.strip()
     old = griffe.load_git(PACKAGE, ref=tag, repo=ROOT)

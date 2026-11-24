@@ -13,11 +13,13 @@ from valgebra_planning.run import ToolError, blame, run
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 TOOLS = {
     contract.name: contract
-    for contract in map(read_contract, json.loads((EXAMPLE / "tools.json").read_text())["tools"])
+    for contract in map(
+        read_contract, json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
+    )
 }
 TASKS = {
     spec["name"]: read_task(spec["name"], spec["inputs"], spec["goal"])
-    for spec in json.loads((EXAMPLE / "tasks.json").read_text())["tasks"]
+    for spec in json.loads((EXAMPLE / "tasks.json").read_text(encoding="utf-8"))["tasks"]
 }
 INPUTS = {"tracking": "AB123456789IT"}
 
@@ -104,7 +106,7 @@ PARCEL = {
 
 
 def test_a_result_with_a_key_its_schema_does_not_declare_is_the_closed_reading_s() -> None:
-    listing = json.loads((EXAMPLE / "tools.json").read_text())["tools"]
+    listing = json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
     shut = {c.name: c for c in (read_contract(t, closed_results=True) for t in listing)}
     task = TASKS["settle a parcel"]
     program = plan(shut, task).program

@@ -731,6 +731,7 @@ def git(*arguments: str, given: str | None = None) -> str:
         input=given,
         capture_output=True,
         text=True,
+        encoding="locale",
         check=True,
         cwd=ROOT,
     ).stdout

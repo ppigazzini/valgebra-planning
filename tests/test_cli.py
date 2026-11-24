@@ -60,9 +60,11 @@ def test_a_library_holding_a_key_no_reader_reads_exits_2(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     for name in ("tools.json", "tasks.json"):
-        (tmp_path / name).write_text((Path(PARCELS) / name).read_text())
+        (tmp_path / name).write_text(
+            (Path(PARCELS) / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
     task = {"name": "t", "inputs": {}, "goal": {}, "dept": 9}
-    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}))
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}), encoding="utf-8")
     assert main(["plan", str(tmp_path)]) == 2
     assert "task 't': 'dept' is no key it reads" in capsys.readouterr().err
 
@@ -107,7 +109,11 @@ def _command(*argv: str) -> subprocess.CompletedProcess[str]:
     """Run the command line in a process of its own, as a user does, its server a child of it."""
     entry = "from valgebra_planning.cli import main; raise SystemExit(main())"
     return subprocess.run(  # noqa: S603 - this interpreter, this package
-        [sys.executable, "-c", entry, *argv], capture_output=True, text=True, check=False
+        [sys.executable, "-c", entry, *argv],
+        capture_output=True,
+        text=True,
+        encoding="locale",
+        check=False,
     )
 
 
@@ -142,7 +148,7 @@ def test_check_notes_a_contract_wider_than_its_keywords_and_exits_on_vacuity_alo
 ) -> None:
     library = tmp_path / "library"
     shutil.copytree(PARCELS, library)
-    listing = json.loads((library / "tools.json").read_text())
+    listing = json.loads((library / "tools.json").read_text(encoding="utf-8"))
     for tool in listing["tools"]:
         if tool["name"] == "book_return":
             tool["inputSchema"]["properties"]["weight_g"].pop("maximum")
@@ -183,9 +189,13 @@ def test_stubs_prints_python_a_model_writes_against(capsys: pytest.CaptureFixtur
 
 def test_a_live_server_s_results_are_read_closed_where_the_library_says_so(tmp_path: Path) -> None:
     for name in ("tools.json", "tasks.json", "policies.json", "flows.json"):
-        (tmp_path / name).write_text((Path(PARCELS) / name).read_text())
-    listing = json.loads((tmp_path / "tools.json").read_text())
-    (tmp_path / "tools.json").write_text(json.dumps({**listing, "closedResults": True}))
+        (tmp_path / name).write_text(
+            (Path(PARCELS) / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+    listing = json.loads((tmp_path / "tools.json").read_text(encoding="utf-8"))
+    (tmp_path / "tools.json").write_text(
+        json.dumps({**listing, "closedResults": True}), encoding="utf-8"
+    )
     live = _command(
         "plan", str(tmp_path), "--task", "return a parcel", "--server", SERVER, "--json"
     )
@@ -202,8 +212,10 @@ def test_a_live_server_s_results_are_read_closed_where_the_library_says_so(tmp_p
 def test_the_proxy_reads_its_server_s_tools_as_its_library_does(
     tmp_path: Path, *, closing: bool
 ) -> None:
-    listing = json.loads((Path(PARCELS) / "tools.json").read_text())
-    (tmp_path / "tools.json").write_text(json.dumps({**listing, "closedResults": closing}))
+    listing = json.loads((Path(PARCELS) / "tools.json").read_text(encoding="utf-8"))
+    (tmp_path / "tools.json").write_text(
+        json.dumps({**listing, "closedResults": closing}), encoding="utf-8"
+    )
     noting = shlex.join([sys.executable, str(Path(__file__).parent / "parcel_server.py"), "--note"])
     entry = "from valgebra_planning.cli import main; raise SystemExit(main())"
     command = [sys.executable, "-c", entry, "proxy", "--server", noting, "--library", str(tmp_path)]
@@ -228,10 +240,14 @@ def test_a_library_names_the_tools_called_after_a_violation_in_a_list(
         ("forwardsElicitation", forwards_elicitation),
     )
     for key, reader in readers:
-        (tmp_path / "tools.json").write_text(json.dumps({"tools": [], key: named}))
+        (tmp_path / "tools.json").write_text(
+            json.dumps({"tools": [], key: named}), encoding="utf-8"
+        )
         with pytest.raises(TypeError, match=f"'{key}' is a list of tool names"):
             reader(tmp_path)
-        (tmp_path / "tools.json").write_text(json.dumps({"tools": [], key: ["stop"]}))
+        (tmp_path / "tools.json").write_text(
+            json.dumps({"tools": [], key: ["stop"]}), encoding="utf-8"
+        )
         assert reader(tmp_path) == {"stop"}
 
 
@@ -241,11 +257,15 @@ def test_a_library_names_the_tools_called_after_a_violation_in_a_list(
 def test_a_library_maps_a_tool_to_the_set_its_error_text_lies_in(
     tmp_path: Path, named: object
 ) -> None:
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": [], "errorTexts": named}))
+    (tmp_path / "tools.json").write_text(
+        json.dumps({"tools": [], "errorTexts": named}), encoding="utf-8"
+    )
     with pytest.raises(TypeError, match="'errorTexts' maps a tool's name to a JSON Schema"):
         error_texts(tmp_path)
     failures = {"approve_freight": {"enum": ["not approved"]}}
-    (tmp_path / "tools.json").write_text(json.dumps({"tools": [], "errorTexts": failures}))
+    (tmp_path / "tools.json").write_text(
+        json.dumps({"tools": [], "errorTexts": failures}), encoding="utf-8"
+    )
     assert error_texts(tmp_path) == failures
 
 
@@ -254,11 +274,13 @@ def test_the_proxy_calls_the_tools_its_library_names_after_a_violation(
     tmp_path: Path, *, named: bool
 ) -> None:
     for name in ("tasks.json", "flows.json"):
-        (tmp_path / name).write_text((Path(PARCELS) / name).read_text())
-    listing = json.loads((Path(PARCELS) / "tools.json").read_text())
+        (tmp_path / name).write_text(
+            (Path(PARCELS) / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+    listing = json.loads((Path(PARCELS) / "tools.json").read_text(encoding="utf-8"))
     after = {"afterViolation": ["find_parcel"]} if named else {}
-    (tmp_path / "tools.json").write_text(json.dumps(listing | after))
-    policies = json.loads((Path(PARCELS) / "policies.json").read_text())
+    (tmp_path / "tools.json").write_text(json.dumps(listing | after), encoding="utf-8")
+    policies = json.loads((Path(PARCELS) / "policies.json").read_text(encoding="utf-8"))
     granted = {
         "name": "no approval granted",
         "initial": "start",
@@ -268,7 +290,7 @@ def test_the_proxy_calls_the_tools_its_library_names_after_a_violation(
         ],
     }
     policies["policies"].append(granted)
-    (tmp_path / "policies.json").write_text(json.dumps(policies))
+    (tmp_path / "policies.json").write_text(json.dumps(policies), encoding="utf-8")
     entry = "from valgebra_planning.cli import main; raise SystemExit(main())"
     command = [sys.executable, "-c", entry, "proxy", "--server", SERVER, "--library", str(tmp_path)]
 

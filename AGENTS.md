@@ -47,7 +47,7 @@ uv run --no-sync ruff format --check
 uv run --no-sync ty check
 uv run --no-sync python tools/docs_lint.py
 uv run --no-sync python tools/docs_lint.py --commits
-uv run --no-sync pytest
+uv run --no-sync python -X warn_default_encoding -m pytest
 uv run --no-sync python tools/case.py examples/parcels --check docs/studies/parcels.json
 uv run --no-sync python tools/bench.py --check docs/studies/bench.json
 uv run --no-sync python tools/faults.py examples/bookings --check docs/studies/faults.json

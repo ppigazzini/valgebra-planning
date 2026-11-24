@@ -14,11 +14,11 @@ from valgebra_planning.planner import plan
 from valgebra_planning.program import render
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
-LISTING = json.loads((EXAMPLE / "tools.json").read_text())["tools"]
+LISTING = json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
 TOOLS = {contract.name: contract for contract in map(read_contract, LISTING)}
 SETTLE = next(
     read_task(spec["name"], spec["inputs"], spec["goal"])
-    for spec in json.loads((EXAMPLE / "tasks.json").read_text())["tasks"]
+    for spec in json.loads((EXAMPLE / "tasks.json").read_text(encoding="utf-8"))["tasks"]
     if spec["name"] == "settle a parcel"
 )
 NAIVE = (
