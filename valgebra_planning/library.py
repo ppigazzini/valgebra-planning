@@ -21,10 +21,10 @@ the rules a task names, as `valgebra_planning.policy.read_policy` and
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from valgebra_planning.contracts import (
     Contract,
@@ -225,6 +225,26 @@ def _goals(spec: Mapping[str, Any]) -> list[Any]:
     return goals
 
 
+_Rule = TypeVar("_Rule", Policy, Flow)
+
+
+def _by_name(kinds: str, rules: Iterable[_Rule]) -> dict[str, _Rule]:
+    """Return rules by name; two of one name are a `ValueError` naming it.
+
+    A task names its rules by name, and a proxy keeps what a fresh rule's sources returned by
+    the rule's name, so two rules of one name would hold one task to the last alone and share
+    one store between two rules: the second of two ``measured`` rules from two sources admitted
+    a value the first's source never returned.
+    """
+    named: dict[str, _Rule] = {}
+    for rule in rules:
+        if rule.name in named:
+            message = f"two {kinds} are named {rule.name!r}: a name is one rule's"
+            raise ValueError(message)
+        named[rule.name] = rule
+    return named
+
+
 def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -> Library:
     """Read a library directory; a rule a task names and the directory lacks is a `KeyError`.
 
@@ -288,20 +308,20 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
     postconditions = tuple(
         read_postcondition(spec, tools, assert_format=asserted) for spec in declared
     )
-    policies = {
-        p.name: p
-        for p in (
+    policies = _by_name(
+        "policies",
+        (
             read_policy(spec, assert_format=asserted)
             for spec in _listed(directory / "policies.json", "policies")
-        )
-    }
-    flows = {
-        f.name: f
-        for f in (
+        ),
+    )
+    flows = _by_name(
+        "flows",
+        (
             read_flow(spec, assert_format=asserted)
             for spec in _listed(directory / "flows.json", "flows")
-        )
-    }
+        ),
+    )
     # A rule naming a tool, a hint or an argument the library lacks reads no call; a flow's
     # source may also be an input a task names.
     inputs = frozenset(name for spec in specs for name in spec.get("inputs", {}))

@@ -200,3 +200,14 @@ def test_a_flow_source_names_a_tool_or_a_task_input_at_load(tmp_path: Path) -> N
     read_library(_planted(tmp_path / "a", "flows.json", sourced("tracking")))
     with pytest.raises(ValueError, match="'trackin' names no tool listed and no task's input"):
         read_library(_planted(tmp_path / "b", "flows.json", sourced("trackin")))
+
+
+def test_two_policies_of_one_name_are_refused_at_load(tmp_path: Path) -> None:
+    # A task names its policies by name, so two of one name held it to the last alone.
+    def twice(policies: Any) -> Any:
+        policies["policies"].append(json.loads(json.dumps(policies["policies"][0])))
+        return policies
+
+    name = json.loads((PARCELS / "policies.json").read_text(encoding="utf-8"))["policies"][0]
+    with pytest.raises(ValueError, match=f"two policies are named {name['name']!r}"):
+        read_library(_planted(tmp_path, "policies.json", twice))

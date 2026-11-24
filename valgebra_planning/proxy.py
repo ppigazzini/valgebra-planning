@@ -153,6 +153,15 @@ class Gate:
             check_policy(monitor.policy, self.contracts)
         for flow in self.flows:
             check_flow(flow, self.contracts)
+        # What a fresh rule's sources returned is kept by the rule's name (`returned`), so two
+        # rules of one name would share it: each is one rule's.
+        for kinds, names in (
+            ("policies", [monitor.policy.name for monitor in self.monitors]),
+            ("flows", [flow.name for flow in self.flows]),
+        ):
+            for name in sorted({n for n in names if names.count(n) > 1}):
+                msg = f"two {kinds} are named {name!r}: a name is one rule's"
+                raise ValueError(msg)
         named = self.non_text_blocks | self.error_texts.keys() | self.forwards_elicitation
         for tool in sorted(named - self.contracts.keys()):
             msg = f"{tool} is named for its answers, and the proxy holds no such tool"

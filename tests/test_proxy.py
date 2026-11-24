@@ -1583,3 +1583,15 @@ def test_a_dotted_sink_names_its_tool_by_the_last_dot() -> None:
     )
     assert (flow.tool, flow.argument) == ("parcels.notify", "email")
     Gate(dotted, [], [flow])
+
+
+def test_two_rules_of_one_name_are_refused() -> None:
+    # Two fresh rules named `measured`, one from each source, shared what the proxy kept by
+    # the name, so the second admitted a value the first's source never returned.
+    measured = {"name": "measured", "sink": "notify.email", "only": True, "fresh": True}
+    twins = [read_flow({**measured, "sources": [s]}) for s in ("find_parcel", "verify_contact")]
+    with pytest.raises(ValueError, match="two flows are named 'measured'"):
+        Gate(TOOLS, [], twins)
+    twin = read_policy({"name": "p", "initial": "s", "bad": ["v"], "transitions": []})
+    with pytest.raises(ValueError, match="two policies are named 'p'"):
+        Gate(TOOLS, [Monitor(twin), Monitor(twin)], [])

@@ -8,6 +8,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Security
 
+- A rule's name is one rule's. A library kept the last of two policies or two flow rules of one
+  name and held every task naming it to that one alone, and a proxy keeps what a fresh rule's
+  sources returned by the rule's name, so two `measured` rules from two sources shared one store,
+  and a value the first's source never returned passed it. Two rules of one name are refused at
+  load and when a proxy is built.
+
 - A rule naming what the listing lacks is refused. A policy transition on a tool no server lists or
   a hint none sets, as `walk` for `walk_to` or `destructivehint` for `destructiveHint`, and a flow
   rule on an argument its sink does not take or a source no tool is, as `grasp.dist` for
