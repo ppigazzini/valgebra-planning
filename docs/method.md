@@ -66,8 +66,9 @@ program rests on: a value inside the argument it fills, the record where the arg
 related, the returned value inside the goal, and the value a return or a stop names one the
 program holds there, a field the result may lack refuted at either. Each link reads proven, refuted or undecided, and a
 refuted or undecided one carries a value outside the inclusion where the examples given or the
-values drawn from the value's own schema hold one. A concrete member is a proof, so such a value
-refutes an undecided link. A field's declared schema may admit more than its record allows, as
+values drawn from the value's own schema hold one, shrunk before it is shown, shorter and then
+nearer zero, while it stays a value the program may hold and outside the inclusion. A concrete
+member is a proof, so such a value refutes an undecided link. A field's declared schema may admit more than its record allows, as
 where an `allOf` narrows it, so a link on a field its declared set does not prove is asked of
 the value the field belongs to: whether the field lies inside on every such value carrying it.
 That value is asked in its belief, its own set met with each field of it a test on the way

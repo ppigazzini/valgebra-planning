@@ -21,8 +21,9 @@ from __future__ import annotations
 
 import itertools
 import json
+import math
 import random
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
@@ -1022,6 +1023,8 @@ class _Walk:
             # and the root is asked only where none is, the case where it may prove the link.
             outside = [v for v in self.candidates(ref, held) if not target.is_valid(v)][:8]
             found = self.realized(env, ref, outside)
+            if found:
+                found = (self.shrunk(env, ref, target, found[0]),)
             if not found:
                 whole = None if ref.path else answer
                 answer = self.asked(env, ref.variable, within(ref.path, target), whole)
@@ -1197,6 +1200,27 @@ class _Walk:
             if self.member(env, ref.variable, [(ref.path, value)]):
                 return (value,)
         return ()
+
+    def shrunk(self, env: dict[Ref, _Held], ref: Ref, target: Validator[Any], value: Any) -> Any:
+        """Return ``value`` shrunk while it stays a value ``ref`` may hold and outside ``target``.
+
+        A drawn witness is as long as the draw, so it is made smaller, length first, a step at a
+        time while the smaller one still refutes: each step is one membership valgebra decides.
+        """
+        for _ in range(_SHRINKS):
+            smaller = next(
+                (
+                    candidate
+                    for candidate in _smaller(value)
+                    if not target.is_valid(candidate)
+                    and self.member(env, ref.variable, [(ref.path, candidate)])
+                ),
+                _UNSHRUNK,
+            )
+            if smaller is _UNSHRUNK:
+                break
+            value = smaller
+        return value
 
     def member(
         self,
@@ -1631,6 +1655,61 @@ class _Path:
     #: For each fresh rule naming the calls that withdraw it, the versions returned before the
     #: last of those on the way here, by the rule's name (`_withdrawn`).
     withdrawn: tuple[tuple[str, frozenset[int]], ...] = ()
+
+
+#: How many smaller witnesses a refutation's is shrunk through at most, and the mark of none.
+_SHRINKS = 64
+_UNSHRUNK: Any = object()
+
+
+def _smaller(value: Any) -> Iterator[Any]:
+    """Yield values smaller than ``value``, the smallest first: shorter, then nearer zero.
+
+    A text or an array is cut, from empty up to half its length and one shorter; a record loses
+    a key; a number goes to zero, then halves toward it, an infinity to zero alone; each item and
+    field is shrunk in place.
+    """
+    if isinstance(value, str | list):
+        yield from _cut(value)
+    elif isinstance(value, dict):
+        yield from _fewer(value)
+    elif isinstance(value, int) and not isinstance(value, bool) and value:
+        yield 0
+        # Halve in integers: one past the float range has no float to divide.
+        if half := abs(value) // 2:
+            yield half if value > 0 else -half
+    elif isinstance(value, float) and value:
+        yield 0.0
+        if math.isfinite(value) and (half := int(value / 2)):
+            yield float(half)
+
+
+def _cut(value: str | list[Any]) -> Iterator[Any]:
+    """Yield a text or an array cut shorter, then an array with one item shrunk.
+
+    The lengths tried close in on a bound by halves: empty, one, then a half, a quarter and on
+    to one item fewer, so a witness reaches the shortest that still refutes in few steps.
+    """
+    lengths, cut = [0, 1], len(value) // 2
+    while cut:
+        lengths.append(len(value) - cut)
+        cut //= 2
+    for length in dict.fromkeys(lengths):
+        if length < len(value):
+            yield value[:length]
+    if isinstance(value, list):
+        for at, item in enumerate(value):
+            for smaller in _smaller(item):
+                yield [*value[:at], smaller, *value[at + 1 :]]
+
+
+def _fewer(value: dict[str, Any]) -> Iterator[Any]:
+    """Yield a record with one key fewer, then one with one field shrunk."""
+    for key in value:
+        yield {k: v for k, v in value.items() if k != key}
+    for key, item in value.items():
+        for smaller in _smaller(item):
+            yield {**value, key: smaller}
 
 
 #: The empty array, and the arrays holding an item: the two sides of a loop's test.

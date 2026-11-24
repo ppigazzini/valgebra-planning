@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-from valgebra_planning._valgebra import Validator
+import math
+from typing import Any
+
+import pytest
+from hypothesis import given
+from hypothesis import strategies as st
+
+from valgebra_planning._valgebra import Validator, compile_schema
 from valgebra_planning.codemode import repair
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop, render, steps
 from valgebra_planning.run import run
-from valgebra_planning.verify import Link, verify
+from valgebra_planning.verify import Link, _smaller, verify
 
 ORDER_ID = {"type": "string", "pattern": "^ord_[0-9]+$"}
 SPECS: list[dict[str, object]] = [
@@ -301,3 +308,96 @@ def test_a_record_a_call_makes_refutes_two_fields_of_one_value() -> None:
     assert record.verdict == "refuted"
     [found] = record.counterexample
     assert returns.is_valid({"a": found["x"], "b": found["y"]})
+
+
+@pytest.mark.parametrize(
+    ("held", "taken", "witness"),
+    [
+        ({"type": "string"}, {"type": "string", "minLength": 1}, ""),
+        ({"type": "string", "minLength": 201}, {"type": "string", "maxLength": 200}, "x" * 201),
+        ({"type": "integer", "minimum": -1000}, {"type": "integer", "minimum": 1}, 0),
+        ({"const": 1e400}, {"const": 0}, math.inf),
+        ({"enum": [-1e400]}, {"const": 0}, -math.inf),
+        ({"const": 10**400}, {"const": 0}, 10**400),
+    ],
+    ids=["empty", "one-past-the-bound", "zero", "infinity", "less-infinity", "past-a-float"],
+)
+def test_a_witness_is_shrunk_before_it_is_shown(
+    held: object, taken: object, witness: object
+) -> None:
+    """A drawn witness is as long as the draw: it is shrunk while it stays one the program may
+    hold and outside the set it refutes, length first, so the reader sees the smallest."""
+    reader = read_contract(
+        {
+            "name": "read",
+            "inputSchema": {"type": "object", "properties": {}},
+            "outputSchema": {"type": "object", "properties": {"v": held}, "required": ["v"]},
+        }
+    )
+    taker = read_contract(
+        {
+            "name": "take",
+            "inputSchema": {"type": "object", "properties": {"v": taken}, "required": ["v"]},
+        }
+    )
+    program = read_program("c1 = read()\nc2 = take(v=c1.v)\nreturn c2\n")
+    links = verify(program, {"read": reader, "take": taker}, read_task("t", {}, True)).links
+    (refuted,) = [link for link in links if link.claim == "c1.v <= take.v"]
+    assert refuted.verdict == "refuted"
+    (found,) = refuted.counterexample
+    if isinstance(witness, str) and witness:
+        assert isinstance(found, str)
+        assert len(found) == len(witness)
+    else:
+        assert found == witness
+
+
+@given(
+    st.recursive(
+        st.none() | st.booleans() | st.integers() | st.floats(allow_nan=False) | st.text(),
+        lambda items: st.lists(items) | st.dictionaries(st.text(), items),
+        max_leaves=6,
+    )
+)
+def test_every_json_value_shrinks_to_values_of_its_kind_nearer_the_smallest(value: Any) -> None:
+    for candidate in _smaller(value):
+        assert type(candidate) is type(value)
+        assert candidate != value
+        if isinstance(value, int | float):
+            assert abs(candidate) < abs(value)
+            assert candidate == 0 or (candidate > 0) == (value > 0)
+
+
+@pytest.mark.parametrize(
+    ("held", "taken"),
+    [
+        ({"type": "integer", "minimum": 5}, {"type": "integer", "minimum": 1000}),
+        ({"type": "integer", "minimum": -1000}, {"type": "integer", "minimum": -3, "maximum": 3}),
+    ],
+    ids=["zero-is-held-by-none", "zero-is-taken"],
+)
+def test_a_shrunk_witness_stays_held_and_outside(
+    held: dict[str, Any], taken: dict[str, Any]
+) -> None:
+    # Zero is no value the program holds in the first, and one the argument takes in the second:
+    # the witness shrinks toward it and stops short, a value that still refutes.
+    reader = read_contract(
+        {
+            "name": "read",
+            "inputSchema": {"type": "object", "properties": {}},
+            "outputSchema": {"type": "object", "properties": {"v": held}, "required": ["v"]},
+        }
+    )
+    taker = read_contract(
+        {
+            "name": "take",
+            "inputSchema": {"type": "object", "properties": {"v": taken}, "required": ["v"]},
+        }
+    )
+    program = read_program("c1 = read()\nc2 = take(v=c1.v)\nreturn c2\n")
+    links = verify(program, {"read": reader, "take": taker}, read_task("t", {}, True)).links
+    (refuted,) = [link for link in links if link.claim == "c1.v <= take.v"]
+    (found,) = refuted.counterexample
+    assert found != 0
+    assert compile_schema(held).is_valid(found)
+    assert not compile_schema(taken).is_valid(found)

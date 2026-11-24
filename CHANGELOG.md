@@ -75,6 +75,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- A refutation's witness is shrunk before it is shown. The verifier kept the first drawn value
+  outside the target, as long as the draw: a text of 3,155 characters where `''` refutes. A drawn
+  witness is now made smaller, length first, then nearer zero, item and field in place, while it
+  stays a value the program may hold and outside the target, each step one membership valgebra
+  decides: `''`, a text one past a bound of 200, `0`.
+
 - A fresh or keyed flow refutation names the reading to make. Its critique told the author to pass
   a value from a source the rule trusts, which the value already was: one read before a walk, or
   for another object, is now answered "read estimate_pose again after the last call that may act

@@ -258,7 +258,7 @@
       "undecided": [],
       "notes": [
         "refuted: flow scanned: it.distance_m from scan was returned for the object_id grasp takes (at for:it); read scan for the object_id grasp takes, and pass that reading",
-        "refuted: return c1 <= goal; {'items': [{'object_id': 'fH._ZM', 'distance_m': 982}, {'object_id': '@rK', 'distance_m': -713.5}, {'object_id': 'sNmj', 'distance_m': 840.5}]} lies outside"
+        "refuted: return c1 <= goal; {'items': []} lies outside"
       ],
       "run": {
         "outcome": "refused",
@@ -284,7 +284,7 @@
       "undecided": [],
       "notes": [
         "refuted: flow scanned: c1.distance_m from scan was returned for the object_id grasp takes (at for:c1); read scan for the object_id grasp takes, and pass that reading",
-        "refuted: return c1 <= goal; {'items': [{'object_id': 'fH._ZM', 'distance_m': 982}, {'object_id': '@rK', 'distance_m': -713.5}, {'object_id': 'sNmj', 'distance_m': 840.5}]} lies outside"
+        "refuted: return c1 <= goal; {'items': []} lies outside"
       ],
       "run": {
         "outcome": "refused",
@@ -440,7 +440,7 @@
       ],
       "undecided": [],
       "notes": [
-        "refuted: c0.v <= move_joint.speed; 729 lies outside; test `if c0.v in move_joint.speed:` and make the call in that branch"
+        "refuted: c0.v <= move_joint.speed; 5 lies outside; test `if c0.v in move_joint.speed:` and make the call in that branch"
       ]
     },
     {
