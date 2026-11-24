@@ -93,14 +93,17 @@ def test_a_call_made_again_in_its_own_error_block_is_a_retry() -> None:
     ]
 
 
-def test_a_call_on_a_value_read_again_after_the_error_is_not_a_retry() -> None:
+def test_a_call_on_a_value_read_again_after_the_error_may_repeat_it() -> None:
+    # The parcel read again may be the one the failed booking was given: booking it is a retry,
+    # refuted with no read a postcondition covers to show the first did not act.
     read_again = AGAIN.replace(
         "except ToolError:\n",
         "except ToolError:\n    c1 = retry(find_parcel(tracking=tracking))\n",
     )
-    assert [claim for _, claim, _, _ in _retries(read_again)] == [
-        "find_parcel may be retried",
-        "find_parcel may be retried",
+    assert [(claim, verdict) for _, claim, verdict, _ in _retries(read_again)] == [
+        ("find_parcel may be retried", "proven"),
+        ("find_parcel may be retried", "proven"),
+        ("book_return may be retried", "refuted"),
     ]
 
 

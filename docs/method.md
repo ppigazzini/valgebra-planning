@@ -166,8 +166,12 @@ verifier, which adds a link for it.
 - **Errors** (`errors`). Any tool may answer with an error. A call may be retried only where the
   tool's annotations say it is read-only or idempotent, a strong cyclic solution (Daniele et al.
   2000) ending under fairness (Cimatti et al. 2003); any other call needs an error block,
-  `try:`/`except ToolError:`, since retrying it may act twice. A call made again in its error
-  block on the values it was given is a retry written out, and held as one. A retry's link
+  `try:`/`except ToolError:`, since retrying it may act twice. A call to the tool in its error
+  block on values that may be the ones it was given is a retry written out, and held as one:
+  the values are read as sets, so another name for the same value, or one read again after the
+  error, repeats the call, and only an argument whose set valgebra proves disjoint from the
+  failed call's shows the two apart. The planner's error block makes no such call, and reads
+  again what the failed call may have changed. A retry's link
   lists what it rests on: the tool's errors transient within the runner's 8 attempts, and the
   annotations, a hint the server gives, unless the library marks the server trusted. A multi
   round-trip request is the client's loop around one call and leaves the plan unchanged.

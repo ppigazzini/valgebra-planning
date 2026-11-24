@@ -152,6 +152,20 @@ class _Held:
 
 
 @dataclass(frozen=True, slots=True, eq=False)
+class _Attempt:
+    """A call on the path that answered with an error and may have acted.
+
+    ``keys`` is what each argument read, as a key compares it (`_Walk.keyed`), and ``record``
+    the set each held: a later call to ``tool`` may be made on the same values, a retry of it,
+    unless at some argument both take the two sets are disjoint.
+    """
+
+    tool: str
+    keys: tuple[tuple[str, _Key], ...]
+    record: tuple[tuple[str, Validator[Any]], ...]
+
+
+@dataclass(frozen=True, slots=True, eq=False)
 class _Loop:
     """The array a loop reads its item from, the item's name, and what the program held then."""
 
@@ -473,14 +487,15 @@ class _Walk:
         observed = frozenset() if acts else _unnamed(path.observed, call.result)
         erred = _Path(either, path.tested, failing, stale, unknown, observed)
         self.failure(call, contract, env, where, erred)
-        observed = self.observing(call, path, observed, acts=acts)
+        observed = self.observing(call, env, path, observed, acts=acts)
         shown = self.shown(call, env, path)
         defined = {ref: held for ref, held in env.items() if ref.variable != call.result}
         for slot in contract.results:
             defined[Ref(call.result, slot.path)] = _Held(
                 slot.values, slot, version=version, returned=version
             )
-        left = _unread(acted, call.result) if acted else acted
+        # An attempt is held by the values it was given, so a name bound again leaves it.
+        left = acted
         last = _left(path.last, call, acts=acts)
         whole = (
             self.narrowed(defined, call, contract, shown)
@@ -514,45 +529,65 @@ class _Walk:
         return cases
 
     def repeated(
-        self, call: Call, contract: Contract, where: str, env: Mapping[Ref, _Held], path: _Path
+        self, call: Call, contract: Contract, where: str, env: dict[Ref, _Held], path: _Path
     ) -> _Acted:
         """Check a call against those that may have acted on this path; return what its block holds.
 
-        A call made again on the values one that may have acted was given is a retry written
-        out, and holds as one: only for a read-only or idempotent tool, on its annotations unless
-        they are trusted. It is no retry where a read a postcondition of that call's acting
-        covers shows it did not act: valgebra proves every value the read may hold here, the
-        tests on the way met, outside what the declaration says any effect leaves, so the
-        belief holds no state where it acted (Bertoli et al. 2006, §3), and the call is made
-        once more, verified before it is retried (Mansoor et al. 2026, §4.1). A call on a value
-        read again after the error is not one either: whether it repeats the first rests on
-        what the read shows. Only an error block holds a call that may have acted, so a path
-        outside one asks nothing.
+        A call to a tool that may have acted, on values that may be the ones it was given, is a
+        retry written out, and holds as one: only for a read-only or idempotent tool, on its
+        annotations unless they are trusted. The values are read as sets, not as the names
+        holding them: a call is no retry only where at some argument valgebra proves the set it
+        holds disjoint from the one the earlier call's held, so another name for the same value,
+        or a value read again after the error, may repeat the call. It is no retry where a read
+        a postcondition of that call's acting covers shows it did not act: valgebra proves every
+        value the read may hold here, the tests on the way met, outside what the declaration
+        says any effect leaves, so the belief holds no state where it acted (Bertoli et al.
+        2006, §3), and the call is made once more, verified before it is retried (Mansoor et al.
+        2026, §4.1). Only an error block holds a call that may have acted, so a path outside one
+        asks nothing.
         """
-        made = (call.tool, frozenset(call.bindings))
-        acted = path.acted
-        if made in acted:
-            post = self.unacted(made, env, path)
-            if post is not None:
-                claim = f"{call.tool} is made again where {post.read} shows it did not act"
-                assumed = (post.name, f"{post.read} reads an effect of {post.after} at once")
-                self.links.append(Link(where, claim, "proven", (), assumed))
-            else:
-                verdict: Verdict = "proven" if contract.idempotent else "refuted"
-                assumed = annotated(contract) if contract.idempotent else ()
-                self.links.append(Link(where, f"{call.tool} may be retried", verdict, (), assumed))
-        return acted | {made} if call.on_error is not None else acted
+        attempt = self.attempt(call, env)
+        unread = False
+        for done in path.acted:
+            if done.tool != call.tool or _disjoint(done.record, attempt.record):
+                continue
+            post = self.unacted(done, env, path)
+            if post is None:
+                unread = True
+                continue
+            claim = f"{call.tool} is made again where {post.read} shows it did not act"
+            assumed = (post.name, f"{post.read} reads an effect of {post.after} at once")
+            self.links.append(Link(where, claim, "proven", (), assumed))
+        if unread:
+            verdict: Verdict = "proven" if contract.idempotent else "refuted"
+            assumed = annotated(contract) if contract.idempotent else ()
+            self.links.append(Link(where, f"{call.tool} may be retried", verdict, (), assumed))
+        return path.acted | {attempt} if call.on_error is not None else path.acted
+
+    def attempt(self, call: Call, env: dict[Ref, _Held]) -> _Attempt:
+        """Return the call as a later one may repeat it: what each argument read, and its set.
+
+        An argument whose set the walk does not read is left out, so it shows the two calls
+        apart nowhere.
+        """
+        record: list[tuple[str, Validator[Any]]] = []
+        for name, ref in call.bindings:
+            if isinstance(ref, Const):
+                record.append((name, listed([ref.value])))
+                continue
+            held = self.resolve(env, ref).held
+            if held is not None:
+                record.append((name, held.values))
+        keys = tuple((name, self.keyed(env, ref)) for name, ref in call.bindings)
+        return _Attempt(call.tool, keys, tuple(record))
 
     def unacted(
-        self,
-        made: tuple[str, frozenset[tuple[str, Ref | Const]]],
-        env: Mapping[Ref, _Held],
-        path: _Path,
+        self, made: _Attempt, env: Mapping[Ref, _Held], path: _Path
     ) -> Postcondition | None:
         """Return the postcondition whose read shows ``made`` did not act here, or None."""
         for done, variable, index in path.observed:
             post = self.postconditions[index]
-            if done != made or Ref(variable) not in env:
+            if done is not made or Ref(variable) not in env:
                 continue
             shown = intersection(self.belief(env, variable), post.shows)
             if shown.relation_to(nothing) == "subset":
@@ -560,27 +595,34 @@ class _Walk:
         return None
 
     def observing(
-        self, call: Call, path: _Path, kept: frozenset[_Observed], *, acts: bool
+        self,
+        call: Call,
+        env: Mapping[Ref, _Held],
+        path: _Path,
+        kept: frozenset[_Observed],
+        *,
+        acts: bool,
     ) -> frozenset[_Observed]:
         """Return the reads that may show a call did not act, once ``call`` returned.
 
         A call that may act changes what every read before it reported, so it leaves none. A
         read of a postcondition's ``read`` after an error of its ``after``, on the values that
-        call was given at each pair, is one, while its name holds it.
+        call was given at each pair, one version read at one path or one literal, is one, while
+        its name holds it.
         """
         if acts:
             return frozenset()
         if not path.acted or not self.postconditions:
             return kept
-        reading = dict(call.bindings)
+        reading = {name: self.keyed(env, ref) for name, ref in call.bindings}
         found = set(kept)
         for made in path.acted:
-            tool, given = made[0], dict(made[1])
+            given = dict(made.keys)
             for index, post in enumerate(self.postconditions):
-                if not post.acted or post.after != tool or post.read != call.tool:
+                if not post.acted or post.after != made.tool or post.read != call.tool:
                     continue
                 if all(
-                    mine in reading and reading[mine] == given.get(theirs)
+                    reading.get(mine) is not None and reading.get(mine) == given.get(theirs)
                     for mine, theirs in post.given
                 ):
                     found.add((made, call.result, index))
@@ -1332,7 +1374,7 @@ def _join(where: str, branch: str) -> str:
 _States = tuple[frozenset[str], ...]
 
 
-_Acted = frozenset[tuple[str, frozenset[tuple[str, Ref | Const]]]]
+_Acted = frozenset["_Attempt"]
 
 #: What a binding reads, as a key compares it: a literal, or the version of the value whose
 #: field it reads and the field's path, or None where nothing holds it.
@@ -1344,7 +1386,18 @@ _Made = tuple[str, tuple[tuple[str, Ref | Const], ...], str]
 
 
 #: A read a postcondition of a call's acting covers: the call, the read's name, its index.
-_Observed = tuple[tuple[str, frozenset[tuple[str, Ref | Const]]], str, int]
+_Observed = tuple["_Attempt", str, int]
+
+
+def _disjoint(
+    one: tuple[tuple[str, Validator[Any]], ...], other: tuple[tuple[str, Validator[Any]], ...]
+) -> bool:
+    """Return whether valgebra proves two argument records disjoint at some argument."""
+    sets = dict(other)
+    return any(
+        name in sets and intersection(held, sets[name]).relation_to(nothing) == "subset"
+        for name, held in one
+    )
 
 
 def _unnamed(observed: frozenset[_Observed], name: str) -> frozenset[_Observed]:
@@ -1397,23 +1450,14 @@ def _acts(block: Block, contracts: Mapping[str, Contract]) -> bool:
     return False
 
 
-def _unread(acted: _Acted, result: str) -> _Acted:
-    """Return the calls that may have acted, less those given a value ``result`` now rebinds."""
-    return frozenset(
-        (tool, given)
-        for tool, given in acted
-        if all(not isinstance(r, Ref) or r.variable != result for _, r in given)
-    )
-
-
 @dataclass(frozen=True, slots=True)
 class _Path:
     """What a path carries beside its values: policy states, and the sources it tested."""
 
     states: _States
     tested: frozenset[str] = frozenset()
-    #: The calls that answered with an error on the way here and may have acted: each tool,
-    #: and the values it was given.
+    #: The calls that answered with an error on the way here and may have acted, each with
+    #: the values it was given (`_Attempt`).
     acted: _Acted = frozenset()
     #: The versions of the calls that returned a value before the last call on the way here
     #: that may act, the task inputs' among them.

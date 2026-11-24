@@ -394,14 +394,18 @@
     {
       "program": "a failed grasp retried on the walked-to object's other name",
       "task": "pick",
-      "accepted": true,
-      "verified": true,
-      "weak": true,
-      "links": 7,
+      "accepted": false,
+      "verified": false,
+      "weak": false,
+      "links": 8,
       "proven": 7,
-      "refuted": [],
+      "refuted": [
+        "error:grasp: grasp may be retried"
+      ],
       "undecided": [],
-      "notes": []
+      "notes": [
+        "refuted: grasp may be retried (at error:grasp); retry only a read-only or idempotent tool; give this call a `try:`/`except ToolError:` block"
+      ]
     },
     {
       "program": "a failed grasp retried on the object as given",

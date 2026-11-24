@@ -18,9 +18,12 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from valgebra_planning.contracts import read_task
+from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import read_program
+from valgebra_planning.flows import read_flow
 from valgebra_planning.library import read_library
+from valgebra_planning.planner import plan
+from valgebra_planning.program import render
 from valgebra_planning.run import ToolError, run
 from valgebra_planning.verify import verify
 
@@ -267,3 +270,89 @@ def test_a_rule_holds_where_the_value_is_the_one_measured_for_the_object() -> No
         "    c2 = grasp(object_id=o, distance_m=c1.distance_m)\n    return c2.grasp_id\nstop(o)\n"
     )
     assert set(_flow_links(tested, "pick, measured").values()) == {"proven"}
+
+
+def _retries(source: str, task: str = "pick") -> list[tuple[str, str]]:
+    """Return each retry link's claim and verdict over a robot task's rules."""
+    problem = ROBOT.problem(task)
+    checked = verify(read_program(source), ROBOT.tools, problem.task, flows=problem.flows)
+    return [(link.claim, link.verdict) for link in checked.links if "retried" in link.claim]
+
+
+def test_a_retry_is_read_by_the_values_it_may_repeat() -> None:
+    """A later call to a tool that may have acted repeats it on values that may be the same.
+
+    The walked-to object's name holds any string, so a grasp on it may grasp the object the
+    failed grasp was given; a grasp on an object a test showed is another is no retry.
+    """
+    alias, given = (_programs()[f"a failed grasp retried on {n}"][0] for n in _RETRIED)
+    assert _retries(alias) == [("grasp may be retried", "refuted")]
+    assert _retries(given) == [("grasp may be retried", "refuted")]
+    apart = (
+        'if o in ("obj_1",):\n    try:\n        c1 = grasp(object_id=o, distance_m=d)\n'
+        "    except ToolError:\n"
+        '        c2 = grasp(object_id="obj_2", distance_m=d)\n        return c2.grasp_id\n'
+        "    return c1.grasp_id\nstop(o)\n"
+    )
+    assert _retries(apart) == []
+    assert _retries(apart.replace('object_id="obj_2"', 'object_id="obj_1"')) == [
+        ("grasp may be retried", "refuted")
+    ]
+
+
+_RETRIED = ("the walked-to object's other name", "the object as given")
+
+
+def test_the_planner_writes_no_retry_its_verifier_refutes() -> None:
+    """A fallback the planner writes calls no tool that may repeat the failed call.
+
+    After a walk that returns the distance, under a rule that the distance is read after the
+    last action, a failed grasp may have acted: the block neither grasps again under the
+    walked-to object's name nor reads the distance from before the grasp.
+    """
+    listed = json.loads((ROBOT_DIR / "tools.json").read_text(encoding="utf-8"))["tools"]
+    walk = next(tool for tool in listed if tool["name"] == "walk_to")
+    walk["outputSchema"]["properties"]["distance_m"] = {"type": "number"}
+    walk["outputSchema"]["required"].append("distance_m")
+    approach = {"walk_to": read_contract(walk), "grasp": ROBOT.tools["grasp"]}
+    fresh = read_flow(
+        {
+            "name": "fresh",
+            "sources": ["walk_to"],
+            "sink": "grasp.distance_m",
+            "only": True,
+            "fresh": True,
+        }
+    )
+    pick = read_task("pick", {"o": {"type": "string"}}, ROBOT.problem("pick").task.goal_schema)
+    found = plan(approach, pick, depth=6, errors=True, flows=[fresh])
+    assert found.program is not None
+    checked = verify(found.program, approach, pick, errors=True, flows=[fresh])
+    assert [link for link in checked.links if link.verdict != "proven"] == []
+
+
+def test_a_fallback_reads_again_what_the_failed_call_may_have_changed() -> None:
+    """A failed grasp may have moved the object, so a pinch after it measures again first."""
+    listed = json.loads((ROBOT_DIR / "tools.json").read_text(encoding="utf-8"))["tools"]
+    pinch = {**next(tool for tool in listed if tool["name"] == "grasp"), "name": "pinch"}
+    hands = {name: ROBOT.tools[name] for name in ("estimate_pose", "grasp")}
+    hands["pinch"] = read_contract(pinch)
+    rules = [
+        read_flow(
+            {
+                "name": f"measured for {sink}",
+                "sources": ["estimate_pose"],
+                "sink": f"{sink}.distance_m",
+                "only": True,
+                "fresh": True,
+                "key": "object_id",
+            }
+        )
+        for sink in ("grasp", "pinch")
+    ]
+    pick = read_task("pick", {"o": {"type": "string"}}, ROBOT.problem("pick").task.goal_schema)
+    found = plan(hands, pick, depth=6, errors=True, flows=rules)
+    assert found.program is not None
+    assert "pinch" in render(found.program)
+    checked = verify(found.program, hands, pick, errors=True, flows=rules)
+    assert [link for link in checked.links if link.verdict != "proven"] == []

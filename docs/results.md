@@ -92,7 +92,7 @@ where a stop the task tolerates is left, and `proven, no return` where no path r
 | a loop rebinds the reading the grasp after it reads | pick, measured | refuted: `flow measured: c2.distance_m from estimate_pose was returned for the object_id grasp takes` | refused: estimate_pose, scan, estimate_pose |
 | a grasp tested against a tool no library holds | pick, never grasping | accepted |  |
 | a grasp tested against an argument the grasp lacks | pick, never grasping | refuted: `grasp.distance is an argument` |  |
-| a failed grasp retried on the walked-to object's other name | pick | accepted |  |
+| a failed grasp retried on the walked-to object's other name | pick | refuted: `grasp may be retried` |  |
 | a failed grasp retried on the object as given | pick | refuted: `grasp may be retried` |  |
 | a joint moved at a speed read from any number | move a joint | refuted: `c0.v <= move_joint.speed` |  |
 | a stop on a field the result may lack | say | proven, no return |  |
@@ -117,8 +117,8 @@ where a stop the task tolerates is left, and `proven, no return` where no path r
   the values, so the grasp is never made.
 - A test against a tool the library lacks walks neither branch, so its program is accepted; one
   against an argument the grasp lacks is refuted.
-- A failed grasp retried on the walked-to object's other name is accepted, and the same retry on
-  the object as given is refuted, since the grasp may have acted.
+- A failed grasp retried on the walked-to object's other name is refuted, as the same retry on
+  the object as given is: the grasp may have acted, and the other name may hold the same object.
 - A stop on a field the result may lack is proven, and a return under a status the result never
   takes counts its program weak.
 - The two loops run as Python runs them: the call after the test, and the call after the error

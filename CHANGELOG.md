@@ -8,6 +8,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Security
 
+- A retry is read by the values it may repeat. A call to a tool that may have acted, made again in
+  its error block, was a retry only on the same names: a grasp retried on the walked-to object's
+  other name, or a booking made again on a parcel read again after the error, was proven, though
+  either may act twice on one object. A later call is now a retry unless valgebra proves its
+  arguments disjoint from the failed call's at some argument, and a postcondition's read covers it
+  on the values the call was given. The planner's error block makes no such call, and reads again
+  what the failed call may have changed, so it writes no program its verifier refutes.
+
 - A `fresh` or `key` flow rule reads the value a name holds on the path, not the name. The
   verifier kept one table of each name's call for the whole program and cleared a name's
   staleness when a call to it was made, so five programs that break the rule were proven: an

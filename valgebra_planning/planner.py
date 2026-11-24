@@ -207,6 +207,9 @@ class _State:
     stale: frozenset[str] = frozenset()
     #: The arguments each call was given, by the variable its result is bound to.
     given: tuple[tuple[str, tuple[tuple[str, Ref], ...]], ...] = ()
+    #: The calls on the path that answered with an error and may have acted: each tool, and the
+    #: cells each argument it was given held.
+    failed: tuple[tuple[str, tuple[tuple[str, frozenset[int]], ...]], ...] = ()
 
     def cells(self, ref: Ref) -> frozenset[int]:
         return dict(self.refs)[ref]
@@ -397,8 +400,10 @@ class _Search:
         names = list(choices)
         for picked in itertools.islice(itertools.product(*choices.values()), MAX_BINDINGS):
             bindings = tuple(zip(names, picked, strict=True))
-            if (contract.name, bindings) in state.made or not self.record(
-                state, contract, bindings
+            if (
+                (contract.name, bindings) in state.made
+                or self.repeats(state, contract, bindings)
+                or not self.record(state, contract, bindings)
             ):
                 continue
             policed = self.policed(state, contract, bindings)
@@ -556,13 +561,51 @@ class _Search:
             return Call(contract.name, bindings, result, retry=True)
         if weak and (checked := self.checked(state, contract, bindings, depth)) is not None:
             return Call(contract.name, bindings, result, on_error=checked)
-        without = state.but(made=state.made | {(contract.name, bindings)})
+        without = self.failing(state, contract, bindings)
         fallback = self.solve(without, depth - 1, weak=weak)
         if fallback is None and weak:
             fallback = self.stopped(without, bindings, depth - 1)
         if fallback is None:
             return None
         return Call(contract.name, bindings, result, on_error=fallback)
+
+    def failing(
+        self, state: _State, contract: Contract, bindings: tuple[tuple[str, Ref], ...]
+    ) -> _State:
+        """Return the state an error of a call leaves, as the verifier reads its block.
+
+        The call may have acted before it answered, so every value held is one read before an
+        action, and a read made before it may be made again (Mansoor et al. 2026, §4.1); a later
+        call to its tool on values that may be the ones it was given is a retry of it, which a
+        tool neither read-only nor idempotent is not given (`_Search.repeats`).
+        """
+        record = tuple((name, state.cells(ref)) for name, ref in bindings)
+        made, stale = state.made | {(contract.name, bindings)}, state.stale
+        if "readOnlyHint" not in contract.hints:
+            # As after a call that returned (`_Search.after`): a read made before it reads
+            # something new when made again.
+            stale |= {ref.variable for ref, _ in state.refs if ref not in self.literals}
+            made = frozenset(
+                (tool, given)
+                for tool, given in made
+                if "readOnlyHint" not in self.contracts[tool].hints
+            )
+        return state.but(made=made, failed=(*state.failed, (contract.name, record)), stale=stale)
+
+    def repeats(
+        self, state: _State, contract: Contract, bindings: tuple[tuple[str, Ref], ...]
+    ) -> bool:
+        """Return whether a call may repeat one that answered with an error on the path.
+
+        It may unless, at some argument both take, the cells the two values lie in are
+        disjoint: the cells partition the JSON values, so no value lies in both.
+        """
+        given = dict(bindings)
+        return any(
+            tool == contract.name
+            and all(name not in given or cells & state.cells(given[name]) for name, cells in record)
+            for tool, record in state.failed
+        )
 
     def stopped(
         self, state: _State, bindings: tuple[tuple[str, Ref], ...], depth: int
