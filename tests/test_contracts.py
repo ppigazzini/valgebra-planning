@@ -592,3 +592,44 @@ def test_an_argument_record_over_a_result_read_closed_names_the_assumption() -> 
         (record,) = [link for link in links if link.claim.startswith("the arguments of grasp")]
         assert record.verdict == "proven"
         assert record.assumed[:1] == assumed
+
+
+def test_a_required_argument_only_additional_properties_bounds_takes_its_set() -> None:
+    """A required name no property declares lies in `additionalProperties` (Core, 10.3.2.3).
+
+    It took any value, so a speed over the cap was proven to fill it; read from
+    `additionalProperties`, it is refuted. Beside `patternProperties` the name may match a
+    pattern, and the contract is no plain one, so the record link holds the whole.
+    """
+    capped = {"type": "number", "maximum": 2}
+    root = {
+        "type": "object",
+        "properties": {"joint": {"type": "string"}},
+        "required": ["joint", "speed"],
+        "additionalProperties": capped,
+    }
+    done = {"type": "object", "properties": {"done": {"type": "boolean"}}, "required": ["done"]}
+    move = read_contract({"name": "move_joint", "inputSchema": root, "outputSchema": done})
+    assert move.argument("speed").schema == capped
+    speed = read_contract(
+        {
+            "name": "read_speed",
+            "inputSchema": {"type": "object"},
+            "outputSchema": {
+                "type": "object",
+                "properties": {"v": {"type": "number"}},
+                "required": ["v"],
+            },
+        }
+    )
+    checked = verify(
+        read_program("c0 = read_speed()\nc1 = move_joint(joint=j, speed=c0.v)\nreturn c1.done\n"),
+        {"move_joint": move, "read_speed": speed},
+        read_task("t", {"j": {"type": "string"}}, {"type": "boolean"}),
+    )
+    verdicts = {link.claim: link.verdict for link in checked.links}
+    assert verdicts["c0.v <= move_joint.speed"] == "refuted"
+    patterned = {**root, "patternProperties": {"^s": {"type": "number"}}}
+    loose = read_contract({"name": "move_joint", "inputSchema": patterned, "outputSchema": done})
+    assert loose.argument("speed").schema is True
+    assert not loose.plain

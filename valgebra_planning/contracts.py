@@ -317,8 +317,12 @@ def read_contract(
         msg = f"tool {tool.name!r} has an inputSchema whose properties cannot be listed"
         raise Unsupported(msg)
     properties, required = _properties(node)
-    # A required name no property declares takes any JSON value, and still has to be filled.
-    declared = {**properties, **dict.fromkeys(sorted(required - set(properties)), True)}
+    # A required name no property declares takes the set `additionalProperties` gives every
+    # property neither `properties` nor `patternProperties` names (Core, section 10.3.2.3), any
+    # JSON value where it is absent; beside `patternProperties` the name may match a pattern,
+    # so it takes any value here and the contract is no plain one, its record link holding it.
+    extra = node.get("additionalProperties", True) if "patternProperties" not in node else True
+    declared = {**properties, **dict.fromkeys(sorted(required - set(properties)), extra)}
     arguments = tuple(
         Slot(
             tool.name,

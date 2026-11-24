@@ -13,7 +13,8 @@ each step.
 
 An agent fills each argument of a call from a value it holds, so a tool is read as slots
 (`valgebra_planning/contracts.py`): one per property of its MCP `inputSchema`, a required name
-no property declares included, and one per field its `outputSchema` guarantees, nested to three
+no property declares included, in the set `additionalProperties` gives it (Core, section
+10.3.2.3), and one per field its `outputSchema` guarantees, nested to three
 levels, beside the whole result. valgebra-jsonschema compiles each slot against the tool's own
 schema as root, and an older draft reads as it means. The walk listing the slots reads
 `properties`, `required`, `items` and a bare `$ref` itself, resolving a reference from the

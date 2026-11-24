@@ -8,6 +8,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Security
 
+- A required argument no property declares lies in `additionalProperties`. Its slot took any
+  value, so `{"required": ["speed"], "additionalProperties": {"maximum": 2}}` had a speed of 5
+  proven to fill it, a proof the record's own check refused. JSON Schema validates a property
+  neither `properties` nor `patternProperties` names against `additionalProperties` (Core,
+  section 10.3.2.3), and the slot takes that set; beside `patternProperties` the name may match a
+  pattern, so the slot takes any value and the contract's record link holds the whole.
+
 - A rule's name is one rule's. A library kept the last of two policies or two flow rules of one
   name and held every task naming it to that one alone, and a proxy keeps what a fresh rule's
   sources returned by the rule's name, so two `measured` rules from two sources shared one store,
