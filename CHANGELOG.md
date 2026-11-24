@@ -8,6 +8,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A test's listed constants read as the literals `render` writes. The reader took a listed item
+  only where Python parses it as a bare constant, so the planner's own `in (-1,)` and
+  `in ([1, 2],)`, written by `repr`, did not read back: a negative number is a unary minus and a
+  list is a display. Each item is read as a literal and held to the check an argument's constant
+  is, so `-1`, `-0.5`, `[1, 2]` and `{"a": 1}` read back, and an item that is no JSON value,
+  `b"obj_1"`, `...` or `1j`, is refused at its line.
+
 - Text Python cannot parse is refused by its own line. `read_program` parsed a text again as a
   function's body when Python refused it, and the second parse's `SyntaxError` escaped, its line
   one past the text's: no `ProgramError`, so `repair` raised in its first round and the command

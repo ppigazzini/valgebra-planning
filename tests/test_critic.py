@@ -238,3 +238,18 @@ def test_text_python_cannot_parse_is_refused_by_its_own_line(source: str, named:
         read_program(source)
     indented = "    c1 = find_parcel(parcel_id=parcel_id)\n    return c1\n"
     assert read_program(indented) == read_program(indented.replace("    ", ""))
+
+
+@pytest.mark.parametrize("listed", ["(-1,)", "([1, 2],)", '({"a": 1},)', "(-0.5, 2)"])
+def test_a_listed_constant_reads_back_as_it_is_rendered(listed: str) -> None:
+    """A test's constants are the literals `render` writes, so a planned test reads back."""
+    source = f"c1 = find_parcel(parcel_id=parcel_id)\nif c1.parcel.state in {listed}:\n"
+    program = read_program(source + "    return c1\nreturn c1\n")
+    assert read_program(render(program)) == program
+
+
+@pytest.mark.parametrize("item", ['b"obj_1"', "...", "1j"])
+def test_a_listed_constant_no_json_value_is_refused_by_its_line(item: str) -> None:
+    source = f"c1 = find_parcel(parcel_id=parcel_id)\nif c1.parcel.state in ({item},):\n"
+    with pytest.raises(ProgramError, match="line 2: a test lists JSON values"):
+        read_program(source + "    return c1\nreturn c1\n")

@@ -147,13 +147,25 @@ def _call(statement: ast.Assign) -> Call:
 
 
 def _constants(node: ast.expr) -> tuple[Any, ...]:
-    if isinstance(node, ast.Constant):
-        return (node.value,)
-    if isinstance(node, (ast.Tuple, ast.List, ast.Set)) and all(
-        isinstance(item, ast.Constant) for item in node.elts
-    ):
-        return tuple(item.value for item in node.elts if isinstance(item, ast.Constant))
-    raise _fail(node, "a value is tested against a tool's argument or listed constants")
+    """Return the constants a test lists, each the literal it writes.
+
+    An item is read as `render` writes it, by `repr`, so ``-1``, ``-0.5``, ``[1, 2]`` and
+    ``{"a": 1}`` read back as the planner wrote them; an item that is no JSON value, as
+    ``b"obj_1"``, ``...`` or ``1j``, is refused at its line, since no tool's argument holds it.
+    """
+    items = node.elts if isinstance(node, (ast.Tuple, ast.List, ast.Set)) else [node]
+    values = []
+    for item in items:
+        try:
+            value = ast.literal_eval(item)
+        except ValueError:
+            raise _fail(
+                node, "a value is tested against a tool's argument or listed constants"
+            ) from None
+        if not _json(value):
+            raise _fail(item, f"a test lists JSON values, and {value!r} is none")
+        values.append(value)
+    return tuple(values)
 
 
 def _branch(statement: ast.If, *, looping: bool = False) -> Branch:

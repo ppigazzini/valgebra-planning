@@ -55,7 +55,8 @@ the link is undecided where none does.
 
 A program is calls, then one ending: a return, a stop, or a branch on whether a value lies in a
 tool's argument or in listed constants (`valgebra_planning/program.py`). A call binds each
-argument to a value the program holds or to a JSON constant written into it. Its text reads as
+argument to a value the program holds or to a JSON constant written into it, and a test lists
+JSON constants, each the literal `render` writes, `-1` and `[1, 2]` among them. Its text reads as
 Python.
 
 The verifier (`valgebra_planning/verify.py`) walks a program with the set each value lies in,
