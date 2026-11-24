@@ -75,6 +75,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- A fresh or keyed flow refutation names the reading to make. Its critique told the author to pass
+  a value from a source the rule trusts, which the value already was: one read before a walk, or
+  for another object, is now answered "read estimate_pose again after the last call that may act
+  before grasp", or "for the object_id grasp takes", and pass that reading.
+
 - A policy's refusal names the way out it needs. It named each transition from a state the run
   may be in, a result as read "by its result", so a walk waiting on a yes listed the yes and the
   no alike, with neither answer. A way into a state that admits the refused call is named alone

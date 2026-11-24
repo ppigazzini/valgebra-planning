@@ -81,7 +81,10 @@ The first program passes a parcel's state and weight to `book_return` untested, 
 refutes both links with a value the parcel's schema admits and the argument refuses; each
 critique names the test that makes the call safe. A field read without the test showing its
 key, as `c1.parcel.note` where the parcel's schema leaves `note` optional, is refuted with a
-record lacking it, and its critique names the key test, `if "note" in c1.parcel:`. The second
+record lacking it, and its critique names the key test, `if "note" in c1.parcel:`. A value a
+flow rule's source returned before the last call that may act, or for another key than the
+sink's call takes, is refuted with the reading to make, `read estimate_pose again after the last
+call that may act before grasp`, since the source is the one the rule trusts. The second
 program tests both and covers every other state, and every link is proven. `codemode.repair` runs
 the same loop with any callable from the last critique to a program as the model.
 

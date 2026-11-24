@@ -179,7 +179,7 @@
       ],
       "undecided": [],
       "notes": [
-        "refuted: flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act (at error:estimate_pose); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
+        "refuted: flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act (at error:estimate_pose); read estimate_pose again after the last call that may act before grasp, and pass that reading",
         "assumed: the read-only annotations of the calls before it"
       ],
       "run": {
@@ -205,7 +205,7 @@
       ],
       "undecided": [],
       "notes": [
-        "refuted: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes (at error:estimate_pose); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
+        "refuted: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes (at error:estimate_pose); read estimate_pose for the object_id grasp takes, and pass that reading",
         "assumed: the read-only annotations of the calls before it"
       ],
       "run": {
@@ -230,7 +230,7 @@
       ],
       "undecided": [],
       "notes": [
-        "refuted: flow measured: c2.distance_m from estimate_pose was returned for the object_id grasp takes; pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
+        "refuted: flow measured: c2.distance_m from estimate_pose was returned for the object_id grasp takes; read estimate_pose for the object_id grasp takes, and pass that reading",
         "assumed: the read-only annotations of the calls before it"
       ],
       "run": {
@@ -257,7 +257,7 @@
       ],
       "undecided": [],
       "notes": [
-        "refuted: flow scanned: it.distance_m from scan was returned for the object_id grasp takes (at for:it); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
+        "refuted: flow scanned: it.distance_m from scan was returned for the object_id grasp takes (at for:it); read scan for the object_id grasp takes, and pass that reading",
         "refuted: return c1 <= goal; {'items': [{'object_id': 'fH._ZM', 'distance_m': 982}, {'object_id': '@rK', 'distance_m': -713.5}, {'object_id': 'sNmj', 'distance_m': 840.5}]} lies outside"
       ],
       "run": {
@@ -283,7 +283,7 @@
       ],
       "undecided": [],
       "notes": [
-        "refuted: flow scanned: c1.distance_m from scan was returned for the object_id grasp takes (at for:c1); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
+        "refuted: flow scanned: c1.distance_m from scan was returned for the object_id grasp takes (at for:c1); read scan for the object_id grasp takes, and pass that reading",
         "refuted: return c1 <= goal; {'items': [{'object_id': 'fH._ZM', 'distance_m': 982}, {'object_id': '@rK', 'distance_m': -713.5}, {'object_id': 'sNmj', 'distance_m': 840.5}]} lies outside"
       ],
       "run": {
@@ -308,7 +308,7 @@
       ],
       "undecided": [],
       "notes": [
-        "refuted: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes (at else); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
+        "refuted: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes (at else); read estimate_pose for the object_id grasp takes, and pass that reading",
         "assumed: the read-only annotations of the calls before it"
       ],
       "run": {
@@ -333,7 +333,7 @@
       ],
       "undecided": [],
       "notes": [
-        "refuted: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes (at then); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
+        "refuted: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes (at then); read estimate_pose for the object_id grasp takes, and pass that reading",
         "assumed: the read-only annotations of the calls before it"
       ]
     },
@@ -350,7 +350,7 @@
       ],
       "undecided": [],
       "notes": [
-        "refuted: flow measured: c2.distance_m from estimate_pose was returned for the object_id grasp takes; pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
+        "refuted: flow measured: c2.distance_m from estimate_pose was returned for the object_id grasp takes; read estimate_pose for the object_id grasp takes, and pass that reading",
         "assumed: the read-only annotations of the calls before it"
       ],
       "run": {
@@ -559,7 +559,7 @@
       ],
       "undecided": [],
       "notes": [
-        "refuted: flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act; pass a value from a source the rule trusts, or test it into the rule's endorsed set first"
+        "refuted: flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act; read estimate_pose again after the last call that may act before grasp, and pass that reading"
       ],
       "run": {
         "outcome": "refused",

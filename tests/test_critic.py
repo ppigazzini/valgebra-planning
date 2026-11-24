@@ -10,6 +10,7 @@ import pytest
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import MAX_PATHS, ProgramError, critique, read_program
 from valgebra_planning.flows import read_flow
+from valgebra_planning.library import read_library
 from valgebra_planning.mining import mine
 from valgebra_planning.planner import plan
 from valgebra_planning.policy import read_policy
@@ -351,3 +352,37 @@ def test_a_program_past_the_path_bound_is_refused_with_its_count(tests: int, *, 
     else:
         with pytest.raises(ProgramError, match=f"runs {2**tests} paths, past {MAX_PATHS}"):
             read_program(source)
+
+
+_STALE = (
+    "c1 = estimate_pose(object_id=o)\nc2 = walk_to(object_id=o)\n"
+    "c3 = grasp(object_id=o, distance_m=c1.distance_m)\nreturn c3.grasp_id\n"
+)
+_ELSEWHERE = (
+    "c1 = estimate_pose(object_id=o)\n"
+    "c3 = grasp(object_id=p, distance_m=c1.distance_m)\nreturn c3.grasp_id\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("source", "remedy"),
+    [
+        (
+            _STALE,
+            (
+                "read estimate_pose again after the last call that may act before grasp, and "
+                "pass that reading"
+            ),
+        ),
+        (_ELSEWHERE, "read estimate_pose for the object_id grasp takes, and pass that reading"),
+    ],
+    ids=["stale", "another-object"],
+)
+def test_a_fresh_or_key_refutation_names_the_reading_to_make(source: str, remedy: str) -> None:
+    """A value from the source the rule trusts was read at the wrong time or for the wrong key:
+    the note names the source and when, or for what, to read it again."""
+    robot = read_library(Path(__file__).parent.parent / "examples" / "robot-skills")
+    problem = robot.problem("pick, measured")
+    notes = critique(source, robot.tools, problem.task, flows=problem.flows).notes
+    note = next(note for note in notes if note.startswith("refuted: flow"))
+    assert note.endswith(f"; {remedy}")

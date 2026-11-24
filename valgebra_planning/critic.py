@@ -23,6 +23,7 @@ from __future__ import annotations
 import ast
 import json
 import math
+import re
 from collections.abc import Mapping, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -498,6 +499,34 @@ def _keyed(link: Link) -> str | None:
     return f"test `if {json.dumps(ref.path[-1])} in {record}:` and read `{ref}` in that branch"
 
 
+#: A fresh rule's claim on a source's value, and a keyed rule's: the source, the calls, the sink.
+_FRESH = re.compile(
+    r"^flow .+?: \S+ from (?P<source>\S+) was returned after every call (?:to (?P<named>.+) )?"
+    r"before (?P<sink>\S+)(?: that may act)?$"
+)
+_KEY = re.compile(
+    r"^flow .+?: \S+ from (?P<source>\S+) was returned for the (?P<key>\S+) (?P<sink>\S+) takes$"
+)
+
+
+def _reread(claim: str) -> str | None:
+    """Return the reading a fresh or keyed rule's refuted claim asks for, if the claim is one.
+
+    The value came from a source the rule trusts, so passing another from it is no remedy: it
+    is read again where the rule asks, after the last call that may act, or that the rule
+    names, before the sink, or for the key the sink's call takes.
+    """
+    if (fresh := _FRESH.match(claim)) is not None:
+        named = fresh["named"]
+        after = f"the last call to {named}" if named else "the last call that may act"
+        source, sink = fresh["source"], fresh["sink"]
+        return f"read {source} again after {after} before {sink}, and pass that reading"
+    if (keyed := _KEY.match(claim)) is not None:
+        source, key, sink = keyed["source"], keyed["key"], keyed["sink"]
+        return f"read {source} for the {key} {sink} takes, and pass that reading"
+    return None
+
+
 def _remedy(link: Link) -> str | None:
     """Return what a program's author can change to prove a link, if the claim is one."""
     claim = link.claim
@@ -508,6 +537,8 @@ def _remedy(link: Link) -> str | None:
         return _POLICY
     if claim.startswith("flow ") and " runs under a test on " in claim:
         return _IMPLICIT
+    if claim.startswith("flow ") and (reading := _reread(claim)) is not None:
+        return reading
     if claim.startswith("flow "):
         return _EXPLICIT
     if claim.endswith(" may be retried"):
