@@ -103,6 +103,9 @@ class Verification:
 
     links: tuple[Link, ...]
     gaps: tuple[Gap, ...]
+    #: Where each return some execution reaches stands: one under a test valgebra proves no
+    #: value meets is left out.
+    returns: tuple[str, ...] = ()
 
     @property
     def proven(self) -> bool:
@@ -118,12 +121,12 @@ class Verification:
     def weak(self) -> bool:
         """Return whether the program reaches the goal on some path and stops only as tolerated.
 
-        Every link is proven, some path returns, and each stop is on a value the task tolerates
-        there: a weak solution, one reaching the goal on some execution (Cimatti et al. 2003,
-        Def. 2.10), whose every other end the task accepts.
+        Every link is proven, some execution returns, and each stop is on a value the task
+        tolerates there: a weak solution, one reaching the goal on some execution (Cimatti et al.
+        2003, Def. 2.10), whose every other end the task accepts. A return no execution reaches
+        is proven of no value and counts for nothing (`returns`).
         """
-        returns = any(link.claim.startswith("return ") for link in self.links)
-        return self.verified and returns and all(gap.tolerated for gap in self.gaps)
+        return self.verified and bool(self.returns) and all(gap.tolerated for gap in self.gaps)
 
     def count(self, verdict: Verdict) -> int:
         """Return how many links read ``verdict``."""
@@ -200,6 +203,8 @@ class _Walk:
     given: dict[int, tuple[tuple[str, _Key], ...]] = field(default_factory=dict)
     #: How many versions were given out: a version names one value on every path.
     versions: int = 0
+    #: Where each return some execution reaches stands (`Verification.returns`).
+    returns: list[str] = field(default_factory=list)
 
     def version(self) -> int:
         """Return a version no value has yet.
@@ -238,12 +243,7 @@ class _Walk:
             env, path = cases[0]
         end = block.end
         if isinstance(end, Return):
-            held = self.held(env, end.ref, where)
-            if held is not None:
-                claim = f"return {end.ref} <= goal"
-                self.inclusion(where, claim, end.ref, held, self.task.goal, env)
-            self.obeyed(where, path.states)
-            self.ended(path)
+            self.returning(end, env, where, path)
         elif isinstance(end, Stop):
             # A stop hands back the value it names, which the run reads as it reads a return's.
             self.held(env, end.ref, where)
@@ -257,6 +257,17 @@ class _Walk:
             self.loop(end, env, where, path)
         else:
             self.branch(end, env, where, path)
+
+    def returning(self, end: Return, env: dict[Ref, _Held], where: str, path: _Path) -> None:
+        """Add a return's links: its value held and inside the goal; keep it where it is reached."""
+        held = self.held(env, end.ref, where)
+        if held is not None:
+            claim = f"return {end.ref} <= goal"
+            self.inclusion(where, claim, end.ref, held, self.task.goal, env)
+            if self.reaches(env):
+                self.returns.append(where)
+        self.obeyed(where, path.states)
+        self.ended(path)
 
     def tolerated(self, env: dict[Ref, _Held], ref: Ref) -> bool:
         """Return whether the task tolerates a stop on ``ref`` here.
@@ -424,6 +435,22 @@ class _Walk:
             if not self.reached(branched, test.ref.variable):
                 continue
             self.block(side, branched, _join(where, name), tested)
+
+    def reaches(self, env: dict[Ref, _Held]) -> bool:
+        """Return whether a path here is an execution: no value a test narrowed is proven none.
+
+        A test narrows the value it reads (Bertoli et al. 2006, Def. 3.4), and a side valgebra
+        proves no value of that belief meets is reached on no execution, so an end there is no
+        terminal state a weak solution counts (Cimatti et al. 2003, Def. 2.10).
+        """
+        narrowed = {
+            ref.variable for ref, held in env.items() if held.values is not held.origin.values
+        }
+        return all(
+            self.belief(env, variable).relation_to(nothing) != "subset"
+            for variable in narrowed
+            if Ref(variable) in env
+        )
 
     def reached(self, env: dict[Ref, _Held], variable: str) -> bool:
         """Return whether a branch is a path: not where a case's value is proven to miss it.
@@ -1536,4 +1563,4 @@ def verify(
         for slot in slots
     }
     walk.block(program, env, "", _Path(tuple(frozenset({p.initial}) for p in policies)))
-    return Verification(tuple(walk.links), tuple(walk.gaps))
+    return Verification(tuple(walk.links), tuple(walk.gaps), tuple(walk.returns))

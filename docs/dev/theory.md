@@ -484,15 +484,18 @@ HELD-BY: test_a_model_s_program_is_repaired_by_the_critique_it_is_handed, test_t
 **A weak program is accepted where its task tolerates each stop.** A weak solution reaches the
 goal on some execution (Cimatti et al. 2003, Def. 2.10). A task names, for a tool or an input,
 the set its whole value may lie in where a path stops on it, as an object not found; a program
-every link of which is proven, some path of which returns, and every stop of which valgebra
-proves inside the set its task names there is weak in that sense, every other end being one
-the task accepts. `repair` ends on one where asked, `accept="weak"`, so a task no program
-covers on every path is met by one stopping only where it may. A program stopping on every
-path returns on none, and is never accepted so. **[LOAD-BEARING: weak-acceptance]**
+every link of which is proven, some execution of which returns, and every stop of which
+valgebra proves inside the set its task names there is weak in that sense, every other end
+being one the task accepts. A return under a test valgebra proves no value of the path's
+belief meets is reached on no execution (Bertoli et al. 2006, Def. 3.4): its link is proven of
+no value, and it counts for nothing. `repair` ends on one where asked, `accept="weak"`, so a
+task no program covers on every path is met by one stopping only where it may. A program
+stopping on every execution returns on none, and is never accepted so.
+**[LOAD-BEARING: weak-acceptance]**
 
-IMPLEMENTED-BY: verify.py::Verification.weak
+IMPLEMENTED-BY: verify.py::Verification.weak, verify.py::_Walk.reaches
 
-HELD-BY: test_a_weak_program_stops_only_where_its_task_tolerates, test_repair_accepts_a_weak_program_where_asked_and_stays_strict_by_default
+HELD-BY: test_a_weak_program_stops_only_where_its_task_tolerates, test_repair_accepts_a_weak_program_where_asked_and_stays_strict_by_default, test_a_weak_program_reaches_the_return_it_counts
 
 **A return in a loop's body ends the program at the first item reaching it.** A strong
 solution's execution structure is acyclic, and all its terminal states are in the goal (Cimatti

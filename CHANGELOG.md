@@ -89,6 +89,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A weak program reaches the return it counts. A return under a test no value meets, as
+  `if c1.status in ("lost",):` where the status is `spoken` or `queued`, is proven of no value,
+  and counted the program weak though it only stops; `repair(accept="weak")` ended on it.
+  `Verification.returns` names where each return some execution reaches stands, and `weak`
+  reads it: a return valgebra proves no value of its path's belief reaches counts for nothing.
+
 - A task fixing an argument it reads fresh is refused. A `constants` entry is written into the
   program and read at no time, so the same `tool.argument` named in `fresh` asked for a value no
   program holds, and the planner and the verifier each read the task their own way. `read_task`

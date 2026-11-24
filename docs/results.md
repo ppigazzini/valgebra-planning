@@ -78,7 +78,7 @@ scan's item for that object. Each task is planned and verified as the parcels' a
 The library also holds 24 programs written as an agent writes one (`programs.json`). Each is
 read, critiqued under its task's rules, and run where a row of the file scripts the tools'
 answers. A verdict is `accepted` where every link is proven and no path stops, `proven, weak`
-where a stop the task tolerates is left, and `proven, no return` where no path returns.
+where a stop the task tolerates is left, and `proven, no return` where no execution returns.
 
 | program | task | verdict | run |
 |---|---|---|---|
@@ -96,7 +96,7 @@ where a stop the task tolerates is left, and `proven, no return` where no path r
 | a failed grasp retried on the object as given | pick | refuted: `grasp may be retried` |  |
 | a joint moved at a speed read from any number | move a joint | refuted: `c0.v <= move_joint.speed` |  |
 | a stop on a field the result may lack | say | refuted: `c1.reason is a value the program holds` |  |
-| a return on a status the result never takes | say | proven, weak |  |
+| a return on a status the result never takes | say | proven, no return |  |
 | a loop whose body tests, then calls | sweep a scan | proven, no return | stopped: scan, grasp, walk_to |
 | a loop whose body tries, then calls | sweep a scan | proven, no return | stopped: scan, grasp, detect, walk_to |
 | a test against a string | sweep a scan | refused, line 2 |  |
@@ -120,7 +120,8 @@ where a stop the task tolerates is left, and `proven, no return` where no path r
 - A failed grasp retried on the walked-to object's other name is refuted, as the same retry on
   the object as given is: the grasp may have acted, and the other name may hold the same object.
 - A stop on a field the result may lack is refuted, as a return on one is. A return under a
-  status the result never takes counts its program weak.
+  status the result never takes is reached on no execution, so its program, which only stops,
+  is not weak.
 - The two loops run as Python runs them: the call after the test, and the call after the error
   block, are made for each item.
 - Five texts are refused by their line: `in` against a string, a test listing bytes, an ellipsis

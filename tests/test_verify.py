@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from valgebra_planning._valgebra import Validator
+from valgebra_planning.codemode import repair
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop, render, steps
@@ -168,6 +169,38 @@ def test_a_stop_names_a_value_the_program_holds() -> None:
     ]
     assert links("c1 = say(text=t)\nstop(c1.status)\n") == []
     assert links('c1 = say(text=t)\nif "reason" in c1:\n    stop(c1.reason)\nstop(c1)\n') == []
+
+
+def test_a_weak_program_reaches_the_return_it_counts() -> None:
+    """A return under a test no value meets is proven of no value, and makes no program weak.
+
+    A weak solution reaches the goal on some execution (Cimatti et al. 2003, Def. 2.10): a
+    status the result never takes reaches its return on none, so the program only stops.
+    """
+    say = read_contract(
+        {
+            "name": "say",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {"status": {"enum": ["spoken", "queued"]}},
+                "required": ["status"],
+                "additionalProperties": False,
+            },
+        }
+    )
+    task = read_task("say", {"t": {"type": "string"}}, {"type": "string"}, stops={"say": True})
+    program = 'c1 = say(text=t)\nif c1.status in ("{}",):\n    return c1.status\nstop(c1)\n'
+    lost = verify(read_program(program.format("lost")), {"say": say}, task)
+    assert (lost.verified, lost.weak, lost.returns) == (True, False, ())
+    spoken = verify(read_program(program.format("spoken")), {"say": say}, task)
+    assert (spoken.verified, spoken.weak, spoken.returns) == (True, True, ("then",))
+    met = repair(lambda _: program.format("lost"), {"say": say}, task, rounds=2, accept="weak")
+    assert not met.accepted
 
 
 def test_a_record_the_input_schema_relates_is_asked_whole() -> None:

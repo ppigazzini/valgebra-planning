@@ -465,7 +465,7 @@
       "task": "say",
       "accepted": false,
       "verified": true,
-      "weak": true,
+      "weak": false,
       "links": 2,
       "proven": 2,
       "refuted": [],
