@@ -8,6 +8,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Security
 
+- A `fresh` or `key` flow rule reads the value a name holds on the path, not the name. The
+  verifier kept one table of each name's call for the whole program and cleared a name's
+  staleness when a call to it was made, so five programs that break the rule were proven: an
+  error block grasping at the reading made before a walk, or at another object's reading the
+  failed call left under the name; a grasp keyed by a detection the program had since replaced;
+  a grasp at the reading a branch it is not on rebound; and one after a loop whose body rebound
+  the name. A loop's item named like a call's result was read as that result. Each call's
+  result, loop item and task input is now a version of its own, held on the path that bound it,
+  and each such program is refuted; a run of it is refused at the grasp.
+
 - A required argument no property declares lies in `additionalProperties`. Its slot took any
   value, so `{"required": ["speed"], "additionalProperties": {"maximum": 2}}` had a speed of 5
   proven to fill it, a proof the record's own check refused. JSON Schema validates a property

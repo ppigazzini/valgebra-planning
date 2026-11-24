@@ -207,9 +207,13 @@ verifier, which adds a link for it.
   Sah et al. 2026, is refuted before the run. An `only` rule with `fresh` refutes a value its
   sources returned before a call that may act, as a task's `fresh` refutes an argument read
   then; with `key`, an argument's name, a value from a source reaches the sink only from a call
-  that took at that argument the reference or literal the sink's call takes, so a distance
-  measured for one object is refuted where it is passed for another. A source's value failing
-  either reaches the sink only inside the endorsed set, as a value from elsewhere does.
+  that took at that argument the value the sink's call takes, so a distance measured for one
+  object is refuted where it is passed for another. Both read the value a name holds on the
+  path, not the name: each call's result, loop item and task input is a version of its own, so
+  an error's block reads the value from before the call that failed, stale if it was, a name
+  bound again holds another value, a branch's bindings stay on its side, and a key holds where
+  both calls read one version at one path, or one literal. A source's value failing either
+  reaches the sink only inside the endorsed set, as a value from elsewhere does.
 - **Fresh reads** (a task's `fresh`). A call whose annotations do not say it is read-only may
   act, and an action may change what a reading before it reported: a distance read before a walk
   is no reading of the distance after it. A task names the arguments it reads fresh, as

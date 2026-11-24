@@ -143,6 +143,12 @@ class _Held:
     case: bool = field(default=False, compare=False)
     #: The postconditions a call's result was narrowed by, each link over it naming them.
     assumed: tuple[str, ...] = field(default=(), compare=False)
+    #: The value's version: each call's result, each loop's item and each task input is one, so
+    #: two references read one value where their roots hold one version, on the path walked.
+    version: int = field(default=0, compare=False)
+    #: The version of the call that returned the value, a loop's item's being its array's, an
+    #: input's its own: what a flow rule reading when and for what a value was returned reads.
+    returned: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -175,9 +181,35 @@ class _Walk:
     builder: random.Random | None = None
     seed: int = 0
     postconditions: tuple[Postcondition, ...] = ()
-    #: The arguments each call was given, by the variable its result is bound to, which a flow
-    #: rule's ``key`` reads of a source call.
-    given: dict[str, tuple[tuple[str, Ref | Const], ...]] = field(default_factory=dict)
+    #: The arguments each call was given, by its result's version, each a literal or the
+    #: version and path of the value it read, which a flow rule's ``key`` reads of a source call.
+    given: dict[int, tuple[tuple[str, _Key], ...]] = field(default_factory=dict)
+    #: How many versions were given out: a version names one value on every path.
+    versions: int = 0
+
+    def version(self) -> int:
+        """Return a version no value has yet.
+
+        A rule reading when and for what a value was returned reads facts of the value, as CaMeL
+        tags each value with its provenance (Debenedetti et al. 2025, §5.3), and a name may hold
+        another value on another path. So each call's result, loop item and task input is a
+        version of its own, held beside the value on the path that bound it, the belief that
+        path walks (Bertoli et al. 2006, Def. 3.4): a failed call binds none, and a branch's or a
+        loop's body's bindings stay on their path.
+        """
+        self.versions += 1
+        return self.versions
+
+    def keyed(self, env: Mapping[Ref, _Held], ref: Ref | Const | None) -> _Key:
+        """Return what a binding reads, as a key compares it (`_Key`).
+
+        One version read at one path is one value, and so is one literal: the slice of the trace
+        a key's value names (Roşu and Chen 2012, Def. 11).
+        """
+        if ref is None or isinstance(ref, Const):
+            return ref
+        root = env.get(Ref(ref.variable))
+        return None if root is None else (root.version, ref.path)
 
     def block(self, block: Block, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         for index, call in enumerate(block.calls):
@@ -252,10 +284,18 @@ class _Walk:
             return
         item = self.element(held)
         inner = {ref: held for ref, held in env.items() if ref.variable != end.item}
-        inner[Ref(end.item)] = _Held(item.values, item, _Loop(end.ref, end.item, env))
+        # The item is a value of its own, returned by the call that returned its array.
+        array = env.get(Ref(end.ref.variable))
+        inner[Ref(end.item)] = _Held(
+            item.values,
+            item,
+            _Loop(end.ref, end.item, env),
+            version=self.version(),
+            returned=held.returned if array is None else array.returned,
+        )
         inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
         if _acts(end.body, self.contracts):
-            stale = path.stale | {ref.variable for ref in inner}
+            stale = path.stale | {held.returned for ref, held in inner.items() if not ref.path}
             path = replace(path, stale=stale, last=None, observed=frozenset())
         else:
             path = _rebound(path, end.item)
@@ -348,8 +388,16 @@ class _Walk:
             tested = listed(test.values)
         if held is None or tested is None:
             return
-        inside = _Held(intersection(held.values, tested), held.origin, held.loop)
-        outside = _Held(intersection(held.values, complement(tested)), held.origin, held.loop)
+        inside, outside = (
+            _Held(
+                intersection(held.values, side),
+                held.origin,
+                held.loop,
+                version=held.version,
+                returned=held.returned,
+            )
+            for side in (tested, complement(tested))
+        )
         # Which branch runs carries the tested value's influence: an implicit flow.
         tested = replace(path, tested=path.tested | {held.origin.tool})
         for side, narrowed, name in (
@@ -389,7 +437,8 @@ class _Walk:
             self.links.append(Link(where, f"{call.tool} is a tool", "refuted"))
             return [(env, path)]
         self.flowing(call, env, where, path)
-        self.given[call.result] = call.bindings
+        version = self.version()
+        self.given[version] = tuple((name, self.keyed(env, ref)) for name, ref in call.bindings)
         acted = path.acted
         failing = (
             self.repeated(call, contract, where, env, path) if acted or call.on_error else acted
@@ -400,7 +449,7 @@ class _Walk:
             if slot.required and slot.path[0] not in dict(call.bindings):
                 self.links.append(Link(where, f"{slot.name} is bound", "refuted"))
         self.fixed(call, env, where)
-        self.read_fresh(call, where, path)
+        self.read_fresh(call, env, where, path)
         if not contract.plain and len(bound) == len(call.bindings):
             self.record(call, contract, bound, where, env)
         after = states
@@ -412,11 +461,13 @@ class _Walk:
             )
         # A tool that answered with an error may still have acted, so its block reads both.
         either = tuple(before | then for before, then in zip(states, after, strict=True))
-        stale = path.stale - {call.result}
+        # The result is a new version, so no value held under its name before is made fresh, as
+        # the error's block, which reads that value, reads it.
+        stale = path.stale
         acts = "readOnlyHint" not in contract.hints
         if acts:
             # A call that may act may change what every value held so far read.
-            stale |= {ref.variable for ref in env if ref.variable != call.result}
+            stale |= {held.returned for ref, held in env.items() if not ref.path}
         # A call that may act and answered with an error left an effect no postcondition reads.
         unknown = None if acts else path.last
         observed = frozenset() if acts else _unnamed(path.observed, call.result)
@@ -426,7 +477,9 @@ class _Walk:
         shown = self.shown(call, env, path)
         defined = {ref: held for ref, held in env.items() if ref.variable != call.result}
         for slot in contract.results:
-            defined[Ref(call.result, slot.path)] = _Held(slot.values, slot)
+            defined[Ref(call.result, slot.path)] = _Held(
+                slot.values, slot, version=version, returned=version
+            )
         left = _unread(acted, call.result) if acted else acted
         last = _left(path.last, call, acts=acts)
         whole = (
@@ -448,7 +501,14 @@ class _Walk:
                 policy.step(held, call.tool, record, contract.hints, cell)
                 for policy, held in zip(self.policies, states, strict=True)
             )
-            held = _Held(cell, whole.origin, case=True, assumed=whole.assumed)
+            held = _Held(
+                cell,
+                whole.origin,
+                case=True,
+                assumed=whole.assumed,
+                version=whole.version,
+                returned=whole.returned,
+            )
             narrowed = {**defined, Ref(call.result): held}
             cases.append((narrowed, _Path(stepped, path.tested, left, stale, last, observed)))
         return cases
@@ -576,13 +636,18 @@ class _Walk:
             whole.origin,
             case=True,
             assumed=tuple(post.name for post in shown),
+            version=whole.version,
+            returned=whole.returned,
         )
         defined[Ref(call.result)] = whole
         for slot in contract.results:
             if slot.path:
                 fields = (post.field(slot.path) for post in shown)
                 defined[Ref(call.result, slot.path)] = _Held(
-                    intersection(slot.values, *fields), slot
+                    intersection(slot.values, *fields),
+                    slot,
+                    version=whole.version,
+                    returned=whole.returned,
                 )
         return whole
 
@@ -665,13 +730,15 @@ class _Walk:
         With ``fresh``, the call that returned it came after every call on the path that may
         act, an action changing what a reading before it reported (Mansoor et al. 2026, §4.1);
         which calls may act is read off their annotations, so the link lists that assumption
-        unless every server is trusted. With ``key``, that call took the reference or the
-        literal the sink's call takes at the key: a value of one slice of the trace reaches no
-        call of another (Roşu and Chen 2012, Def. 11). A value read through a loop's item was
-        returned by the call returning the loop's array. A value failing either reaches the
-        sink only inside the endorsed set, as a value from elsewhere does.
+        unless every server is trusted. With ``key``, that call took the value the sink's call
+        takes at the key, one version read at one path or one literal: a value of one slice of
+        the trace reaches no call of another (Roşu and Chen 2012, Def. 11). A value read through
+        a loop's item was returned by the call returning the loop's array, and both read the
+        version the path holds under a name, not the name (`_Walk.version`). A value failing
+        either reaches the sink only inside the endorsed set, as a value from elsewhere does.
         """
-        returner = self.returner(env, ref)
+        root = env.get(Ref(ref.variable))
+        returner = held.returned if root is None else root.returned
         tool = held.origin.tool
         said = f"flow {flow.name}: {ref} from {tool} was returned"
         read: list[tuple[str, bool, tuple[str, ...]]] = []
@@ -681,8 +748,10 @@ class _Walk:
             claim = f"{said} after every call before {call.tool} that may act"
             read.append((claim, returner not in path.stale, assumed))
         if flow.key:
+            # The same version read at the same path, or the same literal: one value.
             source = dict(self.given.get(returner, ())).get(flow.key)
-            same = source is not None and source == dict(call.bindings).get(flow.key)
+            sink = self.keyed(env, dict(call.bindings).get(flow.key))
+            same = source is not None and source == sink
             read.append((f"{said} for the {flow.key} {call.tool} takes", same, ()))
         if all(holds for _, holds, _ in read) or flow.endorsed is None:
             for claim, holds, assumed in read:
@@ -691,20 +760,6 @@ class _Walk:
             return
         claim = f"flow {flow.name}: {ref} from {tool} reaches {flow.sink}"
         self.inclusion(where, claim, ref, held, flow.endorsed, env)
-
-    def returner(self, env: dict[Ref, _Held], ref: Ref) -> str:
-        """Return the variable bound to the call whose result holds ``ref``'s value.
-
-        A loop's item is a member of the loop's array, so it was returned by the call returning
-        the array; a variable no call and no loop binds is its own, a task input.
-        """
-        variable = ref.variable
-        while variable not in self.given:
-            held = env.get(Ref(variable, ()))
-            if held is None or held.loop is None or held.loop.item != variable:
-                break
-            variable = held.loop.array.variable
-        return variable
 
     def literal(self, where: str, flow: Flow, const: Const) -> None:
         """Add the link of a literal a rule holds: proven only inside the endorsed set."""
@@ -1083,7 +1138,7 @@ class _Walk:
             drawn = []
         return given + [v for v in drawn if held.values.is_valid(v)]
 
-    def read_fresh(self, call: Call, where: str, path: _Path) -> None:
+    def read_fresh(self, call: Call, env: Mapping[Ref, _Held], where: str, path: _Path) -> None:
         """Add a link for each argument the task reads fresh: no call that may act came between.
 
         An action changes the world a reading reports, and whether its effect holds is read in
@@ -1099,7 +1154,8 @@ class _Walk:
                 continue
             ref = given[argument]
             claim = f"{tool}.{argument} is read after every call before it that may act"
-            fresh = isinstance(ref, Ref) and ref.variable not in path.stale
+            root = env.get(Ref(ref.variable)) if isinstance(ref, Ref) else None
+            fresh = root is not None and root.returned not in path.stale
             hinted = fresh and not all(c.trusted for c in self.contracts.values())
             assumed = ("the read-only annotations of the calls before it",) if hinted else ()
             self.links.append(Link(where, claim, "proven" if fresh else "refuted", (), assumed))
@@ -1278,6 +1334,10 @@ _States = tuple[frozenset[str], ...]
 
 _Acted = frozenset[tuple[str, frozenset[tuple[str, Ref | Const]]]]
 
+#: What a binding reads, as a key compares it: a literal, or the version of the value whose
+#: field it reads and the field's path, or None where nothing holds it.
+_Key = Const | tuple[int, tuple[str, ...]] | None
+
 
 #: A call as a postcondition reads it: its tool, its bindings and its result's name.
 _Made = tuple[str, tuple[tuple[str, Ref | Const], ...], str]
@@ -1355,8 +1415,9 @@ class _Path:
     #: The calls that answered with an error on the way here and may have acted: each tool,
     #: and the values it was given.
     acted: _Acted = frozenset()
-    #: The values held before the last call on the way here that may act, by variable.
-    stale: frozenset[str] = frozenset()
+    #: The versions of the calls that returned a value before the last call on the way here
+    #: that may act, the task inputs' among them.
+    stale: frozenset[int] = frozenset()
     #: The last call on the way here that may act, where it returned and no name it reads
     #: has been bound again since: its tool, its bindings and its result's name.
     last: _Made | None = None
@@ -1413,8 +1474,10 @@ def verify(
         contracts, task, examples or {}, random.Random(seed), errors, tuple(policies), tuple(flows)
     )
     walk.seed, walk.postconditions = seed, tuple(postconditions)
+    # Each input is a value of its own, returned by no call: its version is its own.
+    versions = {var: walk.version() for var in task.held}
     env = {
-        Ref(var, slot.path): _Held(slot.values, slot)
+        Ref(var, slot.path): _Held(slot.values, slot, version=versions[var], returned=versions[var])
         for var, slots in task.held.items()
         for slot in slots
     }

@@ -350,6 +350,22 @@ IMPLEMENTED-BY: flows.py, verify.py::_Walk.current, proxy.py::Gate.made
 
 HELD-BY: test_only_refutes_an_identifier_written_into_the_program, test_only_refutes_an_input_or_a_tool_it_does_not_name, test_a_rule_reads_fresh_and_key_with_only_alone, test_a_fresh_keyed_rule_admits_the_latest_reading_of_the_same_object, test_the_planner_grasps_at_the_distance_measured_for_its_object, test_a_proxy_admits_a_fresh_keyed_rule_s_latest_reading_of_the_same_object, test_a_fresh_rule_lets_a_value_inside_the_endorsed_set_through_after_an_action, test_a_proxy_lets_a_value_inside_a_fresh_rule_s_endorsed_set_through_after_an_action, test_only_lets_a_literal_inside_the_endorsed_set_through, test_the_planner_grounds_every_identifier_a_rule_names, test_a_task_naming_an_input_as_a_rule_s_source_tool_is_refused
 
+**A value's provenance is the path's, not its name's.** A `fresh` or `key` rule reads when and
+for what a value was returned, facts of the value: CaMeL tags each value with its provenance
+(Debenedetti et al. 2025, §5.3), and a key slices the trace by its value (Roşu and Chen 2012,
+Def. 11). A name may hold another value on another path, after a call that failed or once
+bound again, and the belief a path walks is its own (Bertoli et al. 2006, Def. 3.4). So the
+verifier gives each call's result, loop item and task input a version, held beside the value on
+the path that bound it: a failed call binds none, its error's block reading the version from
+before, stale if it was; a key holds where both calls read one version at one path, or one
+literal; a loop's item was returned by the call returning its array. The runner binds each name
+to the call that returned its value, so it holds the same rules on values, and a program proven
+under them breaks none when run. **[LOAD-BEARING: provenance-per-path]**
+
+IMPLEMENTED-BY: verify.py::_Walk.version, verify.py::_Walk.keyed, verify.py::_Walk.current, run.py::_Runner.flowing
+
+HELD-BY: test_a_value_read_under_a_rebound_name_is_the_value_its_path_holds, test_a_rule_holds_where_the_value_is_the_one_measured_for_the_object, test_a_program_proven_under_a_rule_never_breaks_it_when_run, test_a_run_refuses_the_grasp_a_flow_rule_refuses
+
 **A privilege policy is a set of argument records.** A policy maps each tool to rules with an
 effect, a condition on the arguments and a fallback (Shi et al. 2025, §4.1), applied with the
 forbidding rules first, the first whose condition holds deciding, and a call no rule matches

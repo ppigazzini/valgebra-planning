@@ -169,14 +169,17 @@
     {
       "program": "an error block grasps at the reading made before the walk",
       "task": "pick, measured",
-      "accepted": true,
-      "verified": true,
-      "weak": true,
+      "accepted": false,
+      "verified": false,
+      "weak": false,
       "links": 13,
-      "proven": 13,
-      "refuted": [],
+      "proven": 12,
+      "refuted": [
+        "error:estimate_pose: flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act"
+      ],
       "undecided": [],
       "notes": [
+        "refuted: flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act (at error:estimate_pose); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
         "assumed: the read-only annotations of the calls before it"
       ],
       "run": {
@@ -192,14 +195,17 @@
     {
       "program": "an error block grasps one object at another's reading",
       "task": "pick, measured",
-      "accepted": true,
-      "verified": true,
-      "weak": true,
+      "accepted": false,
+      "verified": false,
+      "weak": false,
       "links": 12,
-      "proven": 12,
-      "refuted": [],
+      "proven": 11,
+      "refuted": [
+        "error:estimate_pose: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes"
+      ],
       "undecided": [],
       "notes": [
+        "refuted: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes (at error:estimate_pose); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
         "assumed: the read-only annotations of the calls before it"
       ],
       "run": {
@@ -214,14 +220,17 @@
     {
       "program": "a grasp reads a detection the program has since replaced",
       "task": "pick, measured",
-      "accepted": true,
-      "verified": true,
-      "weak": true,
+      "accepted": false,
+      "verified": false,
+      "weak": false,
       "links": 8,
-      "proven": 8,
-      "refuted": [],
+      "proven": 7,
+      "refuted": [
+        ": flow measured: c2.distance_m from estimate_pose was returned for the object_id grasp takes"
+      ],
       "undecided": [],
       "notes": [
+        "refuted: flow measured: c2.distance_m from estimate_pose was returned for the object_id grasp takes; pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
         "assumed: the read-only annotations of the calls before it"
       ],
       "run": {
@@ -267,12 +276,14 @@
       "verified": false,
       "weak": false,
       "links": 6,
-      "proven": 5,
+      "proven": 4,
       "refuted": [
+        "for:c1: flow scanned: c1.distance_m from scan was returned for the object_id grasp takes",
         ": return c1 <= goal"
       ],
       "undecided": [],
       "notes": [
+        "refuted: flow scanned: c1.distance_m from scan was returned for the object_id grasp takes (at for:c1); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
         "refuted: return c1 <= goal; {'items': [{'object_id': 'fH._ZM', 'distance_m': 982}, {'object_id': '@rK', 'distance_m': -713.5}, {'object_id': 'sNmj', 'distance_m': 840.5}]} lies outside"
       ],
       "run": {
@@ -287,14 +298,17 @@
     {
       "program": "a branch rebinds the reading the other side grasps at",
       "task": "pick, measured",
-      "accepted": true,
-      "verified": true,
-      "weak": true,
+      "accepted": false,
+      "verified": false,
+      "weak": false,
       "links": 13,
-      "proven": 13,
-      "refuted": [],
+      "proven": 12,
+      "refuted": [
+        "else: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes"
+      ],
       "undecided": [],
       "notes": [
+        "refuted: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes (at else); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
         "assumed: the read-only annotations of the calls before it"
       ],
       "run": {
@@ -326,14 +340,17 @@
     {
       "program": "a loop rebinds the reading the grasp after it reads",
       "task": "pick, measured",
-      "accepted": true,
-      "verified": true,
-      "weak": true,
+      "accepted": false,
+      "verified": false,
+      "weak": false,
       "links": 8,
-      "proven": 8,
-      "refuted": [],
+      "proven": 7,
+      "refuted": [
+        ": flow measured: c2.distance_m from estimate_pose was returned for the object_id grasp takes"
+      ],
       "undecided": [],
       "notes": [
+        "refuted: flow measured: c2.distance_m from estimate_pose was returned for the object_id grasp takes; pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
         "assumed: the read-only annotations of the calls before it"
       ],
       "run": {

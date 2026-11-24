@@ -409,7 +409,9 @@ class _Runner:
         """Return each flow rule whose sink the call fills that it breaks, as its message.
 
         The runner binds every name to the call that returned its value, so it reads a rule on
-        the values, as the verifier abstracts it (`valgebra_planning.flows`): a value from an
+        the values, as CaMeL tags each value (Debenedetti et al. 2025, §5.3) and a key slices a
+        trace by its value (Roşu and Chen 2012, Def. 11), where the verifier reads the sets a
+        program's references may hold (`valgebra_planning.flows`): a value from an
         origin the rule holds reaches the sink only inside the endorsed set; under ``fresh`` a
         source's value is one no call that may act came after, and under ``key`` one its call
         returned for the value the sink's call takes at the key, as JSON values; under
