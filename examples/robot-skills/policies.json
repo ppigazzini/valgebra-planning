@@ -1,0 +1,18 @@
+{
+  "policies": [
+    {
+      "name": "never grasp",
+      "initial": "start",
+      "bad": [
+        "violated"
+      ],
+      "transitions": [
+        {
+          "from": "start",
+          "tool": "grasp",
+          "to": "violated"
+        }
+      ]
+    }
+  ]
+}

@@ -43,6 +43,7 @@ jobs:
       - run: uv run --no-sync python -X warn_default_encoding -m pytest
       # Every published count is one this code still produces.
       - run: uv run --no-sync python tools/case.py examples/parcels --check docs/studies/parcels.json
+      - run: uv run --no-sync python tools/case.py examples/robot-skills --check docs/studies/robot-skills.json
       - run: uv run --no-sync python tools/bench.py --check docs/studies/bench.json
       - run: uv run --no-sync python tools/faults.py examples/bookings --check docs/studies/faults.json
 

@@ -1,0 +1,332 @@
+{
+  "tools": [
+    {
+      "name": "detect",
+      "description": "Find an object by its label.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "object_id": {
+            "type": "string"
+          },
+          "found": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "object_id",
+          "found"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": false
+      }
+    },
+    {
+      "name": "estimate_pose",
+      "description": "Measure the distance to an object, in meters.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "distance_m": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "distance_m"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": false
+      }
+    },
+    {
+      "name": "walk_to",
+      "description": "Walk up to an object.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "object_id": {
+            "type": "string"
+          },
+          "arrived": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "object_id",
+          "arrived"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "idempotentHint": false
+      }
+    },
+    {
+      "name": "grasp",
+      "description": "Grasp an object at a distance, in meters.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object_id": {
+            "type": "string"
+          },
+          "distance_m": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_id",
+          "distance_m"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "grasp_id": {
+            "type": "string",
+            "pattern": "^g_[0-9]+$"
+          }
+        },
+        "required": [
+          "grasp_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "idempotentHint": false
+      }
+    },
+    {
+      "name": "scan",
+      "description": "List the objects near one, each with its distance.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "object_id": {
+                  "type": "string"
+                },
+                "distance_m": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "object_id",
+                "distance_m"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": false
+      }
+    },
+    {
+      "name": "say",
+      "description": "Speak a text.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "enum": [
+              "spoken",
+              "queued"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "idempotentHint": false
+      }
+    },
+    {
+      "name": "move_joint",
+      "description": "Move a joint; every other argument is a speed of at most 2.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "joint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "joint",
+          "speed"
+        ],
+        "additionalProperties": {
+          "type": "number",
+          "maximum": 2
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "motion_id": {
+            "type": "string",
+            "pattern": "^m_[0-9]+$"
+          }
+        },
+        "required": [
+          "motion_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "idempotentHint": false
+      }
+    },
+    {
+      "name": "read_speed",
+      "description": "Read the speed a joint is set to move at.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "v"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": false
+      }
+    },
+    {
+      "name": "confirm_with_user",
+      "description": "Ask the user to confirm an action on an object.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "grasp",
+              "walk"
+            ]
+          }
+        },
+        "required": [
+          "object_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "confirmed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "confirmed"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": false
+      }
+    }
+  ]
+}

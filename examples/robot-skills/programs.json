@@ -1,0 +1,363 @@
+{
+  "programs": [
+    {
+      "name": "an error block grasps at the reading made before the walk",
+      "task": "pick, measured",
+      "source": [
+        "c1 = estimate_pose(object_id=o)",
+        "c2 = walk_to(object_id=o)",
+        "try:",
+        "    c1 = estimate_pose(object_id=o)",
+        "except ToolError:",
+        "    c3 = grasp(object_id=o, distance_m=c1.distance_m)",
+        "    return c3.grasp_id",
+        "c4 = grasp(object_id=o, distance_m=c1.distance_m)",
+        "return c4.grasp_id"
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1",
+          "p": "obj_2",
+          "a": "mug",
+          "b": "bottle",
+          "d": 0.4
+        },
+        "answers": {
+          "estimate_pose": [
+            {
+              "distance_m": 0.25
+            },
+            "lost track"
+          ],
+          "walk_to": [
+            {
+              "object_id": "obj_1",
+              "arrived": true
+            }
+          ],
+          "grasp": [
+            {
+              "grasp_id": "g_1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an error block grasps one object at another's reading",
+      "task": "pick, measured",
+      "source": [
+        "c1 = estimate_pose(object_id=o)",
+        "try:",
+        "    c1 = estimate_pose(object_id=p)",
+        "except ToolError:",
+        "    c3 = grasp(object_id=p, distance_m=c1.distance_m)",
+        "    return c3.grasp_id",
+        "c4 = grasp(object_id=p, distance_m=c1.distance_m)",
+        "return c4.grasp_id"
+      ]
+    },
+    {
+      "name": "a grasp reads a detection the program has since replaced",
+      "task": "pick, measured",
+      "source": [
+        "c1 = detect(label=a)",
+        "c2 = estimate_pose(object_id=c1.object_id)",
+        "c1 = detect(label=b)",
+        "c3 = grasp(object_id=c1.object_id, distance_m=c2.distance_m)",
+        "return c3.grasp_id"
+      ]
+    },
+    {
+      "name": "a loop grasps one object at the distance of another's item",
+      "task": "pick, scanned",
+      "source": [
+        "c1 = scan(object_id=o)",
+        "c2 = scan(object_id=p)",
+        "for it in c2.items:",
+        "    c3 = grasp(object_id=o, distance_m=it.distance_m)",
+        "return c1"
+      ]
+    },
+    {
+      "name": "the same loop, its item named as a call's result",
+      "task": "pick, scanned",
+      "source": [
+        "c1 = scan(object_id=o)",
+        "c2 = scan(object_id=p)",
+        "for c1 in c2.items:",
+        "    c3 = grasp(object_id=o, distance_m=c1.distance_m)",
+        "return c1"
+      ]
+    },
+    {
+      "name": "a branch rebinds the reading the other side grasps at",
+      "task": "pick, measured",
+      "source": [
+        "c1 = estimate_pose(object_id=o)",
+        "c2 = detect(label=a)",
+        "if c2.found in (True,):",
+        "    c1 = estimate_pose(object_id=p)",
+        "    c3 = grasp(object_id=p, distance_m=c1.distance_m)",
+        "    return c3.grasp_id",
+        "c4 = grasp(object_id=p, distance_m=c1.distance_m)",
+        "return c4.grasp_id"
+      ]
+    },
+    {
+      "name": "the same branch, the faulty grasp on the side the test names",
+      "task": "pick, measured",
+      "source": [
+        "c1 = estimate_pose(object_id=o)",
+        "c2 = detect(label=a)",
+        "if c2.found in (False,):",
+        "    c4 = grasp(object_id=p, distance_m=c1.distance_m)",
+        "    return c4.grasp_id",
+        "c1 = estimate_pose(object_id=p)",
+        "c3 = grasp(object_id=p, distance_m=c1.distance_m)",
+        "return c3.grasp_id"
+      ]
+    },
+    {
+      "name": "a loop rebinds the reading the grasp after it reads",
+      "task": "pick, measured",
+      "source": [
+        "c2 = estimate_pose(object_id=p)",
+        "c5 = scan(object_id=o)",
+        "for it in c5.items:",
+        "    c2 = estimate_pose(object_id=o)",
+        "c3 = grasp(object_id=o, distance_m=c2.distance_m)",
+        "return c3.grasp_id"
+      ]
+    },
+    {
+      "name": "a grasp tested against a tool no library holds",
+      "task": "pick, never grasping",
+      "source": [
+        "c1 = estimate_pose(object_id=o)",
+        "if c1.distance_m in grasp_object.distance_m:",
+        "    c2 = grasp(object_id=o, distance_m=c1.distance_m)",
+        "    return c2.grasp_id",
+        "stop(c1)"
+      ]
+    },
+    {
+      "name": "a grasp tested against an argument the grasp lacks",
+      "task": "pick, never grasping",
+      "source": [
+        "c1 = estimate_pose(object_id=o)",
+        "if c1.distance_m in grasp.distance:",
+        "    c2 = grasp(object_id=o, distance_m=c1.distance_m)",
+        "    return c2.grasp_id",
+        "stop(c1)"
+      ]
+    },
+    {
+      "name": "a failed grasp retried on the walked-to object's other name",
+      "task": "pick",
+      "source": [
+        "c1 = walk_to(object_id=o)",
+        "try:",
+        "    c2 = grasp(object_id=o, distance_m=d)",
+        "except ToolError:",
+        "    c3 = grasp(object_id=c1.object_id, distance_m=d)",
+        "    return c3.grasp_id",
+        "return c2.grasp_id"
+      ]
+    },
+    {
+      "name": "a failed grasp retried on the object as given",
+      "task": "pick",
+      "source": [
+        "c1 = walk_to(object_id=o)",
+        "try:",
+        "    c2 = grasp(object_id=o, distance_m=d)",
+        "except ToolError:",
+        "    c3 = grasp(object_id=o, distance_m=d)",
+        "    return c3.grasp_id",
+        "return c2.grasp_id"
+      ]
+    },
+    {
+      "name": "a joint moved at a speed read from any number",
+      "task": "move a joint",
+      "source": [
+        "c0 = read_speed()",
+        "c1 = move_joint(joint=j, speed=c0.v)",
+        "return c1.motion_id"
+      ]
+    },
+    {
+      "name": "a stop on a field the result may lack",
+      "task": "say",
+      "source": [
+        "c1 = say(text=t)",
+        "stop(c1.reason)"
+      ]
+    },
+    {
+      "name": "a return on a status the result never takes",
+      "task": "say",
+      "source": [
+        "c1 = say(text=t)",
+        "if c1.status in (\"lost\",):",
+        "    return c1.status",
+        "stop(c1)"
+      ]
+    },
+    {
+      "name": "a loop whose body tests, then calls",
+      "task": "sweep a scan",
+      "source": [
+        "c1 = scan(object_id=o)",
+        "for it in c1.items:",
+        "    if it.object_id in (\"obj_1\",):",
+        "        c2 = grasp(object_id=it.object_id, distance_m=it.distance_m)",
+        "    c3 = walk_to(object_id=it.object_id)",
+        "stop(c1)"
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1",
+          "a": "mug"
+        },
+        "answers": {
+          "scan": [
+            {
+              "items": [
+                {
+                  "object_id": "obj_1",
+                  "distance_m": 0.3
+                }
+              ]
+            }
+          ],
+          "grasp": [
+            {
+              "grasp_id": "g_1"
+            }
+          ],
+          "walk_to": [
+            {
+              "object_id": "obj_1",
+              "arrived": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a loop whose body tries, then calls",
+      "task": "sweep a scan",
+      "source": [
+        "c1 = scan(object_id=o)",
+        "for it in c1.items:",
+        "    try:",
+        "        c2 = grasp(object_id=it.object_id, distance_m=it.distance_m)",
+        "    except ToolError:",
+        "        c4 = detect(label=a)",
+        "    c3 = walk_to(object_id=it.object_id)",
+        "stop(c1)"
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1",
+          "a": "mug"
+        },
+        "answers": {
+          "scan": [
+            {
+              "items": [
+                {
+                  "object_id": "obj_1",
+                  "distance_m": 0.3
+                }
+              ]
+            }
+          ],
+          "grasp": [
+            "slipped"
+          ],
+          "detect": [
+            {
+              "object_id": "obj_1",
+              "found": true
+            }
+          ],
+          "walk_to": [
+            {
+              "object_id": "obj_1",
+              "arrived": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a test against a string",
+      "task": "sweep a scan",
+      "source": [
+        "c1 = detect(label=a)",
+        "if c1.object_id in 'obj_1, obj_2':",
+        "    return c1.object_id",
+        "stop(c1)"
+      ]
+    },
+    {
+      "name": "a test against bytes",
+      "task": "sweep a scan",
+      "source": [
+        "c1 = detect(label=a)",
+        "if c1.object_id in (b\"obj_1\",):",
+        "    return c1.object_id",
+        "stop(c1)"
+      ]
+    },
+    {
+      "name": "a test against an ellipsis",
+      "task": "sweep a scan",
+      "source": [
+        "c1 = detect(label=a)",
+        "if c1.object_id in (...,):",
+        "    return c1.object_id",
+        "stop(c1)"
+      ]
+    },
+    {
+      "name": "a test against a complex number",
+      "task": "sweep a scan",
+      "source": [
+        "c1 = detect(label=a)",
+        "if c1.object_id in (1j,):",
+        "    return c1.object_id",
+        "stop(c1)"
+      ]
+    },
+    {
+      "name": "an argument named for a keyword",
+      "task": "sweep a scan",
+      "source": [
+        "c1 = walk_to(from=o)",
+        "return c1"
+      ]
+    },
+    {
+      "name": "a grasp at a reading the walk has made stale",
+      "task": "pick, measured",
+      "source": [
+        "c1 = estimate_pose(object_id=o)",
+        "c2 = walk_to(object_id=o)",
+        "c3 = grasp(object_id=o, distance_m=c1.distance_m)",
+        "return c3.grasp_id"
+      ]
+    },
+    {
+      "name": "a confirmation leaving out the action the task fixes",
+      "task": "confirm a grasp",
+      "source": [
+        "c1 = confirm_with_user(object_id=o)",
+        "return c1.confirmed"
+      ]
+    }
+  ]
+}

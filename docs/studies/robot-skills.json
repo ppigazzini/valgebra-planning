@@ -1,0 +1,501 @@
+{
+  "format": 1,
+  "example": "robot-skills",
+  "rows": [
+    {
+      "task": "pick",
+      "errors": false,
+      "policies": 0,
+      "flows": 0,
+      "mined": false,
+      "predicates": 6,
+      "cells": 12,
+      "undecided cells": 0,
+      "program": "strong",
+      "calls": 1,
+      "tests": 0,
+      "stops": 0,
+      "steps": 1,
+      "links": 3,
+      "proven": 3,
+      "refuted": 0,
+      "undecided": 0,
+      "assumed": 0
+    },
+    {
+      "task": "pick, measured",
+      "errors": false,
+      "policies": 0,
+      "flows": 1,
+      "mined": false,
+      "predicates": 6,
+      "cells": 12,
+      "undecided cells": 0,
+      "program": "strong",
+      "calls": 2,
+      "tests": 0,
+      "stops": 0,
+      "steps": 2,
+      "links": 6,
+      "proven": 6,
+      "refuted": 0,
+      "undecided": 0,
+      "assumed": 0
+    },
+    {
+      "task": "pick, scanned",
+      "errors": false,
+      "policies": 0,
+      "flows": 1,
+      "mined": false,
+      "predicates": 6,
+      "cells": 12,
+      "undecided cells": 0,
+      "program": "none"
+    },
+    {
+      "task": "pick, never grasping",
+      "errors": false,
+      "policies": 1,
+      "flows": 0,
+      "mined": false,
+      "predicates": 6,
+      "cells": 12,
+      "undecided cells": 0,
+      "program": "none"
+    },
+    {
+      "task": "pick, tools may fail",
+      "errors": true,
+      "policies": 0,
+      "flows": 0,
+      "mined": false,
+      "predicates": 6,
+      "cells": 12,
+      "undecided cells": 0,
+      "program": "weak",
+      "calls": 1,
+      "tests": 0,
+      "stops": 1,
+      "steps": 1,
+      "links": 3,
+      "proven": 3,
+      "refuted": 0,
+      "undecided": 0,
+      "assumed": 0
+    },
+    {
+      "task": "move a joint",
+      "errors": false,
+      "policies": 0,
+      "flows": 0,
+      "mined": false,
+      "predicates": 6,
+      "cells": 12,
+      "undecided cells": 0,
+      "program": "weak",
+      "calls": 2,
+      "tests": 1,
+      "stops": 1,
+      "steps": 3,
+      "links": 4,
+      "proven": 4,
+      "refuted": 0,
+      "undecided": 0,
+      "assumed": 0
+    },
+    {
+      "task": "say",
+      "errors": false,
+      "policies": 0,
+      "flows": 0,
+      "mined": false,
+      "predicates": 7,
+      "cells": 13,
+      "undecided cells": 0,
+      "program": "weak",
+      "calls": 1,
+      "tests": 1,
+      "stops": 1,
+      "steps": 2,
+      "links": 2,
+      "proven": 2,
+      "refuted": 0,
+      "undecided": 0,
+      "assumed": 0
+    },
+    {
+      "task": "sweep a scan",
+      "errors": false,
+      "policies": 0,
+      "flows": 0,
+      "mined": false,
+      "predicates": 6,
+      "cells": 12,
+      "undecided cells": 0,
+      "program": "strong",
+      "calls": 2,
+      "tests": 0,
+      "stops": 0,
+      "steps": 2,
+      "links": 4,
+      "proven": 4,
+      "refuted": 0,
+      "undecided": 0,
+      "assumed": 0
+    },
+    {
+      "task": "confirm a grasp",
+      "errors": false,
+      "policies": 0,
+      "flows": 0,
+      "mined": false,
+      "predicates": 8,
+      "cells": 13,
+      "undecided cells": 0,
+      "program": "strong",
+      "calls": 1,
+      "tests": 0,
+      "stops": 0,
+      "steps": 1,
+      "links": 2,
+      "proven": 2,
+      "refuted": 0,
+      "undecided": 0,
+      "assumed": 0
+    }
+  ],
+  "programs": [
+    {
+      "program": "an error block grasps at the reading made before the walk",
+      "task": "pick, measured",
+      "accepted": true,
+      "verified": true,
+      "weak": true,
+      "links": 13,
+      "proven": 13,
+      "refuted": [],
+      "undecided": [],
+      "notes": [
+        "assumed: the read-only annotations of the calls before it"
+      ],
+      "run": {
+        "outcome": "returned",
+        "calls": [
+          "estimate_pose",
+          "walk_to",
+          "estimate_pose",
+          "grasp"
+        ],
+        "refused": null
+      }
+    },
+    {
+      "program": "an error block grasps one object at another's reading",
+      "task": "pick, measured",
+      "accepted": true,
+      "verified": true,
+      "weak": true,
+      "links": 12,
+      "proven": 12,
+      "refuted": [],
+      "undecided": [],
+      "notes": [
+        "assumed: the read-only annotations of the calls before it"
+      ]
+    },
+    {
+      "program": "a grasp reads a detection the program has since replaced",
+      "task": "pick, measured",
+      "accepted": true,
+      "verified": true,
+      "weak": true,
+      "links": 8,
+      "proven": 8,
+      "refuted": [],
+      "undecided": [],
+      "notes": [
+        "assumed: the read-only annotations of the calls before it"
+      ]
+    },
+    {
+      "program": "a loop grasps one object at the distance of another's item",
+      "task": "pick, scanned",
+      "accepted": false,
+      "verified": false,
+      "weak": false,
+      "links": 6,
+      "proven": 4,
+      "refuted": [
+        "for:it: flow scanned: it.distance_m from scan was returned for the object_id grasp takes",
+        ": return c1 <= goal"
+      ],
+      "undecided": [],
+      "notes": [
+        "refuted: flow scanned: it.distance_m from scan was returned for the object_id grasp takes (at for:it); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
+        "refuted: return c1 <= goal; {'items': [{'object_id': 'fH._ZM', 'distance_m': 982}, {'object_id': '@rK', 'distance_m': -713.5}, {'object_id': 'sNmj', 'distance_m': 840.5}]} lies outside"
+      ]
+    },
+    {
+      "program": "the same loop, its item named as a call's result",
+      "task": "pick, scanned",
+      "accepted": false,
+      "verified": false,
+      "weak": false,
+      "links": 6,
+      "proven": 5,
+      "refuted": [
+        ": return c1 <= goal"
+      ],
+      "undecided": [],
+      "notes": [
+        "refuted: return c1 <= goal; {'items': [{'object_id': 'fH._ZM', 'distance_m': 982}, {'object_id': '@rK', 'distance_m': -713.5}, {'object_id': 'sNmj', 'distance_m': 840.5}]} lies outside"
+      ]
+    },
+    {
+      "program": "a branch rebinds the reading the other side grasps at",
+      "task": "pick, measured",
+      "accepted": true,
+      "verified": true,
+      "weak": true,
+      "links": 13,
+      "proven": 13,
+      "refuted": [],
+      "undecided": [],
+      "notes": [
+        "assumed: the read-only annotations of the calls before it"
+      ]
+    },
+    {
+      "program": "the same branch, the faulty grasp on the side the test names",
+      "task": "pick, measured",
+      "accepted": false,
+      "verified": false,
+      "weak": false,
+      "links": 13,
+      "proven": 12,
+      "refuted": [
+        "then: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes"
+      ],
+      "undecided": [],
+      "notes": [
+        "refuted: flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes (at then); pass a value from a source the rule trusts, or test it into the rule's endorsed set first",
+        "assumed: the read-only annotations of the calls before it"
+      ]
+    },
+    {
+      "program": "a loop rebinds the reading the grasp after it reads",
+      "task": "pick, measured",
+      "accepted": true,
+      "verified": true,
+      "weak": true,
+      "links": 8,
+      "proven": 8,
+      "refuted": [],
+      "undecided": [],
+      "notes": [
+        "assumed: the read-only annotations of the calls before it"
+      ]
+    },
+    {
+      "program": "a grasp tested against a tool no library holds",
+      "task": "pick, never grasping",
+      "accepted": true,
+      "verified": true,
+      "weak": false,
+      "links": 1,
+      "proven": 1,
+      "refuted": [],
+      "undecided": [],
+      "notes": []
+    },
+    {
+      "program": "a grasp tested against an argument the grasp lacks",
+      "task": "pick, never grasping",
+      "accepted": false,
+      "verified": false,
+      "weak": false,
+      "links": 2,
+      "proven": 1,
+      "refuted": [
+        ": grasp.distance is an argument"
+      ],
+      "undecided": [],
+      "notes": [
+        "refuted: grasp.distance is an argument"
+      ]
+    },
+    {
+      "program": "a failed grasp retried on the walked-to object's other name",
+      "task": "pick",
+      "accepted": true,
+      "verified": true,
+      "weak": true,
+      "links": 7,
+      "proven": 7,
+      "refuted": [],
+      "undecided": [],
+      "notes": []
+    },
+    {
+      "program": "a failed grasp retried on the object as given",
+      "task": "pick",
+      "accepted": false,
+      "verified": false,
+      "weak": false,
+      "links": 8,
+      "proven": 7,
+      "refuted": [
+        "error:grasp: grasp may be retried"
+      ],
+      "undecided": [],
+      "notes": [
+        "refuted: grasp may be retried (at error:grasp); retry only a read-only or idempotent tool; give this call a `try:`/`except ToolError:` block"
+      ]
+    },
+    {
+      "program": "a joint moved at a speed read from any number",
+      "task": "move a joint",
+      "accepted": false,
+      "verified": false,
+      "weak": false,
+      "links": 3,
+      "proven": 2,
+      "refuted": [
+        ": c0.v <= move_joint.speed"
+      ],
+      "undecided": [],
+      "notes": [
+        "refuted: c0.v <= move_joint.speed; 729 lies outside; test `if c0.v in move_joint.speed:` and make the call in that branch"
+      ]
+    },
+    {
+      "program": "a stop on a field the result may lack",
+      "task": "say",
+      "accepted": false,
+      "verified": true,
+      "weak": false,
+      "links": 1,
+      "proven": 1,
+      "refuted": [],
+      "undecided": [],
+      "notes": [
+        "uncovered: c1.reason (at top); the task tolerates it"
+      ]
+    },
+    {
+      "program": "a return on a status the result never takes",
+      "task": "say",
+      "accepted": false,
+      "verified": true,
+      "weak": true,
+      "links": 2,
+      "proven": 2,
+      "refuted": [],
+      "undecided": [],
+      "notes": [
+        "uncovered: c1 (at else); the task tolerates it"
+      ]
+    },
+    {
+      "program": "a loop whose body tests, then calls",
+      "task": "sweep a scan",
+      "accepted": false,
+      "verified": true,
+      "weak": false,
+      "links": 5,
+      "proven": 5,
+      "refuted": [],
+      "undecided": [],
+      "notes": [
+        "uncovered: c1 (at top); the task tolerates it"
+      ],
+      "run": {
+        "outcome": "stopped",
+        "calls": [
+          "scan",
+          "grasp",
+          "walk_to"
+        ],
+        "refused": null
+      }
+    },
+    {
+      "program": "a loop whose body tries, then calls",
+      "task": "sweep a scan",
+      "accepted": false,
+      "verified": true,
+      "weak": false,
+      "links": 6,
+      "proven": 6,
+      "refuted": [],
+      "undecided": [],
+      "notes": [
+        "uncovered: c1 (at top); the task tolerates it"
+      ],
+      "run": {
+        "outcome": "stopped",
+        "calls": [
+          "scan",
+          "grasp",
+          "detect",
+          "walk_to"
+        ],
+        "refused": null
+      }
+    },
+    {
+      "program": "a test against a string",
+      "task": "sweep a scan",
+      "refused": "line 2: `in` a string tests a substring; list the members as a tuple"
+    },
+    {
+      "program": "a test against bytes",
+      "task": "sweep a scan",
+      "refused": "line 2: a test lists JSON values, and b'obj_1' is none"
+    },
+    {
+      "program": "a test against an ellipsis",
+      "task": "sweep a scan",
+      "refused": "line 2: a test lists JSON values, and Ellipsis is none"
+    },
+    {
+      "program": "a test against a complex number",
+      "task": "sweep a scan",
+      "refused": "line 2: a test lists JSON values, and 1j is none"
+    },
+    {
+      "program": "an argument named for a keyword",
+      "task": "sweep a scan",
+      "refused": "line 1: invalid syntax"
+    },
+    {
+      "program": "a grasp at a reading the walk has made stale",
+      "task": "pick, measured",
+      "accepted": false,
+      "verified": false,
+      "weak": false,
+      "links": 7,
+      "proven": 6,
+      "refuted": [
+        ": flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act"
+      ],
+      "undecided": [],
+      "notes": [
+        "refuted: flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act; pass a value from a source the rule trusts, or test it into the rule's endorsed set first"
+      ]
+    },
+    {
+      "program": "a confirmation leaving out the action the task fixes",
+      "task": "confirm a grasp",
+      "accepted": true,
+      "verified": true,
+      "weak": true,
+      "links": 2,
+      "proven": 2,
+      "refuted": [],
+      "undecided": [],
+      "notes": []
+    }
+  ]
+}

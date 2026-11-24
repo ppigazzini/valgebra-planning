@@ -49,6 +49,7 @@ uv run --no-sync python tools/docs_lint.py
 uv run --no-sync python tools/docs_lint.py --commits
 uv run --no-sync python -X warn_default_encoding -m pytest
 uv run --no-sync python tools/case.py examples/parcels --check docs/studies/parcels.json
+uv run --no-sync python tools/case.py examples/robot-skills --check docs/studies/robot-skills.json
 uv run --no-sync python tools/bench.py --check docs/studies/bench.json
 uv run --no-sync python tools/faults.py examples/bookings --check docs/studies/faults.json
 ```
@@ -67,8 +68,8 @@ a link and on the nav to a warning, so a dead link, a dead anchor or a page off 
 
 - `valgebra_planning/` — the package. `_valgebra.py` is the only module importing valgebra
   or valgebra-jsonschema, and `tests/test_boundaries.py` holds it.
-- `examples/` — the tool libraries, tasks, policies, flow rules and observed calls the
-  studies read.
+- `examples/` — the tool libraries, tasks, policies, flow rules, observed calls and written
+  programs the studies read.
 - `tools/` — the study drivers, `case.py`, `bench.py` and `faults.py`, the lint, `docs_lint.py`, and the
   check holding the changelog to the public API's changes, `api_changes.py`.
 - `docs/` — the user guide `mkdocs.yml` builds and the workflow `Docs` publishes, with

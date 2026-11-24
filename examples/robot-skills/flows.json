@@ -1,0 +1,23 @@
+{
+  "flows": [
+    {
+      "name": "measured",
+      "sources": [
+        "estimate_pose"
+      ],
+      "sink": "grasp.distance_m",
+      "only": true,
+      "fresh": true,
+      "key": "object_id"
+    },
+    {
+      "name": "scanned",
+      "sources": [
+        "scan"
+      ],
+      "sink": "grasp.distance_m",
+      "only": true,
+      "key": "object_id"
+    }
+  ]
+}

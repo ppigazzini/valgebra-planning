@@ -1,0 +1,194 @@
+{
+  "tasks": [
+    {
+      "name": "pick",
+      "inputs": {
+        "o": {
+          "type": "string"
+        },
+        "p": {
+          "type": "string"
+        },
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        },
+        "d": {
+          "type": "number"
+        }
+      },
+      "goal": {
+        "type": "string",
+        "pattern": "^g_[0-9]+$"
+      }
+    },
+    {
+      "name": "pick, measured",
+      "inputs": {
+        "o": {
+          "type": "string"
+        },
+        "p": {
+          "type": "string"
+        },
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        },
+        "d": {
+          "type": "number"
+        }
+      },
+      "goal": {
+        "type": "string",
+        "pattern": "^g_[0-9]+$"
+      },
+      "flows": [
+        "measured"
+      ]
+    },
+    {
+      "name": "pick, scanned",
+      "inputs": {
+        "o": {
+          "type": "string"
+        },
+        "p": {
+          "type": "string"
+        },
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        },
+        "d": {
+          "type": "number"
+        }
+      },
+      "goal": {
+        "type": "string",
+        "pattern": "^g_[0-9]+$"
+      },
+      "flows": [
+        "scanned"
+      ],
+      "depth": 4
+    },
+    {
+      "name": "pick, never grasping",
+      "inputs": {
+        "o": {
+          "type": "string"
+        },
+        "p": {
+          "type": "string"
+        },
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        },
+        "d": {
+          "type": "number"
+        }
+      },
+      "goal": {
+        "type": "string",
+        "pattern": "^g_[0-9]+$"
+      },
+      "policies": [
+        "never grasp"
+      ]
+    },
+    {
+      "name": "pick, tools may fail",
+      "inputs": {
+        "o": {
+          "type": "string"
+        },
+        "p": {
+          "type": "string"
+        },
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        },
+        "d": {
+          "type": "number"
+        }
+      },
+      "goal": {
+        "type": "string",
+        "pattern": "^g_[0-9]+$"
+      },
+      "errors": true
+    },
+    {
+      "name": "move a joint",
+      "inputs": {
+        "j": {
+          "type": "string"
+        }
+      },
+      "goal": {
+        "type": "string",
+        "pattern": "^m_[0-9]+$"
+      }
+    },
+    {
+      "name": "say",
+      "inputs": {
+        "t": {
+          "type": "string"
+        }
+      },
+      "goal": {
+        "const": "spoken"
+      },
+      "stops": {
+        "say": true
+      }
+    },
+    {
+      "name": "sweep a scan",
+      "inputs": {
+        "o": {
+          "type": "string"
+        },
+        "a": {
+          "type": "string"
+        }
+      },
+      "goal": {
+        "type": "string",
+        "pattern": "^g_[0-9]+$"
+      },
+      "stops": {
+        "scan": true
+      },
+      "depth": 4
+    },
+    {
+      "name": "confirm a grasp",
+      "inputs": {
+        "o": {
+          "type": "string"
+        }
+      },
+      "goal": {
+        "type": "boolean"
+      },
+      "constants": {
+        "confirm_with_user.action": "grasp"
+      }
+    }
+  ]
+}

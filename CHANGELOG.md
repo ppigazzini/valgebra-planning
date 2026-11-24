@@ -31,6 +31,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- A study of a humanoid robot's skills, `tools/case.py examples/robot-skills --check
+  docs/studies/robot-skills.json`, a step of the gate. Its nine tasks are planned and verified as
+  the parcels' are, and 24 programs written as an agent writes one are read, critiqued under
+  their task's rules and run against scripted answers: an example may hold them in
+  `programs.json`, each verdict a row of the study.
+
 - `contracts.failures` and `contracts.contract_names` are public. A proxy's refusal names where a
   value lies outside a contract by `failures`, each path and code with no value and no key the
   contract does not name, over the names `contract_names` gives, and a caller holding a contract

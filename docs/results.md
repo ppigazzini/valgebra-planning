@@ -43,6 +43,88 @@ contact check and a notice. Each task is planned, then verified by valgebra alon
   verifier refutes. Enforced, a run never makes the call a policy forbids, never sends an
   argument record outside the input set and never binds a result outside its contract.
 
+## Robot skills
+
+```bash
+uv run python tools/case.py examples/robot-skills --check docs/studies/robot-skills.json
+```
+
+`examples/robot-skills` holds nine skills of a humanoid robot as an adopter's report on this
+package describes them: a detection, a pose estimate, a walk, a grasp, a scan listing nearby
+objects, speech, a joint move whose speed is bounded by `additionalProperties`, a speed reading
+and a user's confirmation. Two flow rules hold the grasp's distance: `measured`, read from
+`estimate_pose` for the object grasped and after the last call that may act, and `scanned`, from a
+scan's item for that object. Each task is planned and verified as the parcels' are.
+
+| task | program | links proven | stops | cells (undecided) |
+|---|---|---|---:|---|
+| pick | strong | 3 of 3 | 0 | 12 (0) |
+| pick, measured | strong | 6 of 6 | 0 | 12 (0) |
+| pick, scanned | none | -- | -- | 12 (0) |
+| pick, never grasping | none | -- | -- | 12 (0) |
+| pick, tools may fail | weak | 3 of 3 | 1 | 12 (0) |
+| move a joint | weak | 4 of 4 | 1 | 12 (0) |
+| say | weak | 2 of 2 | 1 | 13 (0) |
+| sweep a scan | strong | 4 of 4 | 0 | 12 (0) |
+| confirm a grasp | strong | 2 of 2 | 0 | 13 (0) |
+
+- A pick under `measured` measures the object and grasps it at once. Under `scanned` no program
+  is found within 4 calls and tests, and under a policy refusing every grasp none can be.
+- A joint's speed is read from the pose estimate and tested into the bound before the move; the
+  speech stops where the status is not `spoken`.
+- The confirmation is asked with the object alone: the action the task fixes,
+  `confirm_with_user.action`, is an optional argument, and the planner leaves it out.
+
+The library also holds 24 programs written as an agent writes one (`programs.json`). Each is
+read, critiqued under its task's rules, and run where a row of the file scripts the tools'
+answers. A verdict is `accepted` where every link is proven and no path stops, `proven, weak`
+where a stop the task tolerates is left, and `proven, no return` where no path returns.
+
+| program | task | verdict | run |
+|---|---|---|---|
+| an error block grasps at the reading made before the walk | pick, measured | accepted | returned: estimate_pose, walk_to, estimate_pose, grasp |
+| an error block grasps one object at another's reading | pick, measured | accepted |  |
+| a grasp reads a detection the program has since replaced | pick, measured | accepted |  |
+| a loop grasps one object at the distance of another's item | pick, scanned | refuted: `flow scanned: it.distance_m from scan was returned for the object_id grasp takes`; `return c1 <= goal` |  |
+| the same loop, its item named as a call's result | pick, scanned | refuted: `return c1 <= goal` |  |
+| a branch rebinds the reading the other side grasps at | pick, measured | accepted |  |
+| the same branch, the faulty grasp on the side the test names | pick, measured | refuted: `flow measured: c1.distance_m from estimate_pose was returned for the object_id grasp takes` |  |
+| a loop rebinds the reading the grasp after it reads | pick, measured | accepted |  |
+| a grasp tested against a tool no library holds | pick, never grasping | accepted |  |
+| a grasp tested against an argument the grasp lacks | pick, never grasping | refuted: `grasp.distance is an argument` |  |
+| a failed grasp retried on the walked-to object's other name | pick | accepted |  |
+| a failed grasp retried on the object as given | pick | refuted: `grasp may be retried` |  |
+| a joint moved at a speed read from any number | move a joint | refuted: `c0.v <= move_joint.speed` |  |
+| a stop on a field the result may lack | say | proven, no return |  |
+| a return on a status the result never takes | say | proven, weak |  |
+| a loop whose body tests, then calls | sweep a scan | proven, no return | stopped: scan, grasp, walk_to |
+| a loop whose body tries, then calls | sweep a scan | proven, no return | stopped: scan, grasp, detect, walk_to |
+| a test against a string | sweep a scan | refused, line 2 |  |
+| a test against bytes | sweep a scan | refused, line 2 |  |
+| a test against an ellipsis | sweep a scan | refused, line 2 |  |
+| a test against a complex number | sweep a scan | refused, line 2 |  |
+| an argument named for a keyword | sweep a scan | refused, line 1 |  |
+| a grasp at a reading the walk has made stale | pick, measured | refuted: `flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act` |  |
+| a confirmation leaving out the action the task fixes | confirm a grasp | accepted |  |
+
+- Five programs grasp at a reading or a detection through a name the program rebinds before the
+  grasp: in an error block, after a second detection, in a branch the grasp is not on, and in a
+  loop. Each is accepted under `measured`, and the first, run, grasps at the reading made before
+  the walk: the walk keeps a name's source and object in one table across the program's paths,
+  where a name holds the value its own path bound, and a run holds no flow rule. A loop whose
+  item takes a call's name is refuted on its return alone.
+- A test against a tool the library lacks walks neither branch, so its program is accepted; one
+  against an argument the grasp lacks is refuted.
+- A failed grasp retried on the walked-to object's other name is accepted, and the same retry on
+  the object as given is refuted, since the grasp may have acted.
+- A stop on a field the result may lack is proven, and a return under a status the result never
+  takes counts its program weak.
+- The two loops run as Python runs them: the call after the test, and the call after the error
+  block, are made for each item.
+- Five texts are refused by their line: `in` against a string, a test listing bytes, an ellipsis
+  or a complex number, and an argument named `from`.
+- A confirmation leaving out the action the task fixes is accepted.
+
 ## Libraries of growing size
 
 ```bash
