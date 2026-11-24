@@ -466,7 +466,8 @@ def read_task(
     it prefers them: the task's goal is then the union of all, and the planner returns in the
     first where it can. ``constants`` maps ``tool.argument`` to the JSON value the task's intent
     fixes it to, as ``{"confirm_with_user.action": "grasp"}``. ``fresh`` names each
-    ``tool.argument`` whose value is read after the last call before it that may act. With
+    ``tool.argument`` whose value is read after the last call before it that may act; one
+    both fixed and fresh is a `ValueError`, since a constant is read at no time. With
     ``assert_format``, ``format`` is read as an assertion, as `read_contract` reads it.
     """
     held = {}
@@ -483,6 +484,17 @@ def read_task(
         for origin, schema in (stops or {}).items()
     )
     fixed = [(*_sink(name, sink, "a constant"), value) for sink, value in (constants or {}).items()]
+    read_fresh = tuple(_sink(name, sink, "a fresh argument") for sink in fresh)
+    # A constant is written into the program and read at no time, so no call can come after
+    # the last one before it that may act: fixed and fresh at once, the task asks for nothing
+    # a program can hold.
+    for tool, argument, _ in fixed:
+        if (tool, argument) in read_fresh:
+            message = (
+                f"task {name!r}: {tool}.{argument} is fixed to a constant and read fresh, and a "
+                "constant is read at no time"
+            )
+            raise ValueError(message)
     return Task(
         name=name,
         held=held,
@@ -491,7 +503,7 @@ def read_task(
         stops=tolerated,
         preferred=goals if len(goals) > 1 else (),
         constants=tuple(fixed),
-        fresh=tuple(_sink(name, sink, "a fresh argument") for sink in fresh),
+        fresh=read_fresh,
     )
 
 

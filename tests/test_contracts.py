@@ -633,3 +633,16 @@ def test_a_required_argument_only_additional_properties_bounds_takes_its_set() -
     loose = read_contract({"name": "move_joint", "inputSchema": patterned, "outputSchema": done})
     assert loose.argument("speed").schema is True
     assert not loose.plain
+
+
+def test_a_task_fixing_an_argument_it_reads_fresh_is_refused() -> None:
+    # A constant is written into the program and read at no time, so it is never fresh.
+    with pytest.raises(ValueError, match=r"grasp\.distance is fixed to a constant and read fresh"):
+        read_task(
+            "t",
+            {},
+            True,
+            constants={"grasp.distance": 0.3},
+            fresh=["grasp.distance"],
+        )
+    read_task("t", {}, True, constants={"grasp.distance": 0.3}, fresh=["grasp.force"])

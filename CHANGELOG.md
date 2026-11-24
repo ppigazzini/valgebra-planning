@@ -41,6 +41,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A task fixing an argument it reads fresh is refused. A `constants` entry is written into the
+  program and read at no time, so the same `tool.argument` named in `fresh` asked for a value no
+  program holds, and the planner and the verifier each read the task their own way. `read_task`
+  refuses it, naming the argument.
+
 - The program text reads as Python runs it. An `if` with no `else` before more statements made
   them its other side alone, so in a loop's body a side that ran out ended the iteration where
   Python runs on into what follows, and an `if` nested at the end of an outer side was refused or
