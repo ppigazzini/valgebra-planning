@@ -963,13 +963,14 @@ def _reason(
     contracts: Mapping[str, Contract],
     task: Task,
     mattering: frozenset[str],
+    listed: Mapping[str, Contract],
 ) -> str:
     """Return why a search found no program: the bound, and what keeps the goal out of reach.
 
-    Beside the bound, it names each required argument of a tool on a path toward the goal
-    (``mattering``) that only a tested input fills, then those of a tool only a policy names,
-    and each result field that meets the goal and lies outside it and lists no members, which
-    the search tests into the goal on none (`_Search.observed`).
+    Beside the bound, it names each required argument of a tool of ``listed`` the goal needs
+    (`_needed`), callable or not, that only a tested input fills, then those of a tool only a
+    policy names, and each result field that meets the goal and lies outside it and lists no
+    members, which the search tests into the goal on none (`_Search.observed`).
     """
     if cut:
         reason = (
@@ -981,14 +982,16 @@ def _reason(
             f"no program: no path reached the bound of {depth}, so no deeper search finds one "
             f"from the first {MAX_BINDINGS} bindings of each call the search tries"
         )
-    if sourceless := _sourceless(contracts, task, mattering):
+    needed = _needed(listed, task)
+    if sourceless := _sourceless(listed, task, needed):
         reason += (
             f"; no tool's result guarantees a value for {', '.join(sourceless)}, which a task "
             "input fills only under a test"
         )
-    if beside := _sourceless(contracts, task, frozenset(contracts) - mattering):
+    if beside := _sourceless(listed, task, frozenset(contracts) - mattering - needed):
+        opening = "nor for" if sourceless else "no tool's result guarantees a value for"
         reason += (
-            f"; nor for {', '.join(beside)}, of tools only a policy names, whose results "
+            f"; {opening} {', '.join(beside)}, of tools only a policy names, whose results "
             "lead to no goal"
         )
     if near := _near_the_goal(contracts, task, mattering):
@@ -998,6 +1001,38 @@ def _reason(
             "the goal could name"
         )
     return reason
+
+
+def _needed(contracts: Mapping[str, Contract], task: Task) -> frozenset[str]:
+    """Return the tools the goal needs: those whose results meet it, and those feeding them.
+
+    A tool feeds one the goal needs where its result meets a required argument of it that no
+    task input fills whole; an argument an input fills needs no tool, so a tool whose result
+    could fill it keeps no goal out, as a walk's status could fill a say's text.
+    """
+    held = [slot.values for slots in task.held.values() for slot in slots]
+    pending = [
+        name
+        for name, contract in contracts.items()
+        if any(_meets(slot.values, task.goal) for slot in contract.results)
+    ]
+    needed: set[str] = set()
+    while pending:
+        name = pending.pop()
+        if name in needed:
+            continue
+        needed.add(name)
+        for argument in contracts[name].arguments:
+            if not argument.required or any(
+                value.relation_to(argument.values) == "subset" for value in held
+            ):
+                continue
+            pending += [
+                other
+                for other, contract in contracts.items()
+                if any(_meets(slot.values, argument.values) for slot in contract.results)
+            ]
+    return frozenset(needed)
 
 
 def _near_the_goal(
@@ -1638,6 +1673,8 @@ def plan(
     )
     kept |= frozenset(post.read for post in postconditions if _checked_key(post) is not None)
     mattering = frozenset(_reachable(contracts, task, frozenset()))
+    # The reason names an argument of a tool the goal needs even where nothing can call it.
+    listed = contracts
     contracts = _reachable(contracts, task, kept)
     guards = _guards(policies)
     abstraction = abstract(predicates(contracts, task, policies, postconditions), seed=seed)
@@ -1738,5 +1775,5 @@ def plan(
         uncovered=(),
         abstraction=abstraction,
         expanded=search.expanded,
-        reason=_reason(search.cut, depth, contracts, task, mattering),
+        reason=_reason(search.cut, depth, contracts, task, mattering, listed),
     )

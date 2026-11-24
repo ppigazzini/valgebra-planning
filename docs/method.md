@@ -517,9 +517,11 @@ ones.
   `plan` takes another depth, and so do a task's `depth` and the command line's `--depth`. A plan
   with no program says why in `Plan.reason`: the bound cut a path short of the goal, and whether
   a deeper search finds one is not known, or no path reached it, so none does from the bindings
-  the search tries. It also names each argument of a tool on a path toward the goal that no
-  tool's result guarantees a value for, which a task input fills only under a test, as a
-  free-text name tested into `left|right`: the planner writes no constant, so such an argument
-  wants a task input of its own. It names apart those of a tool only a policy names, whose
+  the search tries. It also names each argument of a tool the goal needs that no tool's result
+  guarantees a value for, which a task input fills only under a test, as a free-text name tested
+  into `left|right`: the planner writes no constant, so such an argument wants a task input of its
+  own. The goal needs a tool whose result meets it, callable or not, and one whose result fills a
+  required argument of such a tool that no input fills, so an argument of a tool that could only
+  fill what an input already fills is not named. It names apart those of a tool only a policy names, whose
   results lead to no goal, and each result field listing its members that meets the goal and lies
   outside it, which only a test into the goal would narrow.

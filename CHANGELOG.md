@@ -75,6 +75,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- `Plan.reason` names what keeps the goal out. It named the arguments only a tested input fills
+  of tools a program could call on a path toward the goal, so a pick whose grasp no value of its
+  hand could fill named nothing, the grasp being uncallable, and a say named a walk's command,
+  the walk's status able to fill a text the say's own input fills. It names those of each tool
+  the goal needs, callable or not: one whose result meets the goal, and one whose result fills a
+  required argument of such a tool that no input fills. A clause naming a policy's tools opens
+  no sentence with "nor".
+
 - `library.non_text_blocks` returns the block types each tool passes, `Gate.non_text_blocks` holds
   them by tool, and `proxy` takes either a list of tools, which pass `MEDIA_BLOCKS`, or a mapping
   from a tool to the block types it passes, of `BLOCK_TYPES`.

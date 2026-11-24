@@ -1029,3 +1029,69 @@ def test_a_value_is_returned_only_where_it_was_read_from_each_input_required() -
     found = plan({"search_actions": SEARCH}, task)
     assert found.program is not None
     assert render(found.program) == "c1 = search_actions(run_id=run_id)\nreturn c1.events"
+
+
+def test_the_reason_names_what_keeps_the_goal_out() -> None:
+    """The reason names an argument of a tool the goal needs that nothing fills, callable or not,
+    and no argument of a tool the goal does not need.
+
+    A grasp whose hand no value fills is never called, and its hand is what keeps the pick out;
+    a walk's status could fill a say's text, which the text given already fills, so its command
+    keeps no say out, and a clause naming a policy's tools opens no sentence with "nor".
+    """
+    obj = {"type": "string", "pattern": "^obj_[0-9]+$"}
+    grasped = {"type": "string", "pattern": "^grs_[0-9]+$"}
+    sides = {"type": "string", "enum": ["left", "right"]}
+    mug = {"type": "string", "enum": ["mug"]}
+
+    def tool(name: str, inputs: dict[str, Any], outputs: dict[str, Any]) -> Contract:
+        return read_contract(
+            {
+                "name": name,
+                "inputSchema": {"type": "object", "properties": inputs, "required": [*inputs]},
+                "outputSchema": {"type": "object", "properties": outputs, "required": [*outputs]},
+            }
+        )
+
+    picking = {
+        "detect": tool("detect", {"label": mug}, {"object_id": obj}),
+        "grasp": tool("grasp", {"object_id": obj, "hand": sides}, {"grasp_id": grasped}),
+    }
+    found = plan(picking, read_task("pick", {"label": mug}, grasped))
+    assert found.reason is not None
+    assert found.reason.endswith(
+        "; no tool's result guarantees a value for grasp.hand, which a task input fills only "
+        "under a test"
+    )
+    command = {"type": "string", "pattern": "^cmd_[0-9]+$"}
+    saying = {
+        "say": tool(
+            "say", {"text": {"type": "string"}}, {"status": {"enum": ["spoken", "failed"]}}
+        ),
+        "walk": tool("walk", {"command_id": command}, {"status": {"enum": ["arrived", "blocked"]}}),
+    }
+    said = plan(
+        saying, read_task("say", {"text": {"type": "string"}}, {"const": "spoken"}), depth=1
+    )
+    assert said.reason is not None
+    assert "walk" not in said.reason
+    # A confirmation only a policy names, whose action nothing fills, is the reason's first clause.
+    asking = {
+        **saying,
+        "confirm": tool("confirm", {"action": {"enum": ["speak"]}}, {"ok": {"type": "boolean"}}),
+    }
+    asked = read_policy(
+        {
+            "name": "a say is confirmed",
+            "initial": "s",
+            "bad": ["v"],
+            "transitions": [{"from": "s", "tool": "confirm", "to": "s"}],
+        }
+    )
+    task = read_task("say", {"text": {"type": "string"}}, {"const": "spoken"})
+    kept = plan(asking, task, depth=1, policies=[asked])
+    assert kept.reason is not None
+    assert kept.reason.endswith(
+        "; no tool's result guarantees a value for confirm.action, of tools only a policy "
+        "names, whose results lead to no goal"
+    )
