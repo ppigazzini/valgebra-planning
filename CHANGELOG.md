@@ -130,6 +130,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A loop is a test on whether its array holds an item. The block after a loop was walked once,
+  from the states of the empty array's run beside every other, so an act the body surely takes
+  read "possibly" and its policy link `undecided`, whatever the array's set: under `minItems: 1`,
+  where the array is never empty, and under `maxItems: 0`, where the body never runs. The block
+  after it is walked on each side the array may take, from the states before the loop and from
+  those once its body ran: the act is refuted on the side holding an item and proven on the
+  empty one, refuted alone under `minItems: 1` and proven alone under `maxItems: 0`.
+
 - An annotation hides no member of an enum from the planner. It read a field's members, to test
   a result into the goal or to split on a policy's guard, only where the field's schema held
   nothing but `type`, `required`, `enum` or `const`, so a `description`, a `title` or any other

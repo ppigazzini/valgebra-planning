@@ -93,7 +93,12 @@ body ends the program at the first item reaching it: the array is finite, so the
 acyclic, and each return is a terminal state its link proves in the goal, a strong solution's
 structure (Cimatti et al. 2003) with no fairness assumed. The block after the loop runs where no
 iteration returned or stopped, so it runs under every test such a path made, and a policy's
-obligation at a return in the body is read in the states any number of iterations may leave.
+obligation at a return in the body is read in the states any number of iterations may leave. A
+loop is a test on whether its array holds an item: the block after it is walked from the states
+before the loop where the array may be empty, and from the states once the body ran where it
+may hold one, each ending in its own links, so an act the body surely takes is refuted on the
+side holding an item rather than undecided over both; a side the array's set rules out, as the
+empty one under `minItems: 1`, is not walked.
 
 ## The cells
 

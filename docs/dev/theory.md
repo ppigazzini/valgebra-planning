@@ -84,16 +84,19 @@ al. 2006, Thm. 3.5), proven by induction over finite conditional plans, which ho
 items, so each run of a loop is one of the finite conditional plans it unrolls to, the body once
 per item; the loop's item enters as its array's item set, and the walk reads the body once for
 every item, no value crossing iterations and the policies' states at a fixpoint, a belief
-holding each unrolling's at every point. So a program whose every link is proven and on which no
+holding each unrolling's at every point. The empty array's unrolling and every other are two
+plans, as a test's sides are: what follows a loop is walked from the states before it where the
+array may be empty, and from those once its body ran where it may hold an item, a side valgebra
+proves the array never takes left unwalked. So a program whose every link is proven and on which no
 path stops is strong on each unrolling, and so strong. Each reference's set is read apart
 from the others', a belief containing the real one, so a proof stands. A question asked of a
 value rather than its field is asked of the value's belief, its own set met with each field of
 it a test narrowed, so a refutation there names a value the program may hold; the verifier
 reads neither the cells nor the search. **[LOAD-BEARING: belief-execution]**
 
-IMPLEMENTED-BY: verify.py
+IMPLEMENTED-BY: verify.py, verify.py::_Walk.sides
 
-HELD-BY: test_a_loop_program_proven_strong_keeps_every_contract_on_every_array, test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole, test_a_record_no_call_makes_is_never_a_witness, test_a_record_a_call_makes_refutes_two_fields_of_one_value, test_a_loop_item_reads_no_field_of_a_value_its_name_held, test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads
+HELD-BY: test_a_loop_program_proven_strong_keeps_every_contract_on_every_array, test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole, test_a_record_no_call_makes_is_never_a_witness, test_a_record_a_call_makes_refutes_two_fields_of_one_value, test_a_loop_item_reads_no_field_of_a_value_its_name_held, test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads, test_a_loop_s_sides_are_the_ones_its_array_may_take, test_an_obligation_a_loop_leaves_open_is_refuted_where_its_array_holds_an_item
 
 **A field is read where the held set proves it present.** Selection requires the selected
 field to be defined, the record's type a subtype of a record holding it (Castagna 2023,
@@ -238,7 +241,7 @@ monitor reads the pending states when a run ends. **[LOAD-BEARING: obligations-o
 
 IMPLEMENTED-BY: policy.py
 
-HELD-BY: test_a_path_ending_with_an_obligation_open_is_refuted, test_the_planner_settles_every_obligation_and_pads_no_path, test_an_obligation_a_loop_may_leave_open_is_undecided_and_one_it_settles_proven, test_a_run_ending_with_an_obligation_open_breaks, test_a_policy_holds_over_any_number_of_iterations
+HELD-BY: test_a_path_ending_with_an_obligation_open_is_refuted, test_the_planner_settles_every_obligation_and_pads_no_path, test_an_obligation_a_loop_leaves_open_is_refuted_where_its_array_holds_an_item, test_a_run_ending_with_an_obligation_open_breaks, test_a_policy_holds_over_any_number_of_iterations
 
 **A policy carries no value from one call to another, but at run time with `per`.** A
 parametric property is a base property read once for each binding of its parameters, one trace

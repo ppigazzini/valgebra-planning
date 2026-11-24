@@ -123,7 +123,15 @@ def test_a_policy_holds_over_any_number_of_iterations() -> None:
     assert _claims(LOOP, policies=[once])["policy notify at most once holds"] == "undecided"
 
 
-def test_an_obligation_a_loop_may_leave_open_is_undecided_and_one_it_settles_proven() -> None:
+def _sided(source: str, claim: str, **rules: Any) -> dict[str, str]:
+    """Return a claim's verdict by where it stands: each side of a loop's test apart."""
+    checked = verify(read_program(source), TOOLS, TASK, **rules)
+    return {link.where: link.verdict for link in checked.links if link.claim == claim}
+
+
+def test_an_obligation_a_loop_leaves_open_is_refuted_where_its_array_holds_an_item() -> None:
+    """A loop is a test on whether its array holds an item: the obligation each notice opens is
+    left open on that side alone, and the empty array's side settles it, as a branch's do."""
     answered = read_policy(
         {
             "name": "every notice is followed by an alert",
@@ -137,7 +145,10 @@ def test_an_obligation_a_loop_may_leave_open_is_undecided_and_one_it_settles_pro
         }
     )
     claim = "policy every notice is followed by an alert holds"
-    assert _claims(LOOP, policies=[answered])[claim] == "undecided"
+    assert _sided(LOOP, claim, policies=[answered]) == {
+        "empty:entity": "proven",
+        "items:entity": "refuted",
+    }
     settled = LOOP.replace(
         "    c2 = notify(name=entity.name)\n",
         "    c2 = notify(name=entity.name)\n    c3 = alert(message=query)\n",
@@ -725,3 +736,62 @@ def test_a_sink_after_a_loop_no_iteration_of_which_ends_the_run_keeps_its_links(
     after = LOOP.replace("return c1.count", "c3 = alert(message=query)\nreturn c1.count")
     claims = _claims(after, flows=[ALERTS])
     assert not any(claim.startswith("flow alerts") for claim in claims)
+
+
+#: An act after a listing is the violation.
+_LISTED = read_policy(
+    {
+        "name": "no act after list",
+        "initial": "start",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "start", "tool": "list_ids", "to": "listed"},
+            {"from": "listed", "tool": "act", "to": "violated"},
+        ],
+    }
+)
+
+
+@pytest.mark.parametrize(
+    ("bound", "verdicts"),
+    [
+        ({}, {"empty:i": "proven", "items:i": "refuted"}),
+        ({"minItems": 1}, {"": "refuted"}),
+        ({"maxItems": 0}, {"": "proven"}),
+    ],
+    ids=["any-array", "at-least-one", "none"],
+)
+def test_a_loop_s_sides_are_the_ones_its_array_may_take(
+    bound: dict[str, Any], verdicts: dict[str, str]
+) -> None:
+    """The body acts on every item, so the act is refuted where the array holds one and proven
+    where it is empty; a side valgebra proves the array never takes is no execution."""
+    ids = {"type": "array", "items": {"type": "string"}, **bound}
+    tools = {
+        "list_ids": read_contract(
+            {
+                "name": "list_ids",
+                "inputSchema": {"type": "object", "properties": {}},
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {"ids": ids},
+                    "required": ["ids"],
+                    "additionalProperties": False,
+                },
+            }
+        ),
+        "act": read_contract(
+            {
+                "name": "act",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"id": {"type": "string"}},
+                    "required": ["id"],
+                },
+            }
+        ),
+    }
+    source = "c1 = list_ids()\nfor i in c1.ids:\n    c2 = act(id=i)\nreturn c1\n"
+    checked = verify(read_program(source), tools, read_task("t", {}, True), policies=[_LISTED])
+    claim = "policy no act after list holds"
+    assert {link.where: link.verdict for link in checked.links if link.claim == claim} == verdicts

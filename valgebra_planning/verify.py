@@ -32,6 +32,7 @@ from valgebra_planning._valgebra import (
     Unsupported,
     Validator,
     anything,
+    compile_schema,
     complement,
     intersection,
     nothing,
@@ -330,20 +331,45 @@ class _Walk:
             path, self.flows, inner, lambda flow: _makes(end.body, self.contracts, flow.withdraws)
         )
         path = replace(path, withdrawn=listed)
-        states = path.states
-        while self.policies:
-            ends, _ = self.iterate(
-                end.body, inner, inside, replace(path, states=states, tested=tested), silent=True
-            )
-            grown = tuple(s.union(*(e[i] for e in ends)) for i, s in enumerate(states))
-            if grown == states:
-                break
-            states = grown
+        states, holding = path.states, path.states
+        if self.policies:
+            # The states once the body ran at least once, to a fixpoint from the first walk's.
+            holding = tuple(frozenset() for _ in states)
+            ran = states
+            while True:
+                ends, _ = self.iterate(
+                    end.body, inner, inside, replace(path, states=ran, tested=tested), silent=True
+                )
+                grown = tuple(s.union(*(e[i] for e in ends)) for i, s in enumerate(holding))
+                if grown == holding:
+                    break
+                holding = ran = grown
+        reach = tuple(before | then for before, then in zip(states, holding, strict=True))
         _, exits = self.iterate(
-            end.body, inner, inside, replace(path, states=states, tested=tested), silent=False
+            end.body, inner, inside, replace(path, states=reach, tested=tested), silent=False
         )
         after = path.tested.union(*exits)
-        self.block(end.after, env, where, replace(path, states=states, tested=after))
+        sides = self.sides(held, states, holding)
+        for label, at in sides:
+            here = where if len(sides) == 1 else _join(where, f"{label}:{end.item}")
+            self.block(end.after, env, here, replace(path, states=at, tested=after))
+
+    def sides(self, held: _Held, empty: _States, holding: _States) -> list[tuple[str, _States]]:
+        """Return the sides of a loop what follows it is walked on, each with its states.
+
+        A loop is a test on whether its array holds an item (Bertoli et al. 2006, Def. 2.8): the
+        empty array's run leaves the states before the loop, and any other the states once its
+        body ran. A side valgebra proves the array never takes is no execution, nor one no
+        iteration ends; where the two sides hold the same states, one walk reads both.
+        """
+        if holding == empty:
+            return [("empty", empty)]
+        found = []
+        if intersection(held.values, _EMPTY).relation_to(nothing) != "subset":
+            found.append(("empty", empty))
+        if any(holding) and intersection(held.values, _HOLDING).relation_to(nothing) != "subset":
+            found.append(("items", holding))
+        return found or [("empty", empty)]
 
     def element(self, held: _Held) -> Slot:
         """Return the slot of an element of the array ``held``, as far as valgebra proves it.
@@ -1572,6 +1598,10 @@ class _Path:
     #: last of those on the way here, by the rule's name (`_withdrawn`).
     withdrawn: tuple[tuple[str, frozenset[int]], ...] = ()
 
+
+#: The empty array, and the arrays holding an item: the two sides of a loop's test.
+_EMPTY = compile_schema({"type": "array", "maxItems": 0})
+_HOLDING = compile_schema({"type": "array", "minItems": 1})
 
 #: Whether a path may reach a bad state, read as a verdict on the policy holding.
 _OBEYED: dict[str, Verdict] = {"never": "proven", "surely": "refuted", "possibly": "undecided"}
