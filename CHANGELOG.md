@@ -89,6 +89,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A call `arun` cancels is read as one whose outcome is unread. It was read as one answering with
+  an error, which takes no transition reading the call's result, so a grasp canceled in flight,
+  which may have grasped and answered, left "no obligation left pending" where a policy's
+  `holding` was owed. Each policy holds every state the call may have reached, as a proxy holds a
+  call it canceled, and the run names `release what you grasp may hold holding`.
+
 - A task's constant holds on an optional argument. The planner wrote the arguments a tool
   requires, so a constant the task fixes on an optional one, as the action a confirmation asks
   about, was never written, and the verifier skipped a call leaving it out: the tool read its own

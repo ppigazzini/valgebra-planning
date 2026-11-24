@@ -561,6 +561,50 @@ def test_a_cancel_ends_the_run_naming_the_obligations_it_leaves() -> None:
     assert blame(cancel.run, TOOLS, proven=True) == "the run was canceled at notify: the caller's"
 
 
+RELEASE = read_policy(
+    {
+        "name": "release what you grasp",
+        "initial": "free",
+        "bad": [],
+        "pending": ["holding"],
+        "transitions": [
+            {"from": "free", "tool": "grasp", "result": {"required": ["grasp_id"]}, "to": "holding"}
+        ],
+    }
+)
+
+
+def test_a_cancel_holds_every_state_the_call_may_have_reached() -> None:
+    # A grasp canceled in flight may have grasped and answered: the state its result reaches
+    # is one the run may be in, an obligation a cancel read as an error would leave unnamed.
+    problem = ROBOT.problem("pick")
+    program = read_program("c1 = grasp(object_id=o, distance_m=d)\nreturn c1.grasp_id\n")
+
+    async def canceled() -> asyncio.CancelledError:
+        asked = asyncio.Event()
+
+        async def grasp(**_: Any) -> Any:
+            asked.set()
+            await asyncio.sleep(3600)
+
+        running = asyncio.create_task(
+            arun(program, ROBOT.tools, problem.task, GIVEN, {"grasp": grasp}, policies=[RELEASE])
+        )
+        await asked.wait()
+        running.cancel()
+        with pytest.raises(asyncio.CancelledError) as stopped:
+            await running
+        return stopped.value
+
+    cancel = asyncio.run(canceled())
+    left = "canceled at grasp: release what you grasp may hold holding"
+    if sys.version_info < (3, 13):
+        assert cancel.__notes__ == [left]
+        return
+    assert isinstance(cancel, CanceledRunError)
+    assert cancel.run.stopped == left
+
+
 @pytest.mark.parametrize("bound", ["timeout", "wait_for"])
 def test_a_timeout_reads_a_canceled_run_as_the_cancel_it_is(bound: str) -> None:
     task = TASKS["settle a parcel"]

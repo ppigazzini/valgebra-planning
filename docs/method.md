@@ -332,8 +332,10 @@ follows a loop counted under the test on its array as the verifier counts it. A
 coroutine an async tool hands back unawaited is no JSON value: it is refused and closed, never run.
 `arun` awaits it instead: one interpreter walks the program and asks for each call, doing no I/O
 of its own, `run` making each call and `arun` awaiting it, so the two make the same checks in the
-same order. A cancel while `arun` awaits a call ends the run: the call may have acted, so each
-policy is held in both sets of states, and the `CanceledRunError` it raises, an
+same order. A cancel while `arun` awaits a call ends the run: the call may have acted and
+returned anything, its outcome unread, so each policy holds every state the call may have
+reached, a transition reading its result taken possibly, as a proxy holds a call it canceled,
+and the `CanceledRunError` it raises, an
 `asyncio.CancelledError` a timeout reads as its own, carries the run, its outcome `canceled`
 naming the call and each obligation a policy may leave pending. Python 3.11's and 3.12's
 timeouts read only the exact class as their cancel and let a subclass through, so there `arun`

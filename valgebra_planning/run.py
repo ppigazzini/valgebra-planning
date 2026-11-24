@@ -654,10 +654,11 @@ async def arun(
 
     The checks are `run`'s, in `run`'s order: one interpreter walks the program, and only the
     calls are made here. A tool may be a coroutine function or a plain one. A cancel while a
-    call is awaited ends the run: the call may have acted, so each policy is read from either
-    set of states, and `CanceledRunError` carries the run, its outcome ``canceled`` and
-    ``stopped`` naming the call and each obligation a policy leaves pending. On Python 3.11 and
-    3.12 the cancel received is raised instead, ``stopped`` its note (`CanceledRunError`).
+    call is awaited ends the run: the call may have acted and returned anything, so each policy
+    holds every state the call may have reached, and `CanceledRunError` carries the run, its
+    outcome ``canceled`` and ``stopped`` naming the call and each obligation a policy leaves
+    pending. On Python 3.11 and 3.12 the cancel received is raised instead, ``stopped`` its note
+    (`CanceledRunError`).
     """
     unclashed(task, contracts)
     runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
@@ -672,7 +673,7 @@ async def arun(
                     answer = await _awaited(answer)
                 except asyncio.CancelledError as cancel:
                     steps.close()
-                    ended = _canceled(runner, tool)
+                    ended = _canceled(runner, tool, arguments)
                     if not _SUBCLASS_CANCELS:
                         cancel.add_note(f"{ended.stopped}")
                         raise
@@ -690,10 +691,16 @@ async def _awaited(pending: Awaitable[Any]) -> Any:
         return _Raised(error)
 
 
-def _canceled(runner: _Runner, tool: str) -> Run:
-    """Return the run a cancel ends at a call to ``tool``: what each policy leaves pending."""
+def _canceled(runner: _Runner, tool: str, arguments: dict[str, Any]) -> Run:
+    """Return the run a cancel ends at a call to ``tool``: what each policy leaves pending.
+
+    The call may have acted or not and returned anything, its outcome unread, so each policy
+    holds every state the call may have reached, a transition reading its result taken possibly
+    (`valgebra_planning.policy.Monitor.unread`), as a proxy holds a call it canceled.
+    """
+    hints = runner.contracts[tool].hints
     for monitor in runner.monitors:
-        monitor.errored()
+        monitor.unread(tool, arguments, hints)
     pending = [
         f"{monitor.policy.name} may hold {state}"
         for monitor in runner.monitors
