@@ -44,6 +44,8 @@ from valgebra_planning.policy import Policy, check_policy, read_policy
 from valgebra_planning.program import aliases
 
 __all__ = [
+    "BLOCK_TYPES",
+    "MEDIA_BLOCKS",
     "Library",
     "Problem",
     "after_violation",
@@ -190,13 +192,38 @@ def preempts(directory: Path) -> frozenset[str]:
     return _named(directory, "preempts")
 
 
-def non_text_blocks(directory: Path) -> frozenset[str]:
-    """Return the tools a proxy answers with blocks other than text: ``"nonTextBlocks": [...]``.
+#: The blocks other than text a tool's result may hold (MCP 2026-07-28, Tool Result).
+BLOCK_TYPES = frozenset({"image", "audio", "resource_link", "resource"})
+#: The blocks a tool ``"nonTextBlocks"`` lists by name passes: media, never a resource's text.
+MEDIA_BLOCKS = frozenset({"image", "audio"})
+
+
+def non_text_blocks(directory: Path) -> dict[str, frozenset[str]]:
+    """Return the blocks other than text a proxy answers each tool with: ``"nonTextBlocks"``.
 
     A proxy answers a result with the checked value as its text, and keeps a block that is not
-    text, as a camera's image no check reads, only for these.
+    text, as a camera's image no check reads, only for a tool named here and only of a type
+    named for it. A list names tools whose image and audio pass; an object maps a tool to the
+    block types it passes, an embedded resource or a resource link only where named, since
+    either holds text no check reads. A type MCP names no such block is a `ValueError`.
     """
-    return _named(directory, "nonTextBlocks")
+    named = _document(directory / "tools.json", _TOOLS_KEYS).get("nonTextBlocks", [])
+    if isinstance(named, list) and all(isinstance(tool, str) for tool in named):
+        return dict.fromkeys(named, MEDIA_BLOCKS)
+    if not isinstance(named, dict) or not all(
+        isinstance(kinds, list) and all(isinstance(kind, str) for kind in kinds)
+        for kinds in named.values()
+    ):
+        message = (
+            "tools.json: 'nonTextBlocks' is a list of tool names or maps a tool's name to block "
+            f"types, not {named!r}"
+        )
+        raise TypeError(message)
+    for tool, kinds in named.items():
+        if unknown := sorted(set(kinds) - BLOCK_TYPES):
+            message = f"tools.json: 'nonTextBlocks' names {unknown[0]!r} for {tool}, no block type"
+            raise ValueError(message)
+    return {tool: frozenset(kinds) for tool, kinds in named.items()}
 
 
 def forwards_elicitation(directory: Path) -> frozenset[str]:

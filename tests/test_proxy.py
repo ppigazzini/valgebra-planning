@@ -1002,6 +1002,32 @@ def test_a_block_that_is_not_text_is_kept_only_for_a_tool_named_for_it(*, named:
     assert [block.type for block in answer.content] == ["text", "image"] if named else ["text"]
 
 
+#: A resource and a link a server writes beside a result, each holding text no check reads.
+EMBEDDED = types.EmbeddedResource(
+    type="resource",
+    resource=types.TextResourceContents(
+        uri="file:///note.txt", text=STEERING, mime_type="text/plain"
+    ),
+)
+LINK = types.ResourceLink(type="resource_link", uri="file:///x", name="x", description=STEERING)
+
+
+@pytest.mark.parametrize(
+    ("named", "passed"),
+    [
+        (["approve_freight"], ["text", "image"]),
+        ({"approve_freight": ["image", "resource"]}, ["text", "image", "resource"]),
+        ({"approve_freight": ["resource_link"]}, ["text", "resource_link"]),
+    ],
+    ids=["listed", "resource-named", "link-named"],
+)
+def test_a_block_passes_only_of_a_type_named_for_its_tool(named: Any, passed: list[str]) -> None:
+    """A tool listed by name passes media; a resource's text or a link's reaches the agent only
+    where the library names its type, since no check reads either."""
+    answer = _answered(_with(IMAGE, EMBEDDED, LINK), non_text_blocks=named)
+    assert [block.type for block in answer.content] == passed
+
+
 def test_a_tool_declaring_no_output_schema_is_answered_as_written() -> None:
     open_listing = [
         {key: value for key, value in tool.items() if key != "outputSchema"}
@@ -1016,7 +1042,7 @@ def test_a_tool_declaring_no_output_schema_is_answered_as_written() -> None:
 
 @pytest.mark.parametrize(
     "named",
-    [{"non_text_blocks": frozenset({"camera"})}, {"error_texts": {"camera": None}}],
+    [{"non_text_blocks": {"camera": frozenset({"image"})}}, {"error_texts": {"camera": None}}],
     ids=["blocks", "error-texts"],
 )
 def test_a_tool_the_proxy_does_not_hold_is_not_named_for_its_answers(named: Any) -> None:

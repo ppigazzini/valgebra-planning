@@ -75,7 +75,7 @@ extra.
 | `valgebra_planning.policy` | `Monitor`, `Policy`, `Reach`, `Snapshot`, `Transition`, `read_policy` | |
 | `valgebra_planning.flows` | `Flow`, `read_flow` | |
 | `valgebra_planning.mining` | `SlotKey`, `Types`, `infer_outputs`, `mine` | |
-| `valgebra_planning.library` | `Library`, `Problem`, `after_violation`, `asserts_format`, `error_texts`, `forwards_elicitation`, `non_text_blocks`, `preempts`, `read_library`, `reads_closed` | |
+| `valgebra_planning.library` | `BLOCK_TYPES`, `MEDIA_BLOCKS`, `Library`, `Problem`, `after_violation`, `asserts_format`, `error_texts`, `forwards_elicitation`, `non_text_blocks`, `preempts`, `read_library`, `reads_closed` | |
 | `valgebra_planning.privilege` | `Change`, `Rule`, `Update`, `allowed`, `as_policy`, `describe`, `read_privileges`, `read_rules`, `updates` | |
 | `valgebra_planning.vacuity` | `Certainty`, `Finding`, `vacuities` | |
 | `valgebra_planning.meaning` | `findings` | |

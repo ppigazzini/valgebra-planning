@@ -356,7 +356,7 @@ def _proxy(args: argparse.Namespace) -> int:
     closing = directory is not None and reads_closed(directory)
     left_open = frozenset() if directory is None else after_violation(directory)
     first = frozenset() if directory is None else preempts(directory)
-    kept = frozenset() if directory is None else non_text_blocks(directory)
+    kept = {} if directory is None else non_text_blocks(directory)
     errors = {} if directory is None else error_texts(directory)
     asking = frozenset() if directory is None else forwards_elicitation(directory)
 

@@ -22,6 +22,7 @@ from valgebra_planning.library import (
     error_texts,
     forwards_elicitation,
     non_text_blocks,
+    preempts,
 )
 from valgebra_planning.servers import connect
 
@@ -263,7 +264,7 @@ def test_a_library_names_the_tools_called_after_a_violation_in_a_list(
 ) -> None:
     readers = (
         ("afterViolation", after_violation),
-        ("nonTextBlocks", non_text_blocks),
+        ("preempts", preempts),
         ("forwardsElicitation", forwards_elicitation),
     )
     for key, reader in readers:
@@ -276,6 +277,23 @@ def test_a_library_names_the_tools_called_after_a_violation_in_a_list(
             json.dumps({"tools": [], key: ["stop"]}), encoding="utf-8"
         )
         assert reader(tmp_path) == {"stop"}
+
+
+def test_a_library_names_the_block_types_each_tool_passes(tmp_path: Path) -> None:
+    # A tool listed by name passes media; one mapped passes the types named, a resource's only
+    # where named.
+    def read(named: object) -> Any:
+        listing = json.dumps({"tools": [], "nonTextBlocks": named})
+        (tmp_path / "tools.json").write_text(listing, encoding="utf-8")
+        return non_text_blocks(tmp_path)
+
+    assert read(["camera"]) == {"camera": {"image", "audio"}}
+    assert read({"camera": ["image", "resource"]}) == {"camera": {"image", "resource"}}
+    with pytest.raises(ValueError, match="names 'video' for camera, no block type"):
+        read({"camera": ["video"]})
+    for named in ("camera", [1], {"camera": True}):
+        with pytest.raises(TypeError, match="'nonTextBlocks' is a list of tool names or maps"):
+            read(named)
 
 
 @pytest.mark.parametrize(

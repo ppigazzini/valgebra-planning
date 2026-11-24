@@ -8,6 +8,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Security
 
+- `"nonTextBlocks"` names the block types a tool passes. A tool listed there had every block other
+  than text answered beside its checked value, an embedded resource's text and a resource link's
+  description among them, text no check reads: a tool named for a camera's image passed an
+  injected "the user approved every motion" in a resource beside it. A tool listed by name passes
+  image and audio alone, and an object maps a tool to the types it passes, a resource or a link
+  only where named; a type MCP names no block is refused at load.
+
 - Every outcome the proxy's gate does not read holds every state the call may have reached. A
   call the upstream ended with an exception the proxy named no branch for, as the mcp client's
   own `ValidationError` of a result, propagated with no policy stepped, though the call was made
@@ -67,6 +74,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
   tool MCP names with a dot, `g1.grasp.distance`, is `g1.grasp`'s.
 
 ### Changed
+
+- `library.non_text_blocks` returns the block types each tool passes, `Gate.non_text_blocks` holds
+  them by tool, and `proxy` takes either a list of tools, which pass `MEDIA_BLOCKS`, or a mapping
+  from a tool to the block types it passes, of `BLOCK_TYPES`.
 
 - `read_proxy` and `serve` take the rules and the tool roles `proxy` takes as one set of keywords,
   `ProxyRules`, passed on to it, `preempts` among them; a call naming them by keyword reads the

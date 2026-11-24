@@ -54,6 +54,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from valgebra_planning._valgebra import Unsupported, Validator, compile_schema, json_key, read_tool
 from valgebra_planning.contracts import Contract, contract_names, failures
 from valgebra_planning.flows import Flow, check_flow
+from valgebra_planning.library import MEDIA_BLOCKS
 from valgebra_planning.policy import Monitor, Policy, Snapshot, check_policy
 from valgebra_planning.servers import refused_by_client
 
@@ -134,7 +135,7 @@ class ProxyRules(TypedDict, total=False):
     flows: Sequence[Flow]
     after_violation: Iterable[str]
     preempts: Iterable[str]
-    non_text_blocks: Iterable[str]
+    non_text_blocks: Iterable[str] | Mapping[str, Iterable[str]]
     error_texts: Mapping[str, object] | None
     forwards_elicitation: Iterable[str]
 
@@ -199,7 +200,7 @@ class Gate:
     after_violation: frozenset[str] = frozenset()
     #: The tools whose result is answered with its blocks other than text beside the checked
     #: value, as a camera's image: no check reads them.
-    non_text_blocks: frozenset[str] = frozenset()
+    non_text_blocks: Mapping[str, frozenset[str]] = field(default_factory=dict)
     #: The set each tool's error text must lie in to be passed on as the server wrote it.
     error_texts: Mapping[str, Validator[Any]] = field(default_factory=dict)
     #: The tools whose requests for a person's answer the proxy forwards to its client.
@@ -252,7 +253,7 @@ class Gate:
                 msg = f"two {kinds} are named {name!r}: a name is one rule's"
                 raise ValueError(msg)
         self.preempts |= self.after_violation
-        named = self.non_text_blocks | self.error_texts.keys() | self.forwards_elicitation
+        named = self.non_text_blocks.keys() | self.error_texts.keys() | self.forwards_elicitation
         for tool in sorted((named | self.preempts) - self.contracts.keys()):
             msg = f"{tool} is named for its answers, and the proxy holds no such tool"
             raise ValueError(msg)
@@ -286,14 +287,14 @@ class Gate:
         Its text is the checked value, its JSON where the tool answered with structured content,
         and no other text the upstream wrote: a client hands a model the text, and the gate
         checks the value. A block that is not text is kept only for a tool of
-        ``non_text_blocks``. A tool declaring no output schema answers text no check reads, and
-        is answered as the upstream wrote it.
+        ``non_text_blocks``, and only of a type named for it. A tool declaring no output schema
+        answers text no check reads, and is answered as the upstream wrote it.
         """
         if self.contracts[tool].returns is None:
             return result
         text = value if result.structured_content is None else json.dumps(value)
-        kept = [block for block in result.content if block.type != "text"]
-        blocks = kept if tool in self.non_text_blocks else []
+        passed = self.non_text_blocks.get(tool, frozenset())
+        blocks = [block for block in result.content if block.type in passed]
         return types.CallToolResult(
             content=[types.TextContent(type="text", text=text), *blocks],
             structured_content=result.structured_content,
@@ -977,6 +978,13 @@ def _unanswered(tool: str, error: Exception) -> types.CallToolResult:
     return types.CallToolResult(content=[text], is_error=True)
 
 
+def _blocks(named: Iterable[str] | Mapping[str, Iterable[str]]) -> dict[str, frozenset[str]]:
+    """Return the block types each tool passes: a tool listed by name passes image and audio."""
+    if isinstance(named, Mapping):
+        return {tool: frozenset(kinds) for tool, kinds in named.items()}
+    return dict.fromkeys(named, MEDIA_BLOCKS)
+
+
 def proxy(
     upstream: Client,
     listing: Sequence[types.Tool],
@@ -986,7 +994,7 @@ def proxy(
     flows: Sequence[Flow] = (),
     after_violation: Iterable[str] = (),
     preempts: Iterable[str] = (),
-    non_text_blocks: Iterable[str] = (),
+    non_text_blocks: Iterable[str] | Mapping[str, Iterable[str]] = (),
     error_texts: Mapping[str, object] | None = None,
     forwards_elicitation: Iterable[str] = (),
 ) -> Server[Any]:
@@ -1022,7 +1030,7 @@ def proxy(
         flows,
         after_violation=frozenset(after_violation),
         preempts=frozenset(preempts),
-        non_text_blocks=frozenset(non_text_blocks),
+        non_text_blocks=_blocks(non_text_blocks),
         error_texts={tool: compile_schema(schema) for tool, schema in (error_texts or {}).items()},
         forwards_elicitation=frozenset(forwards_elicitation),
     )
