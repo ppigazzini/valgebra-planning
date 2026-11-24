@@ -44,6 +44,7 @@ __all__ = [
     "RefusedResultError",
     "Run",
     "ToolError",
+    "UnansweredError",
     "arun",
     "blame",
     "run",
@@ -83,6 +84,17 @@ _JSON = Validator(JSON)
 
 class ToolError(Exception):
     """A tool answered with an error: an MCP result with ``isError`` set."""
+
+
+class UnansweredError(ToolError):
+    """A call no result answered: it timed out, or the server answered with a protocol error.
+
+    An error block reads it as any tool error, and it is retried as one. The call may have
+    acted and returned anything, its result lost (Mansoor et al. 2026, §4.1), so each policy
+    then holds every state the call may have reached, a transition reading its result taken
+    possibly (`valgebra_planning.policy.Monitor.unread`), where an error the tool answered with
+    reaches none.
+    """
 
 
 class RefusedResultError(Exception):
@@ -476,6 +488,7 @@ class _Runner:
             self.broken.append(message)
             return Run(None, None, tuple(self.broken), message, Refusal("given", call.tool))
         acts = "readOnlyHint" not in self.contracts[call.tool].hints
+        unanswered = False
         for _ in range(ATTEMPTS if call.retry else 1):
             # A call that may act may have acted whatever it answers.
             if acts:
@@ -485,6 +498,7 @@ class _Runner:
             if not isinstance(answer, _Raised):
                 return (answer,)
             if isinstance(answer.error, ToolError):
+                unanswered |= isinstance(answer.error, UnansweredError)
                 continue
             if isinstance(answer.error, RefusedResultError):
                 # No result is handed back, so no run goes on past the call, enforced or not.
@@ -499,10 +513,9 @@ class _Runner:
             message = f"{call.tool} raised {type(answer.error).__name__}"
             self.broken.append(message)
             return Run(None, None, tuple(self.broken), message, Refusal("raised", call.tool))
-        # The call may not have acted: what follows starts from either set of policy states, as
-        # the verifier walks it.
-        for monitor in self.monitors:
-            monitor.errored()
+        refused = self.erred(call, arguments, unanswered=unanswered)
+        if refused is not None:
+            return refused
         if "readOnlyHint" not in self.contracts[call.tool].hints:
             # It may have acted with no result to read: no postcondition covers what follows.
             self.last = None
@@ -511,6 +524,26 @@ class _Runner:
         self.broken.append(f"{call.tool} answered with an error nothing handles")
         stopped = f"an error of {call.tool}"
         return Run(None, stopped, tuple(self.broken), None, Refusal("error", call.tool, call.retry))
+
+    def erred(self, call: Call, arguments: dict[str, Any], *, unanswered: bool) -> Run | None:
+        """Hold each policy where a call that answered with an error, or with none, leaves it.
+
+        The call may not have acted, so what follows starts from either set of states, as the
+        verifier walks it. One no result answered may also have returned anything: each policy
+        holds every state it may have reached, and a bad state it may hold ends the run as a
+        policy's step into one does; return that run.
+        """
+        if not unanswered:
+            for monitor in self.monitors:
+                monitor.errored()
+            return None
+        hints = self.contracts[call.tool].hints
+        for monitor in self.monitors:
+            if monitor.unread(call.tool, arguments, hints):
+                refused = self.breaks(monitor.violations[-1], "policy", call.tool)
+                if refused is not None:
+                    return refused
+        return None
 
     def branch(self, branch: Branch, env: _Env) -> _Steps[Run | None]:
         """Take the side a test reads; what runs there runs under a test on the tested value."""

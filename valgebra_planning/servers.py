@@ -32,7 +32,7 @@ from valgebra_planning.contracts import Contract, Postcondition, Task, read_cont
 from valgebra_planning.flows import Flow
 from valgebra_planning.policy import Policy
 from valgebra_planning.program import Block
-from valgebra_planning.run import RefusedResultError, Run, ToolError, run
+from valgebra_planning.run import RefusedResultError, Run, ToolError, UnansweredError, run
 
 __all__ = [
     "MAX_PAGES",
@@ -173,9 +173,10 @@ async def run_on_server(
                 raise asyncio.CancelledError from None
             except (MCPError, InputRequiredRoundsExceededError) as error:
                 # Fail the call, as an error block or a refusal reads it: a raise would end the
-                # run with no record of which call broke and why.
+                # run with no record of which call broke and why. No result answered it, so it
+                # may have acted and returned anything.
                 message = f"{name} did not answer: {error}"
-                raise ToolError(message) from error
+                raise UnansweredError(message) from error
             except RuntimeError as error:
                 if not refused_by_client(error, name):
                     raise

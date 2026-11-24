@@ -20,7 +20,15 @@ from valgebra_planning.library import read_library
 from valgebra_planning.planner import plan
 from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Block, Call, Next, Ref, Return
-from valgebra_planning.run import CanceledRunError, Refusal, ToolError, arun, blame, run
+from valgebra_planning.run import (
+    CanceledRunError,
+    Refusal,
+    ToolError,
+    UnansweredError,
+    arun,
+    blame,
+    run,
+)
 from valgebra_planning.verify import verify
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
@@ -873,3 +881,67 @@ def test_a_broken_flow_rule_is_blamed_on_the_proof_it_breaks() -> None:
     assert (
         blame(ran, ROBOT.tools, proven=False) == "a flow rule no link of the program proves broke"
     )
+
+
+@pytest.mark.parametrize(
+    ("error", "outcome"),
+    [
+        (ToolError("dropped"), "stopped"),
+        (UnansweredError("grasp did not answer: timed out"), "refused"),
+    ],
+    ids=["answered", "unanswered"],
+)
+def test_a_call_no_result_answered_may_have_reached_any_state(
+    error: ToolError, outcome: str
+) -> None:
+    """A grasp that timed out may have grasped and answered, its result lost.
+
+    An error the tool answered with is no result, so no transition reading one is taken; a call
+    no result answered holds every state it may have reached, and the stop it falls into leaves
+    `holding` owed, which ends the run.
+    """
+    problem = ROBOT.problem("pick")
+    program = read_program(
+        "try:\n    c1 = grasp(object_id=o, distance_m=d)\nexcept ToolError:\n    stop(o)\n"
+        "return c1.grasp_id\n"
+    )
+
+    def grasp(**_: Any) -> Any:
+        raise error
+
+    ran = run(program, ROBOT.tools, problem.task, GIVEN, {"grasp": grasp}, policies=[RELEASE])
+    assert ran.outcome == outcome
+    if outcome == "refused":
+        assert ran.why == Refusal("policy")
+        assert "holding" in (ran.refused or "")
+
+
+def test_a_call_no_result_answered_into_a_bad_state_ends_the_run() -> None:
+    dropped = read_policy(
+        {
+            "name": "never drop",
+            "initial": "free",
+            "bad": ["dropped"],
+            "transitions": [
+                {
+                    "from": "free",
+                    "tool": "grasp",
+                    "result": {"required": ["grasp_id"]},
+                    "to": "dropped",
+                }
+            ],
+        }
+    )
+    program = read_program(
+        "try:\n    c1 = grasp(object_id=o, distance_m=d)\nexcept ToolError:\n    stop(o)\n"
+        "return c1.grasp_id\n"
+    )
+
+    def grasp(**_: Any) -> Any:
+        message = "grasp did not answer"
+        raise UnansweredError(message)
+
+    task = ROBOT.problem("pick").task
+    ran = run(program, ROBOT.tools, task, GIVEN, {"grasp": grasp}, policies=[dropped])
+    assert ran.why == Refusal("policy", "grasp")
+    assert ran.refused == "never drop: grasp may have returned into dropped"

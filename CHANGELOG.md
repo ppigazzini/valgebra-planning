@@ -89,6 +89,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A call that timed out may have acted with any result. `run_on_server` raised a timeout, as any
+  protocol error, as the tool error a call answering with an error raises, and the run held each
+  policy where an answered error leaves it, taking no transition that reads the result: a grasp
+  that timed out after grasping left no `holding` owed, where the verifier's error block, which
+  cannot tell the two apart, holds it. A call no result answered raises `UnansweredError`, a
+  `ToolError` an error block reads as any, and the run holds every state the call may have
+  reached, as a proxy does; a bad state among them ends the run.
+
 - A call `arun` cancels is read as one whose outcome is unread. It was read as one answering with
   an error, which takes no transition reading the call's result, so a grasp canceled in flight,
   which may have grasped and answered, left "no obligation left pending" where a policy's

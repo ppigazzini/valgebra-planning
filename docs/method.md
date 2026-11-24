@@ -346,7 +346,10 @@ held to its set. A tool raising anything but a tool error ends the run, neither 
 to an error block, its message naming the exception's class alone, since its text may hold a value;
 an interrupt propagates. A call to a tool the run was not given ends the run at that call. A call
 that answers with an error may have acted or not, so each policy is held in the states before and
-after it, as the verifier reads the error's block. A proof of a program holds over the contracts, so
+after it, as the verifier reads the error's block. A call no result answered, a timeout or a
+protocol error, which `run_on_server` raises as `UnansweredError`, may also have returned
+anything, so each policy holds every state the call may have reached, a transition reading its
+result taken possibly, as the error's block holds it; a bad state among them ends the run. A proof of a program holds over the contracts, so
 a tool answering outside its own contract is the case a run must not pass on. With `enforce=False`
 the runner records every break and goes on, a diagnosis rather than a guard. `blame` names why a run
 broke: a proven program breaks only where something it rests on fails, a server returning outside

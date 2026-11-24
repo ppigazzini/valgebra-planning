@@ -16,6 +16,7 @@ from valgebra_planning._valgebra import Sampler
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.planner import plan
+from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Block
 from valgebra_planning.run import Refusal, blame
 from valgebra_planning.servers import connect, read_server, run_on_server
@@ -186,6 +187,37 @@ def test_a_call_asking_for_input_fails_as_a_tool_error(answer: types.InputRequir
     result = asyncio.run(ran(program))
     assert result.value is None
     assert result.why == Refusal("error", "confirm")
+
+
+def test_a_call_no_result_answered_reaches_every_state_it_may_have() -> None:
+    # A call asking for input past its rounds is answered by no result: it may have acted and
+    # returned anything, so the run holds the state a result would reach, owed at the stop.
+    contracts = {"confirm": read_contract(CONFIRM)}
+    task = read_task("confirm an order", {"order": {"type": "integer"}}, {"type": "boolean"})
+    owed = read_policy(
+        {
+            "name": "a confirmation is followed up",
+            "initial": "idle",
+            "bad": [],
+            "pending": ["confirmed"],
+            "transitions": [
+                {"from": "idle", "tool": "confirm", "result": {"type": "object"}, "to": "confirmed"}
+            ],
+        }
+    )
+    program = read_program(
+        "try:\n    c1 = confirm(order=order)\nexcept ToolError:\n    stop(order)\nreturn c1.ok\n"
+    )
+
+    async def ran() -> Any:
+        async with Client(_asking(ASKING[0]), input_required_max_rounds=1) as client:
+            return await run_on_server(
+                program, contracts, task, {"order": 1}, client, policies=[owed]
+            )
+
+    result = asyncio.run(ran())
+    assert result.why == Refusal("policy")
+    assert "confirmed" in (result.refused or "")
 
 
 #: A string no schema declares and no code spells: a part of a value the client refuses.
