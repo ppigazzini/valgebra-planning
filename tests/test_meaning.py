@@ -168,3 +168,103 @@ def test_a_result_any_string_fills_is_found() -> None:
     assert finding in _found([DETECT, noted])
     worded = _tool("note", {"object_id": OBJECT_ID}, {"text": {"enum": ["near", "far"]}}, READ_ONLY)
     assert not any("may return any string" in f for f in _found([DETECT, worded]))
+
+
+_S = {"type": "string"}
+
+
+def _noted(output: dict[str, Any]) -> list[str]:
+    tool = read_contract(
+        {
+            "name": "read",
+            "inputSchema": {"type": "object", "properties": {}},
+            "outputSchema": output,
+        }
+    )
+    return [
+        f.finding.removesuffix(" may return any string: an agent reads it unbounded")
+        for f in findings(Library({"read": tool}, ()))
+        if "any string" in f.finding
+    ]
+
+
+def _down(depth: int, leaf: dict[str, Any]) -> dict[str, Any]:
+    for name in reversed("wxyz"[:depth]):
+        leaf = {"type": "object", "properties": {name: leaf}, "required": [name]}
+    return leaf
+
+
+@pytest.mark.parametrize(
+    ("output", "noted"),
+    [
+        ({"type": "object", "properties": {"a": _S}}, ["read.a"]),
+        (
+            _down(4, {"type": "object", "properties": {"a": _S}, "required": ["a"]}),
+            ["read.w.x.y.z.a"],
+        ),
+        ({"type": "object", "properties": {"a": {"type": "array", "items": _S}}}, ["read.a.[]"]),
+        (
+            {
+                "type": "object",
+                "properties": {
+                    "actions": {
+                        "type": "array",
+                        "items": {"type": "object", "properties": {"_id": _S, "action": _S}},
+                    }
+                },
+            },
+            ["read.actions.[]._id", "read.actions.[].action"],
+        ),
+        ({"type": "object", "additionalProperties": _S}, ["read.*"]),
+        ({"type": "object", "patternProperties": {"^x": _S}}, ["read.*"]),
+        ({"type": "object", "properties": {"a": {**_S, "maxLength": 64}}}, []),
+        (
+            {
+                "type": "object",
+                "allOf": [{"properties": {"a": _S}}, {"properties": {"a": {"maxLength": 5}}}],
+            },
+            [],
+        ),
+        (
+            {
+                "type": "object",
+                "anyOf": [{"properties": {"a": {"const": "x"}}}, {"properties": {"a": _S}}],
+            },
+            ["read.a"],
+        ),
+        (
+            {
+                "$defs": {
+                    "node": {
+                        "type": "object",
+                        "properties": {"label": _S, "next": {"$ref": "#/$defs/node"}},
+                    }
+                },
+                "$ref": "#/$defs/node",
+            },
+            ["read.label"],
+        ),
+    ],
+    ids=[
+        "optional",
+        "four-objects-down",
+        "an-array",
+        "item-fields",
+        "additional",
+        "patterned",
+        "bounded",
+        "all-of-bounds-it",
+        "any-of-frees-it",
+        "recursive-ref-read-once",
+    ],
+)
+def test_the_string_note_reads_every_place_a_string_may_sit(
+    output: dict[str, Any], noted: list[str]
+) -> None:
+    """A checked result carries to an agent every string its schema admits, wherever it sits.
+
+    Every place the output schema puts a value is read, required or not, at any depth, in an
+    item or under a key no property names; an ``allOf`` branch bounds a place the others name,
+    an ``anyOf`` branch frees it, and a reference is followed once.
+    """
+    assert _noted(output) == noted

@@ -90,7 +90,9 @@ postcondition that covers no read or narrows none, a rule no task is held to. A 
 leaves undecided is marked so. The exit status is 1 when it finds one. After them, each line
 starting `note:` names a contract wider than its keywords suggest
 ([the method](method.md#specifications-that-hold-vacuously)), which the exit status does not
-read; with `--json` each entry carries its `kind`, `vacuous` or `wide`.
+read, among them each place in a result that may hold any string, read wherever the output
+schema puts a value, required or not, at any depth, in an item or under a key no property names,
+and named by its path, `[]` for an item and `*` for an unnamed key; with `--json` each entry carries its `kind`, `vacuous` or `wide`.
 
 ## Compare two privilege policies
 

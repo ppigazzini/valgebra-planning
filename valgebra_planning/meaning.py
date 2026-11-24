@@ -31,6 +31,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from valgebra_planning._valgebra import (
+    Compiler,
     Unsupported,
     Validator,
     closed,
@@ -40,6 +41,7 @@ from valgebra_planning._valgebra import (
     interval,
     json_key,
     nothing,
+    union,
 )
 from valgebra_planning.contracts import Contract, Slot
 from valgebra_planning.library import Library
@@ -64,6 +66,110 @@ def _format_alone(slot: Slot) -> Certainty | None:
     if "format" not in schema or slot.asserted:
         return None
     return _certainty(_STRINGS.relation_to(slot.values))
+
+
+def _named(path: tuple[str, ...]) -> str:
+    """Return a place in a result as the note names it: ``[]`` an item, ``*`` a key unnamed."""
+    return ".".join(path)
+
+
+def _open_strings(contract: Contract) -> dict[tuple[str, ...], Certainty]:
+    """Return each place in a contract's result that may hold any string, by its path.
+
+    The note's reason is what a checked result may carry to an agent, so every place its output
+    schema puts a value is read, required or not, at any depth, in an item, or under a key no
+    property names: each subschema of ``properties``, ``patternProperties``,
+    ``additionalProperties``, ``items`` and ``prefixItems``, through ``allOf``, whose branches
+    constrain one value together, ``anyOf`` and ``oneOf``, whose branches are alternatives, and
+    ``$ref``, each reference followed once. A place the companion will not compile apart is
+    left out, as the planner's slots leave it.
+    """
+    whole = next((slot for slot in contract.results if not slot.path), None)
+    if whole is None:
+        return {}
+    compiler = Compiler(whole.root, assert_format=whole.asserted)
+    found: dict[tuple[str, ...], Certainty] = {}
+    for path, values in _places(compiler, whole.root, whole.schema, frozenset()).items():
+        if (certainty := _certainty(_STRINGS.relation_to(values))) is not None:
+            found[path] = certainty
+    return found
+
+
+_Places = dict[tuple[str, ...], Validator[Any]]
+
+
+def _places(compiler: Compiler, root: object, schema: object, followed: frozenset[str]) -> _Places:
+    """Return the set of each place below ``schema`` a value may sit, by its path below it."""
+    if not isinstance(schema, dict):
+        return {}
+    found: _Places = {}
+    _meet(found, _own(compiler, root, schema, followed))
+    reference = schema.get("$ref")
+    if isinstance(reference, str) and reference not in followed:
+        target = _pointed(root, reference)
+        if target is not None:
+            _meet(found, _places(compiler, root, target, followed | {reference}))
+    for branch in schema.get("allOf") or []:
+        _meet(found, _places(compiler, root, branch, followed))
+    for key in ("anyOf", "oneOf"):
+        branches = [_places(compiler, root, b, followed) for b in schema.get(key) or []]
+        _meet(found, _either(branches))
+    return found
+
+
+def _own(
+    compiler: Compiler, root: object, schema: dict[str, Any], followed: frozenset[str]
+) -> _Places:
+    """Return the places a schema's own keywords put a value, and the places below each."""
+    subs: list[tuple[str, object]] = [
+        *((name, sub) for name, sub in (schema.get("properties") or {}).items()),
+        *(("*", sub) for sub in (schema.get("patternProperties") or {}).values()),
+        *(("[]", sub) for sub in schema.get("prefixItems") or []),
+    ]
+    for step, key in (("*", "additionalProperties"), ("[]", "items")):
+        if isinstance(schema.get(key), dict):
+            subs.append((step, schema[key]))
+    places: list[_Places] = []
+    for step, sub in subs:
+        try:
+            here = compiler.compile(sub)
+        except Unsupported:
+            continue
+        below = _places(compiler, root, sub, followed)
+        places.append({(step,): here} | {(step, *path): values for path, values in below.items()})
+    # Two subschemas naming one place apart, as two patterns, are two keys' sets: either holds.
+    return _either(places)
+
+
+def _meet(found: _Places, places: _Places) -> None:
+    """Meet each place's set with the one ``places`` gives it: both constrain one value."""
+    for path, values in places.items():
+        found[path] = intersection(found[path], values) if path in found else values
+
+
+def _either(branches: list[_Places]) -> _Places:
+    """Return each place's set as the union of the sets the branches give it: either holds."""
+    joined: dict[tuple[str, ...], list[Validator[Any]]] = {}
+    for places in branches:
+        for path, values in places.items():
+            joined.setdefault(path, []).append(values)
+    return {path: union(*sets) for path, sets in joined.items()}
+
+
+def _pointed(root: object, reference: str) -> object:
+    """Return the subschema a reference into ``root`` names, or None for any other."""
+    if not reference.startswith("#"):
+        return None
+    here = root
+    for part in [p for p in reference[1:].split("/") if p]:
+        step = part.replace("~1", "/").replace("~0", "~")
+        if isinstance(here, dict) and step in here:
+            here = here[step]
+        elif isinstance(here, list) and step.isdigit() and int(step) < len(here):
+            here = here[int(step)]
+        else:
+            return None
+    return here
 
 
 def _open_sides(slot: Slot) -> list[str]:
@@ -203,9 +309,12 @@ def findings(library: Library) -> list[Finding]:
             for target, certainty in _undeclared_only(contract, targets)
         ]
         found += [
-            Finding(where, f"{slot.name} may return any string: an agent reads it unbounded", c)
-            for slot in contract.results
-            if (c := _certainty(_STRINGS.relation_to(slot.values))) is not None
+            Finding(
+                where,
+                f"{name}.{_named(path)} may return any string: an agent reads it unbounded",
+                c,
+            )
+            for path, c in sorted(_open_strings(contract).items())
         ]
         gate = _gate_only(contract, tools, goals)
         if gate is not None:

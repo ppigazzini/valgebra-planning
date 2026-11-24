@@ -137,6 +137,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- `check`'s note that a result may carry any string to an agent reads every place a string may
+  sit. It read the planner's slots, the fields a result guarantees down to three objects, so an
+  optional field, one four objects down, an array's strings, a string in each item and strings
+  under `additionalProperties` went unnoted. Each place the output schema puts a value is read,
+  through `allOf`, `anyOf`, `oneOf` and a `$ref` followed once, named by its path with `[]` for an
+  item and `*` for a key no property names.
+
 - A loop is a test on whether its array holds an item. The block after a loop was walked once,
   from the states of the empty array's run beside every other, so an act the body surely takes
   read "possibly" and its policy link `undecided`, whatever the array's set: under `minItems: 1`,
