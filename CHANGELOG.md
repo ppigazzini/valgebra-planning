@@ -8,6 +8,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Security
 
+- Every outcome the proxy's gate does not read holds every state the call may have reached. A
+  call the upstream ended with an exception the proxy named no branch for, as the mcp client's
+  own `ValidationError` of a result, propagated with no policy stepped, though the call was made
+  and may have acted: a grasp made and its result unparsed left the next walk admitted where
+  holding forbids it. Once a call is sent, any way it ends but a result read is an outcome
+  unread, held before anything else reads it; an exception is answered with a fixed text naming
+  the tool, and a cancel, an exit or a group of them is raised again.
+
 - A stop names a value the program holds. `stop(c1.reason)`, on a field the result may lack, was
   proven, though a run reaching it with no `reason` ends on the read and stops on nothing: a
   return was asked whether its value is held there, and a stop was not. It is refuted, with a

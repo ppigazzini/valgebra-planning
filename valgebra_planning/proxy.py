@@ -658,28 +658,36 @@ async def _checked(
     gate.made(params.name)
     try:
         result = await _made(gate, upstream, params, resumed)
-    except asyncio.CancelledError:
-        # The client canceled the call while the upstream held it: it may have acted.
+    except BaseException as error:
+        # Once the call is sent, every way it ends but a result read is an outcome unread: it
+        # may have acted and returned anything, so the gate holds every state it may have
+        # reached before anything else reads it. A cancel, an exit or a group of them reaches
+        # the server's task as itself, after the gate holds them.
         gate.unread(params.name, arguments)
-        raise
-    except (MCPError, InputRequiredRoundsExceededError) as error:
-        gate.unread(params.name, arguments)
-        # The message is the server's or the client's, text no contract bounds: name the code.
-        said = (
-            f"error {error.error.code}"
-            if isinstance(error, MCPError)
-            else "it asked for input, which the proxy gives none of"
-        )
-        text = types.TextContent(type="text", text=f"{params.name} did not answer: {said}")
-        return types.CallToolResult(content=[text], is_error=True)
-    except RuntimeError as error:
-        if not refused_by_client(error, params.name):
+        if not isinstance(error, Exception):
             raise
-        gate.unread(params.name, arguments)
-        # The client's text holds the value, so the refusal names the tool alone.
-        refused = f"{params.name} returned a value outside its contract, refused by the client"
-        return _refusal(refused)
+        return _unanswered(params.name, error)
     return _read(gate, params.name, arguments, result)
+
+
+def _unanswered(tool: str, error: Exception) -> types.CallToolResult:
+    """Return the answer to a call the upstream ended with ``error`` instead of a result.
+
+    Its message is the server's or the client's, text no contract bounds, so the answer names
+    the tool and what kind of end it was: a protocol error by its code, a request for input the
+    proxy gives none of, a result the client refused, or none at all.
+    """
+    if isinstance(error, RuntimeError) and refused_by_client(error, tool):
+        # The client's text holds the value, so the refusal names the tool alone.
+        return _refusal(f"{tool} returned a value outside its contract, refused by the client")
+    if isinstance(error, MCPError):
+        said = f"error {error.error.code}"
+    elif isinstance(error, InputRequiredRoundsExceededError):
+        said = "it asked for input, which the proxy gives none of"
+    else:
+        said = "its result was not read"
+    text = types.TextContent(type="text", text=f"{tool} did not answer: {said}")
+    return types.CallToolResult(content=[text], is_error=True)
 
 
 def proxy(

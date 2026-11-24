@@ -7,7 +7,7 @@ import re
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx2
 import pytest
@@ -19,11 +19,12 @@ from mcp.server.auth.middleware.auth_context import auth_context_var
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
 from mcp.server.lowlevel import Server
+from pydantic import TypeAdapter
 
 from valgebra_planning.contracts import read_contract
 from valgebra_planning.flows import Flow, read_flow
 from valgebra_planning.policy import Monitor, read_policy
-from valgebra_planning.proxy import Gate, http_app, proxy, read_proxy, spelled_out
+from valgebra_planning.proxy import Gate, _checked, http_app, proxy, read_proxy, spelled_out
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 LISTING = json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
@@ -792,6 +793,53 @@ def test_a_call_whose_outcome_is_not_read_holds_every_state_it_may_have_reached(
     made, second = _approved_twice(answer, cancel=cancel)
     assert _refused(second) == "refused: one granted approval: approve_freight reached violated"
     assert made == ["approve_freight"]
+
+
+def test_an_end_of_a_sent_call_no_protocol_names_is_an_outcome_unread() -> None:
+    """A sent call the client ends with an exception no branch names is an outcome unread.
+
+    The client's own check of a result raises one: the call was made and may have acted, so the
+    gate holds every state it may have reached, and the call is answered with a fixed text
+    naming the tool.
+    """
+    made: list[str] = []
+
+    async def session() -> tuple[Any, Any]:
+        async with Client(_upstream(made, dict(ANSWERS), LISTING)) as upstream:
+            real = upstream.call_tool
+            ended: list[str] = []
+
+            async def unparsed(name: str, arguments: Any = None, **options: Any) -> Any:
+                answer = await real(name, arguments, **options)
+                if name == "approve_freight" and not ended:
+                    ended.append(name)
+                    TypeAdapter(int).validate_python("an unknown block")
+                return answer
+
+            upstream.call_tool = unparsed  # ty: ignore[invalid-assignment]
+            front = proxy(upstream, (await upstream.list_tools()).tools, TOOLS, policies=[ONCE])
+            async with Client(front) as client:
+                return await client.call_tool(*APPROVAL), await client.call_tool(*APPROVAL)
+
+    first, second = asyncio.run(session())
+    assert _refused(first) == "approve_freight did not answer: its result was not read"
+    assert _refused(second) == "refused: one granted approval: approve_freight reached violated"
+    assert made == ["approve_freight"]
+
+
+def test_a_cancel_of_a_sent_call_is_raised_after_the_gate_holds_it() -> None:
+    # A cancel reaches the server's task as itself, never as an answer, and only once the gate
+    # holds every state the canceled call may have reached.
+    gate = Gate(TOOLS, [Monitor(ONCE)], [])
+
+    class Canceling:
+        async def call_tool(self, *_: Any, **__: Any) -> Any:
+            raise asyncio.CancelledError
+
+    params = types.CallToolRequestParams(name=APPROVAL[0], arguments=APPROVAL[1])
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(_checked(gate, cast("Any", Canceling()), params))
+    assert gate.before(*APPROVAL) == "one granted approval: approve_freight reached violated"
 
 
 def test_an_error_the_server_answers_steps_no_transition_reading_a_result() -> None:

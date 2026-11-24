@@ -159,9 +159,11 @@ A result the proxy's client refuses against the output schema the server declare
 naming the tool alone, since the client's own message holds the value.
 A refused call leaves every policy
 where it was, and a call the server answers with an error leaves each in the states before and
-after it, since the call may have acted or not. A call whose outcome the gate does not read, its
-result refused, the call canceled or answered by no result, leaves each in every state it may
-have reached, a transition reading its result taken possibly. A transition reading the result steps when the
+after it, since the call may have acted or not. A call whose outcome the gate does not read, any
+way a sent call ends but a result read: its result refused, the call canceled or answered by no
+result, or an exception the client raises, leaves each in every state it may have reached, a
+transition reading its result taken possibly, before the call is answered with a fixed text
+naming the tool or a cancel is raised again. A transition reading the result steps when the
 result arrives; once a result takes a policy to a bad state, the call having been made, every
 later call is refused but one to a tool `tools.json` names under `"afterViolation"`, which no
 policy may read. A flow rule reads provenance from values: an argument equal to a value a source

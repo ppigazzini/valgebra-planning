@@ -373,8 +373,10 @@ run on the `result` check naming it. A call a policy reads holds the gate from i
 result, so each policy reads such calls in the order they act, and a call no policy reads waits on
 none. A refused call steps no policy, a call the server answers with
 an error leaves each policy in the states before and after it, and a call made whose outcome the
-gate does not read, its result refused, the call canceled or answered by no result, leaves each in
-every state the call may have reached, a transition reading its result taken possibly. A flow rule reads a value's
+gate does not read, any way a sent call ends but a result read, its result refused, the call
+canceled or answered by no result, or an exception the client raises, leaves each in every state
+the call may have reached, a transition reading its result taken possibly, before anything else
+reads the call. A flow rule reads a value's
 source from equality with what a source tool returned, an assumption. With `only` that is the
 grounding gate of Sah et al. 2026: an argument equal to no value its sources returned is refused,
 and a value from a task input with it, since a proxy sees no task. An `only` rule with `fresh`
