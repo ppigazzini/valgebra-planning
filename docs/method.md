@@ -189,7 +189,12 @@ verifier, which adds a link for it.
   run as at it: a transition is read on what the earlier ones leave, and one they leave no record
   for is reported vacuous. A loop's body may
   run any number of times, so the states a policy may be in when it starts are taken to a
-  fixpoint, the states being finite. A policy reads one program's calls in order and, before the
+  fixpoint, the states being finite. A state may lapse: a transition of `from`, `after_s` and `to`
+  alone is taken where the state has been held that many seconds with no call leaving it, the time
+  since the event that entered it last (Bauer et al. 2011, Def. 4.2), so a yes is held for two
+  minutes and no longer. A monitor reads it exactly at each event by a clock; no lapse leaves a bad
+  state or a state nothing enters, and no chain of them leads back where it began. A policy reads one program's calls in order
+  and, before the
   run, carries no value from one call to another; with `per`, the runner holds one instance per
   value. A transition may read an annotation hint, `destructiveHint` or
   another, on any tool giving it, MCP's default read where a tool sets none: a tool setting no

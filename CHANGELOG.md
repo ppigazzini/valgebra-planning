@@ -123,6 +123,9 @@ All notable changes to valgebra-planning are recorded here. The format follows
   three are the same, in the same order, and no "1797 more" follows them, in `failures` and in
   each refusal of a proxy and of a run that names them.
 
+- `policy.Snapshot` is a named tuple, holding when each state was entered beside the states it held
+  as a tuple, and `Monitor.moved` takes `at`, the time a state it enters is entered.
+
 - valgebra is required from 0.0.35, whose `validate` takes the `limit` a refusal is read through,
   and valgebra-jsonschema from 0.0.7, whose constant past the float range is its infinity. On 0.0.6
   it was no value at all, so a result declared `{"const": 1e400}` lay inside every argument, and the
@@ -130,6 +133,15 @@ All notable changes to valgebra-planning are recorded here. The format follows
   count moves from 0.0.32 and 0.0.6.
 
 ### Added
+
+- A policy's state may lapse. A policy had no time, so a yes read hours ago admitted a motion as one
+  read now. A transition of `from`, `after_s` and `to` alone, `{"from": "yes", "after_s": 120, "to":
+  "unasked"}`, is taken where the state has been held that many seconds with no call leaving it:
+  `Monitor` takes a `clock`, `time.monotonic` where none is given, keeps when each state that lapses
+  was entered, and moves it before each step, before the run's end is read and before its states
+  are. No lapse leaves a bad state or one nothing enters, a state lapses once, and no chain of lapses
+  leads back. A policy
+  with none reads no clock. `Lapse` and `Span` are public.
 
 - A task names the inputs its answer must be read from: `reads` in `tasks.json` and `read_task`.
   A goal's set says what kind of value answers, not whose: every run's events meet "the events

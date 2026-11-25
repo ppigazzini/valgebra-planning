@@ -232,6 +232,20 @@ IMPLEMENTED-BY: policy.py, policy.py::Policy.step, policy.py::Monitor.unread, po
 
 HELD-BY: test_the_monitor_reads_a_trace_call_by_call, test_a_bad_state_is_never_left, test_a_call_that_answered_with_an_error_holds_the_policy_in_either_state, test_a_call_whose_outcome_is_not_read_holds_the_call_s_whole_image, test_a_result_the_gate_refuses_holds_every_state_a_result_may_reach, test_a_call_whose_outcome_is_not_read_holds_every_state_it_may_have_reached, test_a_call_a_policy_reads_waits_for_the_one_in_flight, test_an_error_is_held_against_its_own_call_beside_one_no_policy_reads, test_a_call_no_policy_reads_waits_on_none, test_the_walk_on_one_value_holds_the_monitor_s_first_match_alone, test_the_walk_on_a_set_holds_every_state_the_monitor_takes_a_value_of_it_to, test_a_rule_written_first_match_is_proven_as_the_monitor_reads_it, test_a_run_refuses_the_call_an_approval_that_answered_with_an_error_would_allow, test_a_call_the_server_answers_with_an_error_leaves_the_policy_in_either_state, test_a_transition_reading_the_result_is_taken_when_the_result_arrives, test_a_walk_splits_at_a_call_a_result_guard_reads_and_refutes_the_case_it_breaks, test_a_program_moving_only_under_the_answer_its_policy_reads_is_proven, test_the_gate_reads_a_result_a_transition_waits_on, test_a_guard_the_arguments_only_overlap_leaves_the_policy_undecided, test_a_program_planned_under_the_policy_approves_first_and_is_proven, test_a_program_planned_without_the_policy_is_refuted_on_its_freight_path_alone, test_the_planner_tests_the_answer_a_result_guard_reads, test_a_call_no_result_answered_may_have_reached_any_state, test_a_call_no_result_answered_reaches_every_state_it_may_have, test_a_stop_acting_before_the_walk_it_overtakes_is_held, test_a_walk_answering_before_the_stop_it_was_overtaken_by_is_held, test_a_result_only_the_other_order_takes_to_a_bad_state_is_refused
 
+**A state may lapse, by an event-recording clock.** A run is a timed word, each event with the time
+it occurred (Bauer et al. 2011, Def. 4.1), and the time since an event occurred last is its
+event-recording clock's value (Bauer et al. 2011, Def. 4.2), which TLTL's past operator bounds (Bauer
+et al. 2011, Def. 4.11). A lapse bounds the time since the event that entered its state, so it reads
+the past alone: a monitor that keeps when each state it holds was entered decides it at each event,
+with no clock predicting one. A state a transition enters is entered anew, one it was in among them,
+as its event's clock is reset; a target is entered when the lapse came due, so a chain of them is
+read in its order; and where a result is not read, the time it arrived is known to lie between two,
+and each state it may leave held is held. **[LOAD-BEARING: timed-policies]**
+
+IMPLEMENTED-BY: policy.py::Lapse, policy.py::Monitor.moved
+
+HELD-BY: test_a_monitor_holds_the_states_the_timed_automaton_does, test_a_yes_lapses_once_it_was_held_its_seconds, test_a_yes_given_again_is_held_from_the_last_one, test_a_chain_of_lapses_is_read_in_the_order_it_came_due, test_a_result_not_read_may_have_entered_its_state_at_any_time_since_the_call, test_a_state_a_call_may_have_left_lapses_beside_the_one_it_reached
+
 **An obligation is decided over the whole program.** A property that no continuation of a
 run's prefix makes true or false for good, as a notice owed after every booking, is not
 monitorable after that prefix (Bauer et al. 2011, Def. 3.4), and a trace rule checked one

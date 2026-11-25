@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import itertools
 import json
+import math
 import random
 from pathlib import Path
 from typing import Any
@@ -936,3 +938,352 @@ def test_a_result_no_value_is_in_is_walked_as_one_case() -> None:
     ):
         links = verify(read_program(text), tools, read_task("t", {}, True), policies=[policy]).links
         assert [link.verdict for link in links if link.claim == "policy looked holds"] == [verdict]
+
+
+class _Clock:
+    """A clock a test sets."""
+
+    def __init__(self, now: float = 0.0) -> None:
+        self.now, self.read = now, 0
+
+    def __call__(self) -> float:
+        self.read += 1
+        return self.now
+
+
+def _lapsing(*transitions: dict[str, Any], **keys: Any) -> dict[str, Any]:
+    """Return a policy's document: a yes is asked, lapses, and a walk without one is refused."""
+    asked = {"from": "unasked", "tool": "confirm", "result": {"const": "yes"}, "to": "yes"}
+    again = {"from": "yes", "tool": "confirm", "result": {"const": "yes"}, "to": "yes"}
+    walk = {"from": "unasked", "tool": "walk", "to": "violated"}
+    return {
+        "name": "consent",
+        "initial": "unasked",
+        "bad": ["violated"],
+        "transitions": [asked, again, walk, *transitions],
+        **keys,
+    }
+
+
+#: A yes held for 120 seconds.
+CONSENT = _lapsing({"from": "yes", "after_s": 120, "to": "unasked"})
+
+
+def _consented(clock: _Clock, spec: dict[str, Any] = CONSENT, **arguments: Any) -> Monitor:
+    """Return a monitor that read a yes at the clock's time."""
+    monitor = Monitor(read_policy(spec), clock=clock)
+    assert not monitor.observe("confirm", arguments)
+    assert not monitor.returned("confirm", arguments, "yes")
+    return monitor
+
+
+@pytest.mark.parametrize(
+    ("spec", "says"),
+    [
+        (_lapsing({"from": "yes", "after_s": 0, "to": "unasked"}), "positive number of seconds"),
+        (_lapsing({"from": "yes", "after_s": -1, "to": "unasked"}), "positive number of seconds"),
+        (_lapsing({"from": "yes", "after_s": True, "to": "unasked"}), "positive number of seconds"),
+        (_lapsing({"from": "yes", "after_s": "120", "to": "no"}), "positive number of seconds"),
+        (_lapsing({"from": "yes", "after_s": math.inf, "to": "no"}), "positive number of seconds"),
+        (_lapsing({"from": "yes", "after_s": math.nan, "to": "no"}), "positive number of seconds"),
+        (_lapsing({"from": "yes", "after_s": 1, "to": "no", "tool": "walk"}), "'tool' is no key"),
+        (_lapsing({"from": "violated", "after_s": 1, "to": "no"}), "a bad state is never left"),
+        (_lapsing({"from": "yse", "after_s": 1, "to": "unasked"}), "no transition enters it"),
+        (_lapsing({"from": "yes", "after_s": 1, "to": "yes"}), "lead back, yes to yes"),
+        (
+            _lapsing(
+                {"from": "yes", "after_s": 1, "to": "no"},
+                {"from": "yes", "after_s": 2, "to": "old"},
+            ),
+            "a state lapses once, and it lapses to 'no'",
+        ),
+        (
+            _lapsing(
+                {"from": "yes", "after_s": 1, "to": "no"}, {"from": "no", "after_s": 2, "to": "yes"}
+            ),
+            "lead back, yes to no to yes",
+        ),
+    ],
+)
+def test_a_lapse_no_monitor_could_hold_is_refused(spec: dict[str, Any], says: str) -> None:
+    with pytest.raises(ValueError, match="consent") as refused:
+        read_policy(spec)
+    assert says in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    ("seconds", "held"), [(0, "yes"), (119, "yes"), (120, "violated"), (121, "violated")]
+)
+def test_a_yes_lapses_once_it_was_held_its_seconds(seconds: float, held: str) -> None:
+    clock = _Clock(1000.0)
+    monitor = _consented(clock)
+    clock.now += seconds
+    assert monitor.observe("walk", {}) == (held == "violated")
+    assert monitor.held() == {held}
+
+
+def test_a_yes_given_again_is_held_from_the_last_one() -> None:
+    clock = _Clock()
+    monitor = _consented(clock)
+    clock.now = 100
+    monitor.observe("confirm", {})
+    monitor.returned("confirm", {}, "yes")
+    clock.now = 219
+    assert monitor.held() == {"yes"}
+    clock.now = 220
+    assert monitor.held() == {"unasked"}
+
+
+def test_a_chain_of_lapses_is_read_in_the_order_it_came_due() -> None:
+    chain = _lapsing(
+        {"from": "yes", "after_s": 10, "to": "stale"},
+        {"from": "stale", "after_s": 5, "to": "unasked"},
+    )
+    for now, state in ((9, "yes"), (10, "stale"), (14, "stale"), (15, "unasked"), (900, "unasked")):
+        clock = _Clock()
+        monitor = _consented(clock, chain)
+        clock.now = now
+        assert monitor.held() == {state}
+
+
+def test_a_state_a_call_may_have_left_lapses_beside_the_one_it_reached() -> None:
+    # The second confirmation answered with an error, so the run may be at either yes.
+    clock = _Clock()
+    left = _lapsing(
+        {"from": "yes", "after_s": 120, "to": "unasked"},
+        {"from": "yes", "tool": "walk", "to": "walked"},
+    )
+    monitor = _consented(clock, left)
+    clock.now = 60
+    monitor.observe("walk", {})
+    monitor.errored()
+    assert monitor.held() == {"yes", "walked"}
+    clock.now = 120
+    assert monitor.held() == {"unasked", "walked"}
+    assert monitor.observe("walk", {})
+
+
+def test_a_result_not_read_may_have_entered_its_state_at_any_time_since_the_call() -> None:
+    clock = _Clock()
+    stale = _lapsing({"from": "yes", "after_s": 120, "to": "stale"})
+    monitor = Monitor(read_policy(stale), clock=clock)
+    monitor.observe("confirm", {})
+    clock.now = 50
+    monitor.unread("confirm", {}, frozenset())
+    for now, held in (
+        (50, {"unasked", "yes"}),
+        (119, {"unasked", "yes"}),
+        (120, {"unasked", "yes", "stale"}),
+        (169, {"unasked", "yes", "stale"}),
+        (170, {"unasked", "stale"}),
+    ):
+        clock.now = now
+        assert monitor.held() == held
+
+
+def test_the_run_s_end_reads_the_clock() -> None:
+    owed = _lapsing({"from": "yes", "after_s": 30, "to": "unasked"}, pending=["yes"])
+    clock = _Clock()
+    monitor = _consented(clock, owed)
+    clock.now = 29
+    assert monitor.ended()
+    monitor = _consented(clock, owed)
+    clock.now += 30
+    assert not monitor.ended()
+
+
+def test_a_lapse_into_a_bad_state_refuses_the_call_that_finds_it() -> None:
+    due = _lapsing({"from": "yes", "after_s": 30, "to": "violated"})
+    clock = _Clock()
+    monitor = _consented(clock, due)
+    clock.now = 30
+    assert monitor.observe("look", {})
+    assert monitor.violations[-1] == "consent: a state lapsed into violated"
+    clock.now = 0
+    monitor = _consented(clock, due)
+    clock.now = 30
+    assert monitor.ended()
+
+
+def test_each_value_s_instance_lapses_by_its_own_yes() -> None:
+    clock = _Clock()
+    each = _lapsing({"from": "yes", "after_s": 120, "to": "unasked"}, per="object_id")
+    monitor = _consented(clock, each, object_id="a")
+    clock.now = 60
+    monitor.observe("confirm", {"object_id": "b"})
+    monitor.returned("confirm", {"object_id": "b"}, "yes")
+    clock.now = 125
+    assert not monitor.observe("walk", {"object_id": "b"})
+    assert monitor.observe("walk", {"object_id": "a"})
+
+
+def test_a_refused_call_s_restore_keeps_when_each_state_was_entered() -> None:
+    clock = _Clock()
+    monitor = _consented(clock)
+    kept = monitor.snapshot()
+    clock.now = 100
+    monitor.observe("confirm", {})
+    monitor.returned("confirm", {}, "yes")
+    monitor.restore(kept)
+    assert Monitor.at(monitor.policy, kept, clock).snapshot() == kept
+    clock.now = 120
+    assert monitor.held() == {"unasked"}
+
+
+def test_a_policy_with_no_lapse_reads_no_clock() -> None:
+    clock = _Clock()
+    monitor = _consented(clock, _lapsing())
+    monitor.held()
+    monitor.ended()
+    monitor.observe("walk", {})
+    assert clock.read == 0
+
+
+def test_a_way_out_names_the_time_that_leads_out() -> None:
+    cooling = {
+        "name": "cool down",
+        "initial": "free",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "free", "tool": "fire", "to": "hot"},
+            {"from": "hot", "tool": "fire", "to": "violated"},
+            {"from": "hot", "after_s": 2.5, "to": "free"},
+        ],
+    }
+    clock = _Clock()
+    monitor = Monitor(read_policy(cooling), clock=clock)
+    assert not monitor.observe("fire", {})
+    assert monitor.ways_out("fire") == ["from hot, 2.5 s lead to free"]
+    clock.now = 2.5
+    assert not monitor.observe("fire", {})
+
+
+STATES = ["s", "t", "u", "v"]
+
+
+@st.composite
+def _timed(draw: st.DrawFn) -> tuple[dict[str, Any], list[tuple[str, str, Any, int]]]:
+    """Draw a policy with lapses and a timed trace of calls, results and errors."""
+    order = draw(st.permutations(STATES))
+    lapses = [
+        {"from": a, "after_s": draw(st.integers(1, 6)), "to": b}
+        for a, b in itertools.pairwise(order)
+        if draw(st.booleans())
+    ]
+    moves = [
+        {"from": draw(st.sampled_from(STATES)), "tool": tool, "to": draw(st.sampled_from(STATES))}
+        | ({"result": {"const": answer}} if answer is not None else {})
+        for tool in ("f", "g")
+        for answer in (None, 1)
+        for _ in range(draw(st.integers(0, 2)))
+    ]
+    while True:
+        # No lapse is out of a state nothing enters.
+        entered = {order[0], *(t["to"] for t in (*lapses, *moves))}
+        left = [t for t in lapses if t["from"] in entered]
+        if left == lapses:
+            break
+        lapses = left
+    spec = {"name": "p", "initial": order[0], "bad": [], "transitions": [*lapses, *moves]}
+    if draw(st.booleans()):
+        spec["per"] = "k"
+    trace = draw(
+        st.lists(
+            st.tuples(
+                st.sampled_from(["f", "g"]),
+                st.sampled_from(["result", "other", "error", "silent"]),
+                st.sampled_from([None, 1, 2]),
+                st.integers(0, 4),
+            ),
+            max_size=8,
+        )
+    )
+    return spec, trace
+
+
+class _Reference:
+    """The timed automaton read one configuration at a time: a state and when it was entered."""
+
+    def __init__(self, spec: dict[str, Any]) -> None:
+        self.lapses = {t["from"]: t for t in spec["transitions"] if "after_s" in t}
+        self.calls = [t for t in spec["transitions"] if "after_s" not in t]
+        self.per = spec.get("per")
+        self.own: set[tuple[str, int]] = {(spec["initial"], 0)}
+        self.values: dict[Any, set[tuple[str, int]]] = {}
+
+    def lapse(self, configurations: set[tuple[str, int]], now: int) -> set[tuple[str, int]]:
+        moved = set()
+        for configuration in configurations:
+            state, entered = configuration
+            while state in self.lapses and entered + self.lapses[state]["after_s"] <= now:
+                entered += self.lapses[state]["after_s"]
+                state = self.lapses[state]["to"]
+            moved.add((state, entered))
+        return moved
+
+    def at(self, now: int) -> None:
+        self.own = self.lapse(self.own, now)
+        self.values = {key: self.lapse(held, now) for key, held in self.values.items()}
+
+    def step(self, tool: str, key: Any, now: int, answer: Any, *, returned: bool) -> None:
+        def after(configuration: tuple[str, int]) -> tuple[str, int]:
+            for t in self.calls:
+                if t["from"] != configuration[0] or t["tool"] != tool:
+                    continue
+                if ("result" in t) == returned and (not returned or t["result"]["const"] == answer):
+                    return t["to"], now
+            return configuration
+
+        self.at(now)
+        if self.per and key is not None:
+            held = self.values.setdefault(key, set(self.own))
+            self.values[key] = set(map(after, held))
+        else:
+            self.own = set(map(after, self.own))
+            self.values = {k: set(map(after, held)) for k, held in self.values.items()}
+
+    def states(self) -> set[str]:
+        return {state for held in (self.own, *self.values.values()) for state, _ in held}
+
+
+@given(_timed())
+@settings(max_examples=400, deadline=None)
+def test_a_monitor_holds_the_states_the_timed_automaton_does(
+    drawn: tuple[dict[str, Any], list[tuple[str, str, Any, int]]],
+) -> None:
+    spec, trace = drawn
+    clock = _Clock()
+    monitor, reference = Monitor(read_policy(spec), clock=clock), _Reference(spec)
+    now = 0
+    for tool, outcome, key, waited in trace:
+        arguments = {} if key is None else {"k": key}
+        now += waited
+        clock.now = now
+        reference.at(now)
+        own, values = set(reference.own), {k: set(v) for k, v in reference.values.items()}
+        monitor.observe(tool, arguments)
+        reference.step(tool, key, now, None, returned=False)
+        assert monitor.held() == reference.states()
+        now += 1
+        clock.now = now
+        if outcome == "error":
+            monitor.errored()
+            if reference.per and key is not None:
+                reference.values[key] |= values.get(key, own)
+            else:
+                reference.own |= own
+                reference.values = {
+                    k: held | values.get(k, set()) for k, held in reference.values.items()
+                }
+        elif outcome != "silent":
+            answer = 1 if outcome == "result" else 0
+            monitor.returned(tool, arguments, answer)
+            reference.step(tool, key, now, answer, returned=True)
+        reference.at(now)
+        assert monitor.held() == reference.states()
+        snapshot = monitor.snapshot()
+        assert Monitor.at(monitor.policy, snapshot, clock).snapshot() == snapshot
+    now += 30
+    clock.now = now
+    reference.at(now)
+    assert monitor.held() == reference.states()

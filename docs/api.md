@@ -72,7 +72,7 @@ extra.
 | `valgebra_planning.critic` | `Critique`, `ProgramError`, `critique`, `read_program` | |
 | `valgebra_planning.codemode` | `Repair`, `feedback`, `repair`, `stub`, `stubs` | |
 | `valgebra_planning.run` | `CanceledRunError`, `Outcome`, `Refusal`, `RefusedResultError`, `Run`, `ToolError`, `UnansweredError`, `arun`, `blame`, `run` | |
-| `valgebra_planning.policy` | `Monitor`, `Policy`, `Reach`, `Snapshot`, `Transition`, `listing`, `read_policy` | |
+| `valgebra_planning.policy` | `Lapse`, `Monitor`, `Policy`, `Reach`, `Snapshot`, `Span`, `Transition`, `listing`, `read_policy` | |
 | `valgebra_planning.flows` | `Flow`, `read_flow` | |
 | `valgebra_planning.mining` | `SlotKey`, `Types`, `infer_outputs`, `mine` | |
 | `valgebra_planning.library` | `BLOCK_TYPES`, `MEDIA_BLOCKS`, `Library`, `Problem`, `after_violation`, `asserts_format`, `error_texts`, `forwards_elicitation`, `non_text_blocks`, `preempts`, `read_library`, `reads_closed` | |
