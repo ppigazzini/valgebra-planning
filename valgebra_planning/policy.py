@@ -37,6 +37,10 @@ is confirmed before it is grasped" holds of each object, as Agent-C binds a file
 file opened before it (Kamath et al. 2025, §5.1). The monitor holds the instances at run time;
 the walk holds no value's identity, so it takes every transition of such a policy possibly at
 most, and proves none of its links.
+
+A state may lapse (`Lapse`): it is left for a named state once it was held its seconds, with no
+call. The monitor reads it by a clock at each event. The walk reads no time and takes no lapse, and
+a link that rests on one not coming due names the timing (`valgebra_planning.verify`).
 """
 
 from __future__ import annotations

@@ -487,6 +487,12 @@ ones.
   value's identity, takes every transition of such a policy possibly at most, and proves none of
   its links. A proxy reads no pending state: MCP 2026-07-28 has no session, and a proxy sees no
   end of a task.
+- **A proof reads no time.** A program is walked before it runs, so a policy's lapse is taken by no
+  walk and no search: a link that needs one not to come due is proven under the timing it names,
+  which a run and a proxy hold by their clocks, and a late call is refused there. A proxy's clock is
+  its process's, so one started again holds no state of the last; a lapse is read at each call, and
+  one that comes due while a call is under way withdraws nothing from it; and where a call that
+  overtakes another leaves open when a state was entered, every state it may leave held is held.
 - **A call is given no input, and a person's answer is forwarded only where a library says.** A
   server may answer a call by asking for input: an elicitation, a sampling, its roots, or an
   interaction it waits on, MCP 2026-07-28's `input_required`. The runner gives none, so the call
