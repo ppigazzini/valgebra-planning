@@ -18,7 +18,6 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from valgebra_planning._valgebra import finite
 from valgebra_planning.contracts import Contract, Slot, Task
 from valgebra_planning.critic import Critique, ProgramError, critique
 from valgebra_planning.program import alias, quoted, spelled
@@ -35,6 +34,8 @@ _HINTS = {
     "object": "dict[str, Any]",
     "null": "None",
 }
+#: A schema as a stub's docstring writes it.
+_written = json.JSONEncoder(sort_keys=True).encode
 #: What a stub's reader is told before the tools: the language the critic reads.
 PREAMBLE = '''"""Tools to write a program against.
 
@@ -72,7 +73,7 @@ def _hint(schema: object) -> str:
 def _literal(slot: Slot) -> str | None:
     """Return the `Literal` of the values an argument's schema lists, or None for no such list.
 
-    `finite` lists the JSON values a schema with `enum` or `const` admits, the rest of the
+    `Slot.listed` holds the JSON values a schema with `enum` or `const` admits, the rest of the
     schema applied (JSON Schema 2020-12 Validation, §6.1.2, §6.1.3), an integral number in both
     of its spellings. A `Literal` holds a `str`, an `int`, a `bool` or `None` (PEP 586), so the
     float spelling of a listed integer is left out and a list holding a float that is no integer
@@ -80,7 +81,7 @@ def _literal(slot: Slot) -> str | None:
     well. A list naming both booleans, or `null` alone, is the set a kind's hint names, `bool`
     or `None`, and is written so.
     """
-    listed = finite(slot.schema, slot.root)
+    listed = slot.listed()
     if not listed:
         return None
     kept: list[object] = []
@@ -111,11 +112,11 @@ def stub(contract: Contract) -> str:
     parameters = (["*", *arguments] if arguments else []) + ["**named: Any"] * bool(unspelled)
     inputs = contract.arguments[0].root if contract.arguments else {"type": "object"}
     returns = contract.result().schema if contract.results else None
-    doc = [f"Arguments, as JSON Schema: {json.dumps(inputs, sort_keys=True)}"]
+    doc = [f"Arguments, as JSON Schema: {_written(inputs)}"]
     doc.append(
         "Returns no value a program can read."
         if returns is None
-        else f"Returns, as JSON Schema: {json.dumps(returns, sort_keys=True)}"
+        else f"Returns, as JSON Schema: {_written(returns)}"
     )
     called = alias(contract.name)
     if called != contract.name:

@@ -6,6 +6,23 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `verify`, `critique`, `render` and `plan` cost less than in 0.0.7, and `read_program` and `stubs`
+  what they cost there, with 0.0.8's answers. By instructions under cachegrind, on CPython 3.15 and
+  over calls repeated on one library, `verify` of nine programs counts 0.16 to 0.69 of 0.0.7's,
+  where 0.0.8 counts 1.22 to 7.47, `critique` of three 0.31 to 0.83, `plan` of six tasks 0.18 to
+  0.87, `render` 0.82, `stubs` 0.97, `read_program` 1.01, and the notes `check` makes of two
+  libraries' contracts 0.35 and 1.13. A return is shown reached by one value found, built of its
+  result's fields' members and held in the belief, and by the whole belief where none is. What a
+  test leaves in a set and out of it, an inclusion of what it leaves out, and whether two sets share
+  a value are asked once, by the sets, and a planner's candidates refute a relation before valgebra
+  is asked one.
+
+- A first call costs more than one repeated. The first program verified on a contract costs 1.1 to
+  3.3 times 0.0.7's, where 0.0.8 cost 3.8 to 15.6, for the value drawn for each pattern its result
+  holds, and the first `stubs` 1.7 times, for the `Literal` of each listed argument.
+
 ## [0.0.8] - 2026-11-25
 
 A release of policies with time, of the verifier's reading of a program, and of the proxy. A
@@ -142,8 +159,10 @@ studies read every count 0.0.7 recorded, and a study of a humanoid robot's skill
   took 0.37. `critique` of the first takes 483 µs where it took 74, `render` of the second 9.7 µs
   where it took 6.9, `stubs` of the parcels library 117 µs where it took 56, and `plan` of the
   bookings' task 2.6 ms where it took 2.0. Each is the median of five `timeit` rounds, which a
-  second environment of 0.0.7 reads within 2% of the first. Which change costs each is not measured;
-  a profile of each would name it.
+  second environment of 0.0.7 reads within 2% of the first. Most of `verify`'s, and of `critique`'s,
+  is the question of which returns some execution reaches, most of `stubs`' the `Literal` of a
+  listed argument, most of `render`'s the names Python does not spell, and the largest part of
+  `plan`'s a retry read by the values it may repeat.
 
 - `policy.Snapshot` is a named tuple, holding when each state was entered beside the states it held
   as a tuple, and `Monitor.moved` takes `at`, the time a state it enters is entered.

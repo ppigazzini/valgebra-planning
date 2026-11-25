@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from valgebra_planning import meaning
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.library import Library, Problem, read_library
 from valgebra_planning.meaning import findings
@@ -38,6 +39,7 @@ def _found(listing: list[dict[str, Any]], *, assert_format: bool = False) -> set
     return {f"{f.where}: {f.finding}" for f in findings(Library(tools, (Problem(task),), {}))}
 
 
+EXAMPLES = Path(__file__).parent.parent / "examples"
 READ_ONLY = {"readOnlyHint": True}
 DETECT = _tool("detect", {"name": {"type": "string"}}, {"object_id": OBJECT_ID}, READ_ONLY)
 GRASP = _tool("grasp", {"object_id": OBJECT_ID}, {"grasp_id": GRASP_ID}, None)
@@ -304,3 +306,16 @@ def test_the_example_libraries_hold_no_lapse_that_ends_an_obligation() -> None:
     for name in ("parcels", "robot-skills"):
         library = read_library(Path(__file__).parent.parent / "examples" / name)
         assert not [f for f in findings(library) if "ends an obligation" in f.finding]
+
+
+def test_a_place_s_set_is_the_one_its_slot_compiled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A result's findings are alike whether a field's set is its slot's or compiled again."""
+    libraries = [read_library(EXAMPLES / name) for name in ("parcels", "bookings", "robot-skills")]
+    kept = [findings(library) for library in libraries]
+    compiled = meaning._Read.set_of
+
+    def again(self: meaning._Read, schema: object) -> object:
+        return compiled(meaning._Read(self.whole, {}), schema)
+
+    monkeypatch.setattr(meaning._Read, "set_of", again)
+    assert [findings(library) for library in libraries] == kept

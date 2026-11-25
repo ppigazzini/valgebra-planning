@@ -29,7 +29,8 @@ finding names is the author's to narrow or keep.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from valgebra_planning._valgebra import (
@@ -38,14 +39,12 @@ from valgebra_planning._valgebra import (
     Validator,
     closed,
     compile_schema,
-    finite,
     intersection,
     interval,
     json_key,
-    nothing,
     union,
 )
-from valgebra_planning.contracts import Contract, Slot
+from valgebra_planning.contracts import Contract, Slot, meet
 from valgebra_planning.library import Library
 from valgebra_planning.vacuity import Certainty, Finding
 
@@ -89,9 +88,10 @@ def _open_strings(contract: Contract) -> dict[tuple[str, ...], Certainty]:
     whole = next((slot for slot in contract.results if not slot.path), None)
     if whole is None:
         return {}
-    compiler = Compiler(whole.root, assert_format=whole.asserted)
+    compiled = {id(s.schema): s.values for s in contract.results if s.root is whole.root}
+    read = _Read(whole, compiled)
     found: dict[tuple[str, ...], Certainty] = {}
-    for path, values in _places(compiler, whole.root, whole.schema, frozenset()).items():
+    for path, values in _places(read, whole.schema, frozenset()).items():
         if (certainty := _certainty(_STRINGS.relation_to(values))) is not None:
             found[path] = certainty
     return found
@@ -100,28 +100,48 @@ def _open_strings(contract: Contract) -> dict[tuple[str, ...], Certainty]:
 _Places = dict[tuple[str, ...], Validator[Any]]
 
 
-def _places(compiler: Compiler, root: object, schema: object, followed: frozenset[str]) -> _Places:
+@dataclass(slots=True)
+class _Read:
+    """A result as its places are read, and the sets its slots compiled already.
+
+    ``compiled`` holds each slot's set by its subschema's identity, read against the same root.
+    """
+
+    whole: Slot
+    compiled: Mapping[int, Validator[Any]]
+    #: What compiles a place no slot compiled, made at the first.
+    compiler: Compiler | None = None
+
+    def set_of(self, schema: object) -> Validator[Any]:
+        """Return the set ``schema`` compiles to; raises `Unsupported` where it does not."""
+        known = self.compiled.get(id(schema)) if isinstance(schema, dict) else None
+        if known is not None:
+            return known
+        if self.compiler is None:
+            self.compiler = Compiler(self.whole.root, assert_format=self.whole.asserted)
+        return self.compiler.compile(schema)
+
+
+def _places(read: _Read, schema: object, followed: frozenset[str]) -> _Places:
     """Return the set of each place below ``schema`` a value may sit, by its path below it."""
     if not isinstance(schema, dict):
         return {}
     found: _Places = {}
-    _meet(found, _own(compiler, root, schema, followed))
+    _meet(found, _own(read, schema, followed))
     reference = schema.get("$ref")
     if isinstance(reference, str) and reference not in followed:
-        target = _pointed(root, reference)
+        target = _pointed(read.whole.root, reference)
         if target is not None:
-            _meet(found, _places(compiler, root, target, followed | {reference}))
+            _meet(found, _places(read, target, followed | {reference}))
     for branch in schema.get("allOf") or []:
-        _meet(found, _places(compiler, root, branch, followed))
+        _meet(found, _places(read, branch, followed))
     for key in ("anyOf", "oneOf"):
-        branches = [_places(compiler, root, b, followed) for b in schema.get(key) or []]
+        branches = [_places(read, b, followed) for b in schema.get(key) or []]
         _meet(found, _either(branches))
     return found
 
 
-def _own(
-    compiler: Compiler, root: object, schema: dict[str, Any], followed: frozenset[str]
-) -> _Places:
+def _own(read: _Read, schema: dict[str, Any], followed: frozenset[str]) -> _Places:
     """Return the places a schema's own keywords put a value, and the places below each."""
     subs: list[tuple[str, object]] = [
         *((name, sub) for name, sub in (schema.get("properties") or {}).items()),
@@ -134,10 +154,10 @@ def _own(
     places: list[_Places] = []
     for step, sub in subs:
         try:
-            here = compiler.compile(sub)
+            here = read.set_of(sub)
         except Unsupported:
             continue
-        below = _places(compiler, root, sub, followed)
+        below = _places(read, sub, followed)
         places.append({(step,): here} | {(step, *path): values for path, values in below.items()})
     # Two subschemas naming one place apart, as two patterns, are two keys' sets: either holds.
     return _either(places)
@@ -155,7 +175,7 @@ def _either(branches: list[_Places]) -> _Places:
     for places in branches:
         for path, values in places.items():
             joined.setdefault(path, []).append(values)
-    return {path: union(*sets) for path, sets in joined.items()}
+    return {path: sets[0] if len(sets) == 1 else union(*sets) for path, sets in joined.items()}
 
 
 def _pointed(root: object, reference: str) -> object:
@@ -206,17 +226,12 @@ def _untyped_consts(schema: object, path: str = "") -> Iterator[str]:
 
 def _gate(slot: Slot) -> bool:
     """Return whether ``slot`` takes one JSON value, or booleans alone."""
-    listed = finite(slot.schema, slot.root)
+    listed = slot.listed()
     if not listed:
         return False
     return len({json_key(value) for value in listed}) == 1 or all(
         isinstance(value, bool) for value in listed
     )
-
-
-def _meets(one: Validator[Any], other: Validator[Any]) -> str:
-    """Return valgebra's answer on whether two sets share no value."""
-    return intersection(one, other).relation_to(nothing)
 
 
 def _gate_only(
@@ -228,13 +243,13 @@ def _gate_only(
     met, undecided = [], False
     for result in contract.results:
         for other in goals:
-            answer = _meets(result.values, other)
+            answer = meet(result.values, other)
             if answer == "not_subset":
                 return None
             undecided |= answer == "undecided"
         for tool in tools.values():
             for argument in tool.arguments:
-                answer = _meets(result.values, argument.values)
+                answer = meet(result.values, argument.values)
                 undecided |= answer == "undecided"
                 if answer == "not_subset":
                     met.append(argument)
@@ -262,9 +277,9 @@ def _undeclared_only(
     except Unsupported:
         return
     for name, target in targets:
-        if _meets(contract.returns, target) != "not_subset":
+        if meet(contract.returns, target) != "not_subset":
             continue
-        certainty = _certainty(_meets(shut, target))
+        certainty = _certainty(meet(shut, target))
         if certainty is not None:
             yield name, certainty
 
