@@ -6,6 +6,19 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-11-25
+
+A release of one fix and of speed. A call's argument record holds each argument's whole set, the
+defect under Security: an argument under `oneOf`, `not` or `if` over objects, or requiring a key
+ending in `?`, was read in a set lacking values it may hold, so a program passing a tool a value
+outside its input schema, or breaking a policy that reads the argument, was proven, and the planner
+wrote such programs. `verify`, `critique` and `plan` cost less than in 0.0.7, which 0.0.8 made
+dearer, with 0.0.8's answers but for that record and a link on a field that a value found refutes
+with its witness. A page says how a call is counted, how to spend less and how the speed is made,
+and `tools/perf.py` counts one. It requires valgebra 0.0.35, valgebra-jsonschema 0.0.7 and mcp
+2.3.0, as 0.0.8 does, and the parcels, robot-skills, bench and faults studies read every count
+0.0.8 recorded.
+
 ### Security
 
 - A call's argument record holds each argument's whole set. The record was built with valgebra's
@@ -1166,7 +1179,8 @@ decides more of it; the user guide is published.
   on synthetic libraries of 8 to 256 tools the cut holds 5 predicates and 12 cells at every
   size.
 
-[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.8...HEAD
+[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.9...HEAD
+[0.0.9]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.5...v0.0.6
