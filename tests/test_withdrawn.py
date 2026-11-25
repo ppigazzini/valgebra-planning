@@ -23,6 +23,7 @@ from valgebra_planning.flows import check_flow, read_flow
 from valgebra_planning.library import read_library
 from valgebra_planning.meaning import findings
 from valgebra_planning.planner import plan
+from valgebra_planning.policy import read_policy
 from valgebra_planning.program import render
 from valgebra_planning.proxy import proxy
 from valgebra_planning.run import run
@@ -117,6 +118,36 @@ def test_the_planner_reads_a_listed_rule_after_a_call_that_may_have_acted() -> N
 
     assert planned(True).count("estimate_pose") == 2
     assert planned(["walk_to"]).count("estimate_pose") == 1
+
+
+def test_the_planner_reads_again_after_a_call_the_list_names() -> None:
+    """A distance read before the walk a policy asks for is read again before the grasp."""
+    hands = {name: LIBRARY.tools[name] for name in ("estimate_pose", "grasp", "walk_to")}
+    pick = read_task("pick", {"o": {"type": "string"}}, LIBRARY.problem("pick").task.goal_schema)
+    walked = read_policy(
+        {
+            "name": "walked to first",
+            "initial": "away",
+            "bad": ["violated"],
+            "transitions": [
+                {"from": "away", "tool": "walk_to", "to": "there"},
+                {"from": "away", "tool": "grasp", "to": "violated"},
+            ],
+        }
+    )
+
+    def planned(fresh: object) -> list[str]:
+        rules = [_rule(fresh)]
+        found = plan(hands, pick, depth=5, policies=[walked], flows=rules)
+        assert found.program is not None
+        checked = verify(found.program, hands, pick, policies=[walked], flows=rules)
+        assert [link for link in checked.links if link.verdict != "proven"] == []
+        return [
+            line.split(" = ")[1].split("(")[0] for line in render(found.program).split("\n")[:-1]
+        ]
+
+    assert planned(["walk_to"]) == ["walk_to", "estimate_pose", "grasp"]
+    assert planned(["grasp"]) == ["estimate_pose", "walk_to", "grasp"]
 
 
 def _replayed(fresh: object, between: str | None = None) -> Any:

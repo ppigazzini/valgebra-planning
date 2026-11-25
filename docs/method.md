@@ -119,7 +119,8 @@ the second holds the complement of a predicate a cell lies outside by a relation
 of arrays of records need, and the first holds only the predicates it was cut by, which keeps a
 cell of many overlapping ranges within what valgebra decides. Schemas valgebra compiles to one validator, a
 description or a default apart, are one predicate, since equal validators denote one set.
-Relations between two predicates, each asked once, settle most cuts. The concrete values are the edges of common bounds, every listed value, draws
+Relations between two predicates settle most cuts, each read once: a candidate value refutes
+one, and valgebra is asked where none does. The concrete values are the edges of common bounds, every listed value, draws
 from each schema and objects merged from those draws, since an open record meets another where a
 value carries both their keys. The predicates are cut in the order of their names: which meets
 valgebra leaves undecided depends on the order the cut splits by and draws in, so a fixed order

@@ -10,7 +10,7 @@ import pytest
 from valgebra_planning import planner
 from valgebra_planning._valgebra import Sampler
 from valgebra_planning.cells import abstract
-from valgebra_planning.contracts import Contract, read_contract, read_task
+from valgebra_planning.contracts import Contract, meet, read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.flows import read_flow
 from valgebra_planning.library import read_library
@@ -599,6 +599,27 @@ def test_a_constant_on_an_optional_argument_is_written_and_held() -> None:
         assert [link.verdict for link in links if link.claim == claim] == [verdict]
 
 
+def test_a_constant_the_task_fixes_fills_no_other_argument() -> None:
+    """The task fixed the value of one argument, so no other call is handed it as a value held."""
+    noted = {"type": "string", "pattern": "^note_"}
+    note = {
+        "name": "note",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"action": ACTIONS},
+            "required": ["action"],
+        },
+        "outputSchema": {"type": "object", "properties": {"id": noted}, "required": ["id"]},
+    }
+    tools = {**_enumerated(), "note": read_contract(note)}
+    held = {"hand": SIDES}
+    assert plan(tools, read_task("note", held, noted, constants=INTENT)).program is None
+    told = read_task("note", {**held, "action": ACTIONS}, noted, constants=INTENT)
+    found = plan(tools, told).program
+    assert found is not None
+    assert render(found) == "c1 = note(action=action)\nreturn c1.id"
+
+
 def test_a_constant_at_a_sink_an_only_flow_holds_is_refused() -> None:
     told = read_flow(
         {
@@ -1095,3 +1116,13 @@ def test_the_reason_names_what_keeps_the_goal_out() -> None:
         "; no tool's result guarantees a value for confirm.action, of tools only a policy "
         "names, whose results lead to no goal"
     )
+
+
+def test_a_library_planned_over_again_asks_no_pair_of_sets_again() -> None:
+    """Whether two sets may share a value is asked once, and each task over them reads it."""
+    contracts = {str(spec["name"]): read_contract(spec) for spec in [FIND, *SETTLE]}
+    first = plan(contracts, TASK)
+    assert first.program is not None
+    asked = meet.cache_info().misses
+    assert plan(contracts, TASK).program == first.program
+    assert meet.cache_info().misses == asked

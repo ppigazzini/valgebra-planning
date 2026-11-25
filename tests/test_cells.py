@@ -1,13 +1,25 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+import random
+from typing import Any, cast
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from valgebra_planning import cells
 from valgebra_planning._valgebra import compile_schema
-from valgebra_planning.cells import EDGES, KINDS, Abstraction, Predicate, abstract, gather
+from valgebra_planning.cells import (
+    EDGES,
+    KINDS,
+    Abstraction,
+    Predicate,
+    _pool,
+    _Relations,
+    abstract,
+    gather,
+)
 
 SCHEMAS: dict[str, object] = {
     "order_id": {"type": "string", "pattern": "^ord_[0-9]+$"},
@@ -127,3 +139,75 @@ def test_one_schema_named_twice_is_one_predicate() -> None:
     )
     assert len(merged) == 1
     assert merged[0].names == ("find.order_id", "refund.order_id")
+
+
+def test_a_relation_read_off_the_candidates_is_the_one_valgebra_answers() -> None:
+    """A candidate refutes, and valgebra proves: the two readings of a pair are one."""
+    predicates = _predicates()
+    read = _Relations(predicates, _pool(predicates, random.Random(0)))
+    asked = _Relations(predicates, [])
+    pairs = [(i, j) for i in range(len(predicates)) for j in range(len(predicates))]
+    for i, j in pairs:
+        assert read.is_below(i, j) == asked.is_below(i, j)
+        assert read.are_apart(i, j) == asked.are_apart(i, j)
+    apart = len(predicates) * (len(predicates) + 1) // 2
+    assert read.asked == asked.asked == len(pairs) + apart
+    assert any(asked.below.values())
+    assert any(asked.apart.values())
+
+
+def test_a_candidate_in_both_of_two_sets_asks_valgebra_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def refused(*_: object) -> None:
+        raise AssertionError
+
+    monkeypatch.setattr(cells, "apart", refused)
+    predicates = gather(
+        (name, compile_schema(SCHEMAS[name]), SCHEMAS[name], SCHEMAS[name])
+        for name in ("status", "shipped")
+    )
+    read = _Relations(predicates, ["open", "shipped", 1])
+    assert not read.are_apart(0, 1)
+    assert not read.is_below(0, 1)
+    assert read.is_below(1, 0)
+    with pytest.raises(AssertionError):
+        _Relations(predicates, ["open", 1]).are_apart(0, 1)
+
+
+def test_a_candidate_in_one_set_alone_asks_valgebra_nothing() -> None:
+    """A candidate refutes an inclusion, and one that tells nothing leaves it to valgebra."""
+
+    class Listed:
+        def __init__(self, *held: str) -> None:
+            self.held = held
+
+        def is_valid(self, value: object) -> bool:
+            return value in self.held
+
+        def relation_to(self, _: object) -> str:
+            return "subset"
+
+    sets = [Predicate((name,), cast("Any", Listed(*name)), {}, {}) for name in ("ab", "b")]
+    read = _Relations(sets, ["a", "b", "c"])
+    assert not read.is_below(0, 1)
+    assert read.is_below(1, 0)
+    assert _Relations(sets, ["b", "c"]).is_below(0, 1)
+
+
+def test_a_name_two_predicates_bear_stands_for_the_first() -> None:
+    both = [
+        Predicate(("a", "b"), compile_schema(SCHEMAS["status"]), {}, {}),
+        Predicate(("b", "c"), compile_schema(SCHEMAS["total"]), {}, {}),
+    ]
+    named = Abstraction(tuple(both), ())
+    assert [named.index(name) for name in ("a", "b", "c")] == [0, 0, 1]
+    with pytest.raises(KeyError):
+        named.index("d")
+
+
+def test_a_cell_s_witness_is_the_first_candidate_in_it() -> None:
+    pool = _pool(_predicates(), random.Random(0))
+    for cell in ABSTRACTION.cells:
+        inside = [v for v in pool if cell.values.is_valid(v)]
+        assert cell.witness == tuple(inside[:1])

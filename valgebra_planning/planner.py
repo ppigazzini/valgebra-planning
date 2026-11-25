@@ -28,7 +28,7 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import partial
-from typing import Any
+from typing import Any, NamedTuple
 
 from valgebra_planning._valgebra import (
     ANNOTATIONS,
@@ -36,7 +36,6 @@ from valgebra_planning._valgebra import (
     anything,
     complement,
     intersection,
-    nothing,
     union,
 )
 from valgebra_planning.cells import Abstraction, Predicate, abstract, gather
@@ -45,6 +44,7 @@ from valgebra_planning.contracts import (
     Postcondition,
     Slot,
     Task,
+    apart,
     field_slot,
     fixes,
     listed,
@@ -192,8 +192,7 @@ class Plan:
     timing: tuple[str, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
-class _State:
+class _State(NamedTuple):
     refs: tuple[tuple[Ref, frozenset[int]], ...]
     made: frozenset[tuple[str, tuple[tuple[str, Ref], ...]]]
     fresh: int
@@ -219,18 +218,22 @@ class _State:
     read: frozenset[str] = frozenset()
 
     def cells(self, ref: Ref) -> frozenset[int]:
+        for held, cells in self.refs:
+            if held is ref:
+                return cells
         return dict(self.refs)[ref]
 
     def origin(self, ref: Ref) -> str:
         return dict(self.origins).get(ref.variable, ref.variable)
 
-    def but(self, **changes: Any) -> _State:
-        return replace(self, **changes)
-
     def narrowed(self, ref: Ref, cells: frozenset[int]) -> _State:
-        refs = tuple((r, cells if r == ref else held) for r, held in self.refs)
+        # The reference narrowed is the state's own wherever the search reads it off the state.
+        own = any(r is ref for r, _ in self.refs)
+        refs = tuple(
+            (r, cells if (r is ref if own else r == ref) else held) for r, held in self.refs
+        )
         read = self.read | ({ref.variable} & self.reading)
-        return self.but(refs=refs, tested=self.tested | {self.origin(ref)}, read=read)
+        return self._replace(refs=refs, tested=self.tested | {self.origin(ref)}, read=read)
 
     def signature(self) -> object:
         old = frozenset(cells for ref, cells in self.refs if ref.variable in self.stale)
@@ -238,8 +241,9 @@ class _State:
             frozenset(cells for ref, cells in self.refs if ref.variable in names)
             for _, names in self.withdrawn
         )
-        held = frozenset(cells for _, cells in self.refs)
-        fed = frozenset(cells for ref, cells in self.refs if self.fed(ref.variable))
+        held = fed = frozenset(cells for _, cells in self.refs)
+        if self.reading:
+            fed = frozenset(cells for ref, cells in self.refs if self.fed(ref.variable))
         return held, self.policed, self.tested, old, listed, self.read, fed
 
     def fed(self, variable: str) -> bool:
@@ -296,6 +300,12 @@ class _Search:
     postconditions: tuple[Postcondition, ...] = ()
     #: The goal's set, which a member a result field lists is read against (`observed`).
     goal_values: Validator[Any] = anything
+    #: The cells each argument takes, and the references each tool's result is read by with
+    #: theirs, by the tool: read off the abstraction once a search.
+    takes: dict[tuple[str, str], frozenset[int]] = field(default_factory=dict)
+    gives: dict[str, tuple[tuple[tuple[str, ...], frozenset[int]], ...]] = field(
+        default_factory=dict
+    )
 
     def bound(self, state: _State, ref: Ref) -> Validator[Any]:
         """Return the values a binding passes: a constant's own, or its reference's cells'."""
@@ -305,6 +315,23 @@ class _Search:
 
     def cells_of(self, name: str) -> frozenset[int]:
         return self.abstraction.cells_of(self.abstraction.index(name))
+
+    def taken(self, contract: Contract, slot: Slot) -> frozenset[int]:
+        """Return the cells an argument of a tool takes."""
+        key = (contract.name, slot.path[0])
+        if key not in self.takes:
+            self.takes[key] = self.cells_of(_argument_name(slot))
+        return self.takes[key]
+
+    def given(self, contract: Contract) -> tuple[tuple[tuple[str, ...], frozenset[int]], ...]:
+        """Return the path of each field of a tool's result a search reads, with its cells."""
+        if contract.name not in self.gives:
+            self.gives[contract.name] = tuple(
+                (slot.path, self.cells_of(_result_name(slot)))
+                for slot in contract.results
+                if self.holds(_result_name(slot))
+            )
+        return self.gives[contract.name]
 
     def holds(self, name: str) -> bool:
         """Return whether a named set is one the cells were cut by."""
@@ -397,7 +424,7 @@ class _Search:
         # An argument the task fixes is written whether the tool requires it or not: left out,
         # the tool reads its own default, which no task fixed.
         unread = state.reading - state.read
-        reading = self.reading(state, contract, unread)
+        reading = self.reading(state, contract, unread) if unread else frozenset()
         required = [
             slot
             for slot in contract.arguments
@@ -405,6 +432,7 @@ class _Search:
             or (contract.name, slot.path[0]) in self.fixed
             or slot.path[0] in reading
         ]
+        held = self.held(state)
         full: dict[str, list[Ref]] = {}
         partial: dict[str, list[Ref]] = {}
         for slot in required:
@@ -413,15 +441,9 @@ class _Search:
                 # The task fixes this argument: its constant fills it, and nothing else does.
                 full[slot.path[0]], partial[slot.path[0]] = [constant], []
                 continue
-            arg = self.cells_of(_argument_name(slot))
+            arg = self.taken(contract, slot)
             fresh = (contract.name, slot.path[0]) in self.fresh
-            refs = [
-                (r, c)
-                for r, c in state.refs
-                if r not in self.literals
-                and self.agree(state, r, slot)
-                and not (fresh and r.variable in state.stale)
-            ]
+            refs = self.filling(state, slot, held, fresh=fresh)
             full[slot.path[0]] = [r for r, c in refs if c and c <= arg]
             partial[slot.path[0]] = [r for r, c in refs if c & arg and not c <= arg]
         if any(not full[name] and not partial[name] for name in full):
@@ -438,6 +460,29 @@ class _Search:
                 if block is not None:
                     return block
         return None
+
+    def filling(
+        self,
+        state: _State,
+        slot: Slot,
+        held: Sequence[tuple[Ref, frozenset[int]]],
+        *,
+        fresh: bool,
+    ) -> Sequence[tuple[Ref, frozenset[int]]]:
+        """Return the values of ``held`` the mined types, and a fresh argument, let fill one."""
+        if not fresh and self.types is None:
+            return held
+        return [
+            (ref, cells)
+            for ref, cells in held
+            if self.agree(state, ref, slot) and not (fresh and ref.variable in state.stale)
+        ]
+
+    def held(self, state: _State) -> Sequence[tuple[Ref, frozenset[int]]]:
+        """Return each value the program holds, the constants the task fixes left out."""
+        if not self.literals:
+            return state.refs
+        return [(ref, cells) for ref, cells in state.refs if ref not in self.literals]
 
     def reading(self, state: _State, contract: Contract, unread: frozenset[str]) -> set[str]:
         """Return the optional arguments a call writes an input the task requires into.
@@ -486,11 +531,11 @@ class _Search:
             # starts from either set of policy states.
             either = tuple(a | b for a, b in zip(state.policed, policed, strict=True))
             result = f"c{state.fresh}"
-            failing = state.but(policed=either)
+            failing = state._replace(policed=either)
             call = self.failure(failing, contract, bindings, result, depth, weak=weak)
             if call is None:
                 continue
-            stepped = state.but(policed=policed)
+            stepped = state._replace(policed=policed)
             after = self.after(stepped, contract, bindings, result)
             # A weak search tests the result into the goal first: searching on past the call
             # reaches the same test deeper, after calls no path needs.
@@ -552,7 +597,7 @@ class _Search:
                 ):
                     sides.append(None)
                 else:
-                    sides.append(after.narrowed(ref, narrowed).but(policed=policed))
+                    sides.append(after.narrowed(ref, narrowed)._replace(policed=policed))
             inside, outside = sides
             then = None if inside is None else self.solve(inside, depth - 2, weak=weak)
             if then is None:
@@ -657,13 +702,13 @@ class _Search:
         if "readOnlyHint" not in contract.hints:
             # As after a call that returned (`_Search.after`): a read made before it reads
             # something new when made again.
-            stale |= {ref.variable for ref, _ in state.refs if ref not in self.literals}
+            stale |= {ref.variable for ref, _ in self.held(state)}
             made = frozenset(
                 (tool, given)
                 for tool, given in made
                 if "readOnlyHint" not in self.contracts[tool].hints
             )
-        return state.but(
+        return state._replace(
             made=made,
             failed=(*state.failed, (contract.name, record)),
             stale=stale,
@@ -677,8 +722,10 @@ class _Search:
 
         A call the rule names makes every variable held before it stale for that rule.
         """
+        if not any(flow.withdrawn_by for flow in self.flows):
+            return ()
         held = dict(state.withdrawn)
-        names = frozenset(ref.variable for ref, _ in state.refs if ref not in self.literals)
+        names = frozenset(ref.variable for ref, _ in self.held(state))
         return tuple(
             (
                 flow.name,
@@ -697,6 +744,8 @@ class _Search:
         It may unless, at some argument both take, the cells the two values lie in are
         disjoint: the cells partition the JSON values, so no value lies in both.
         """
+        if not state.failed:
+            return False
         given = dict(bindings)
         return any(
             tool == contract.name
@@ -751,13 +800,13 @@ class _Search:
             if policed is None:
                 continue
             read = f"c{state.fresh}"
-            seen = self.after(state.but(policed=policed), reader, reading, read)
+            seen = self.after(state._replace(policed=policed), reader, reading, read)
             name = _result_name(field_slot(reader.result(), key))
             then = None
             if self.holds(name):
                 # The key test makes the field it opens a value the program holds.
                 opened = (Ref(read, (key,)), self.cells_of(name))
-                then = self.solve(seen.but(refs=(*seen.refs, opened)), depth - 2, weak=True)
+                then = self.solve(seen._replace(refs=(*seen.refs, opened)), depth - 2, weak=True)
             if then is None and self.settled(seen) and bindings:
                 then = self.stopping(seen, bindings[0][1], depth - 2)
             again = self.again(seen, contract, bindings, depth - 2)
@@ -780,10 +829,10 @@ class _Search:
             return None
         result = f"c{state.fresh}"
         either = tuple(a | b for a, b in zip(state.policed, policed, strict=True))
-        stop = self.stopped(state.but(policed=either), bindings, depth - 1)
+        stop = self.stopped(state._replace(policed=either), bindings, depth - 1)
         if stop is None:
             return None
-        after = self.after(state.but(policed=policed), contract, bindings, result)
+        after = self.after(state._replace(policed=policed), contract, bindings, result)
         rest = self.solve(after, depth - 1, weak=True)
         if rest is None:
             return None
@@ -868,23 +917,19 @@ class _Search:
         bindings: tuple[tuple[str, Ref], ...],
         result: str,
     ) -> _State:
-        results = tuple(
-            (Ref(result, slot.path), self.cells_of(_result_name(slot)))
-            for slot in contract.results
-            if self.holds(_result_name(slot))
-        )
+        results = tuple((Ref(result, path), cells) for path, cells in self.given(contract))
         made = state.made | {(contract.name, bindings)}
         stale = state.stale
         if "readOnlyHint" not in contract.hints:
             # A call that may act may change what every value held so far read, so a read-only
             # call made before it reads something new when made again (Mansoor et al. 2026, §4.1).
-            stale |= {ref.variable for ref, _ in state.refs if ref not in self.literals}
+            stale |= {ref.variable for ref, _ in self.held(state)}
             made = frozenset(
                 (tool, given)
                 for tool, given in made
                 if "readOnlyHint" not in self.contracts[tool].hints
             )
-        return state.but(
+        return state._replace(
             refs=state.refs + results,
             made=made,
             fresh=state.fresh + 1,
@@ -952,7 +997,7 @@ class _Search:
 
 def _meets(one: Validator[Any], other: Validator[Any]) -> bool:
     """Return whether two sets may share a value: not proven disjoint."""
-    return intersection(one, other).relation_to(nothing) != "subset"
+    return not apart(one, other)
 
 
 def _reason(
@@ -1223,9 +1268,7 @@ def _resting(
 
 def _readable(values: Validator[Any], consumers: Sequence[Validator[Any]]) -> bool:
     """Return whether some argument or the goal may hold a value of ``values``."""
-    return any(
-        intersection(values, consumer).relation_to(nothing) != "subset" for consumer in consumers
-    )
+    return any(_meets(values, consumer) for consumer in consumers)
 
 
 def predicates(

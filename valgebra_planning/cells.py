@@ -11,9 +11,11 @@ cells of the kinds it meets.
 A part of a cell is dropped only where valgebra proves it empty. It is inhabited where a
 concrete value lies in it, or where valgebra refutes its emptiness. Every other part is
 kept as undecided, so it can cost a plan, never admit a wrong one. Most cuts are settled by
-relations between two predicates, each asked of valgebra once: a cell inside a predicate
-disjoint from the new one lies outside it, a cell inside a predicate below the new one lies
-inside it, and a cell outside a predicate above it lies outside it.
+relations between two predicates, each read once: a cell inside a predicate disjoint from the
+new one lies outside it, a cell inside a predicate below the new one lies inside it, and a cell
+outside a predicate above it lies outside it. A candidate member in both refutes that two are
+disjoint, and one in the first alone that it lies below the second, so valgebra is asked only
+where no candidate tells.
 """
 
 from __future__ import annotations
@@ -40,6 +42,7 @@ from valgebra_planning._valgebra import (
     intersection,
     nothing,
 )
+from valgebra_planning.contracts import EDGES, apart
 
 __all__ = ["Abstraction", "Cell", "Predicate", "Status", "abstract", "gather"]
 
@@ -54,29 +57,6 @@ KINDS: dict[str, Validator[Any]] = {
     "array": ARRAY,
     "object": OBJECT,
 }
-
-#: Values at the edges of common bounds, tried in every cell before any draw.
-EDGES: tuple[Any, ...] = (
-    None,
-    True,
-    False,
-    0,
-    1,
-    -1,
-    2,
-    100,
-    1000,
-    0.5,
-    -0.5,
-    1.5,
-    float("inf"),
-    "",
-    "a",
-    "0",
-    [],
-    [None],
-    {},
-)
 
 #: How many values are drawn from each predicate's schema.
 DRAWS = 24
@@ -121,7 +101,8 @@ class _Split:
     inside: set[int]
     outside: set[int]
     values: Validator[Any]
-    witnesses: list[Any]
+    #: The candidates lying in the cell, a bit each by its place in the pool.
+    witnesses: int
     proven: bool = False
 
 
@@ -133,13 +114,15 @@ class Abstraction:
     cells: tuple[Cell, ...]
     asked: int = 0
     _members: dict[int, frozenset[int]] = field(default_factory=dict)
+    _index: dict[str, int] = field(default_factory=dict, repr=False, compare=False)
 
     def index(self, name: str) -> int:
         """Return the predicate a name stands for, or raise `KeyError`."""
-        for i, predicate in enumerate(self.predicates):
-            if name in predicate.names:
-                return i
-        raise KeyError(name)
+        if not self._index:
+            # A name two predicates bear stands for the first.
+            for i, predicate in reversed(list(enumerate(self.predicates))):
+                self._index |= dict.fromkeys(predicate.names, i)
+        return self._index[name]
 
     def cells_of(self, predicate: int) -> frozenset[int]:
         """Return the cells lying inside a predicate."""
@@ -185,20 +168,32 @@ def gather(entries: Iterable[tuple[str, Validator[Any], object, object]]) -> lis
 
 
 class _Relations:
-    """Relations between two predicates, each asked of valgebra at most once."""
+    """Relations between two predicates, each read at most once: ``asked`` counts them.
 
-    def __init__(self, predicates: Sequence[Predicate]) -> None:
+    A candidate member of the pool refutes one, and valgebra is asked where none does.
+    """
+
+    def __init__(self, predicates: Sequence[Predicate], pool: Sequence[Any]) -> None:
         self.predicates = predicates
+        self.pool = pool
         self.below: dict[tuple[int, int], bool] = {}
         self.apart: dict[tuple[int, int], bool] = {}
+        self.held: dict[int, int] = {}
         self.asked = 0
+
+    def members(self, i: int) -> int:
+        """Return the candidates predicate ``i`` holds, a bit each by its place in the pool."""
+        if i not in self.held:
+            self.held[i] = _bits(self.predicates[i].values, self.pool)
+        return self.held[i]
 
     def is_below(self, i: int, j: int) -> bool:
         """Return whether predicate ``i`` is proven inside ``j``."""
         if (i, j) not in self.below:
             self.asked += 1
-            answer = self.predicates[i].values.relation_to(self.predicates[j].values)
-            self.below[i, j] = answer == "subset"
+            self.below[i, j] = not self.members(i) & ~self.members(j) and (
+                self.predicates[i].values.relation_to(self.predicates[j].values) == "subset"
+            )
         return self.below[i, j]
 
     def are_apart(self, i: int, j: int) -> bool:
@@ -206,9 +201,15 @@ class _Relations:
         key = (min(i, j), max(i, j))
         if key not in self.apart:
             self.asked += 1
-            meet = intersection(self.predicates[i].values, self.predicates[j].values)
-            self.apart[key] = meet.relation_to(nothing) == "subset"
+            self.apart[key] = not self.members(i) & self.members(j) and apart(
+                self.predicates[i].values, self.predicates[j].values
+            )
         return self.apart[key]
+
+
+def _bits(values: Validator[Any], pool: Sequence[Any]) -> int:
+    """Return which of ``pool`` lie in ``values``, a bit each by its place."""
+    return sum(1 << place for place, value in enumerate(pool) if values.is_valid(value))
 
 
 def _pool(predicates: Sequence[Predicate], rng: random.Random) -> list[Any]:
@@ -244,6 +245,11 @@ def _pool(predicates: Sequence[Predicate], rng: random.Random) -> list[Any]:
     return pool
 
 
+def _first(witnesses: int, pool: Sequence[Any]) -> tuple[Any, ...]:
+    """Return the first candidate of ``pool`` whose bit is set, if any."""
+    return (pool[(witnesses & -witnesses).bit_length() - 1],) if witnesses else ()
+
+
 def _emptiness(values: Validator[Any]) -> Literal["empty", "inhabited", "undecided"]:
     answer = values.relation_to(nothing)
     if answer == "subset":
@@ -268,7 +274,8 @@ def _cut(split: _Split, i: int, predicate: Predicate, relations: _Relations) -> 
         values = intersection(
             split.values, predicate.values if inside else complement(predicate.values)
         )
-        witnesses = [v for v in split.witnesses if predicate.values.is_valid(v) == inside]
+        members = relations.members(i)
+        witnesses = split.witnesses & (members if inside else ~members)
         proven = bool(witnesses)
         if not witnesses:
             emptiness = _emptiness(values)
@@ -310,16 +317,16 @@ def _meet(kind: str, inside: set[int], outside: set[int], relations: _Relations)
 def abstract(predicates: Sequence[Predicate], *, seed: int = 0) -> Abstraction:
     """Cut the JSON values into the cells of ``predicates``."""
     rng = random.Random(seed)
-    relations = _Relations(predicates)
     pool = _pool(predicates, rng)
+    relations = _Relations(predicates, pool)
     cells: list[Cell] = []
     for kind, kind_values in KINDS.items():
+        members = _bits(kind_values, pool)
         meets = [
             i
             for i, predicate in enumerate(predicates)
-            if _emptiness(intersection(kind_values, predicate.values)) != "empty"
+            if members & relations.members(i) or not apart(kind_values, predicate.values)
         ]
-        members = [v for v in pool if kind_values.is_valid(v)]
         splits = [_Split(kind, set(), set(), kind_values, members, proven=bool(members))]
         for i in meets:
             splits = [part for split in splits for part in _cut(split, i, predicates[i], relations)]
@@ -329,7 +336,7 @@ def abstract(predicates: Sequence[Predicate], *, seed: int = 0) -> Abstraction:
                 inside=frozenset(split.inside),
                 values=split.values,
                 status="inhabited" if split.proven else "undecided",
-                witness=tuple(split.witnesses[:1]),
+                witness=_first(split.witnesses, pool),
             )
             for split in splits
         )
