@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from valgebra_planning import critic
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import MAX_PATHS, ProgramError, critique, read_program
 from valgebra_planning.flows import read_flow
@@ -386,3 +387,37 @@ def test_a_fresh_or_key_refutation_names_the_reading_to_make(source: str, remedy
     notes = critique(source, robot.tools, problem.task, flows=problem.flows).notes
     note = next(note for note in notes if note.startswith("refuted: flow"))
     assert note.endswith(f"; {remedy}")
+
+
+def test_a_reading_leaves_nothing_shared_to_the_next() -> None:
+    """The blocks a reading shares are its own, after one that ends in an error too."""
+    running = 'if x in ("a",):\n    c1 = look(x=x)\nreturn x\n'
+    read_program(running)
+    assert critic._READ.get() is None
+    with pytest.raises(ProgramError):
+        read_program(running + "return (\n")
+    with pytest.raises(ProgramError):
+        read_program('if x in ("a",):\n    c1 = look(x=x)\nimport os\nreturn x\n')
+    assert critic._READ.get() is None
+
+
+@pytest.mark.parametrize(
+    "step",
+    [
+        'if x.a{i} in ("p",):\n    c{i} = look(x=x)\n',
+        "try:\n    c{i} = look(x=x)\nexcept ToolError:\n    d{i} = look(x=x)\n",
+    ],
+    ids=["if", "try"],
+)
+def test_what_follows_each_side_that_runs_on_is_read_once(
+    step: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The paths double with each step, and the runs of statements read do not."""
+    read = []
+    statements = critic._statements
+    monkeypatch.setattr(
+        critic, "_statements", lambda *a, **k: read.append(a[0]) or statements(*a, **k)
+    )
+    steps = 11
+    read_program("".join(step.format(i=i) for i in range(steps)) + "return x\n")
+    assert len(read) <= 2 * steps + 1

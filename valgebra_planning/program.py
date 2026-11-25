@@ -18,7 +18,7 @@ import re
 import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
-from itertools import groupby
+from functools import lru_cache
 from typing import Any
 
 __all__ = [
@@ -37,16 +37,21 @@ __all__ = [
 ]
 
 
+#: How many names keep how a program writes them: a program writes a few names many times.
+_NAMES = 1024
+
+
+@lru_cache(maxsize=_NAMES)
 def spelled(name: str) -> bool:
     """Return whether Python spells ``name``: an identifier, no keyword, that it reads unchanged.
 
     Python reads an identifier in its NFKC form, so a name in another form, as one holding the
-    ligature U+FB01, would be read as another name.
+    ligature U+FB01, would be read as another name. An ASCII name is in that form.
     """
     return (
         name.isidentifier()
         and not keyword.iskeyword(name)
-        and unicodedata.normalize("NFKC", name) == name
+        and (name.isascii() or unicodedata.normalize("NFKC", name) == name)
     )
 
 
@@ -63,6 +68,7 @@ def quoted(name: str) -> str:
     return json.dumps(name) if all(ord(char) < _ASTRAL for char in name) else repr(name)
 
 
+@lru_cache(maxsize=_NAMES)
 def _member(name: str) -> str:
     """Return how a program writes the field or the argument ``name`` after what holds it."""
     return f".{name}" if spelled(name) else f"[{quoted(name)}]"
@@ -81,7 +87,7 @@ class Ref:
         A key that is no Python identifier, or is a keyword, as `a-b` or `class`, reads back only
         as a subscript, `x["a-b"]`, the form the critic reads it in.
         """
-        return self.variable + "".join(map(_member, self.path))
+        return "".join((self.variable, *map(_member, self.path))) if self.path else self.variable
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +202,7 @@ def slot(tool: str, argument: str) -> str:
     return alias(tool) + _member(argument)
 
 
+@lru_cache(maxsize=_NAMES)
 def alias(name: str) -> str:
     """Return the identifier a program calls a tool by: its name, where Python spells one.
 
@@ -233,11 +240,16 @@ def aliases(names: Iterable[str]) -> dict[str, str]:
 
 def named(block: Block, names: Mapping[str, str]) -> Block:
     """Return ``block`` with each tool an alias calls written by its name (`aliases`)."""
+    moved = {written: name for written, name in names.items() if written != name}
+    return _named(block, moved) if moved else block
+
+
+def _named(block: Block, names: Mapping[str, str]) -> Block:
     calls = tuple(
         replace(
             call,
             tool=names.get(call.tool, call.tool),
-            on_error=None if call.on_error is None else named(call.on_error, names),
+            on_error=None if call.on_error is None else _named(call.on_error, names),
         )
         for call in block.calls
     )
@@ -246,11 +258,11 @@ def named(block: Block, names: Mapping[str, str]) -> Block:
         end = replace(
             end,
             tool=names.get(end.tool, end.tool),
-            then=named(end.then, names),
-            otherwise=named(end.otherwise, names),
+            then=_named(end.then, names),
+            otherwise=_named(end.otherwise, names),
         )
     elif isinstance(end, For):
-        end = replace(end, body=named(end.body, names), after=named(end.after, names))
+        end = replace(end, body=_named(end.body, names), after=_named(end.after, names))
     return Block(calls, end)
 
 
@@ -261,11 +273,17 @@ def _passed(bindings: Iterable[tuple[str, Ref | Const]]) -> str:
     is passed by its name in a dictionary unpacked into it: ``send(to=to, **{"from": sender})``.
     """
     passed: list[str] = []
-    for keyworded, run in groupby(bindings, key=lambda binding: spelled(binding[0])):
-        if keyworded:
-            passed += [f"{name}={ref}" for name, ref in run]
-        else:
-            passed.append("**{" + ", ".join(f"{quoted(name)}: {ref}" for name, ref in run) + "}")
+    run: list[str] = []
+    for name, ref in bindings:
+        if not spelled(name):
+            run.append(f"{quoted(name)}: {ref}")
+            continue
+        if run:
+            passed.append("**{" + ", ".join(run) + "}")
+            run = []
+        passed.append(f"{name}={ref}")
+    if run:
+        passed.append("**{" + ", ".join(run) + "}")
     return ", ".join(passed)
 
 

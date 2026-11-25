@@ -24,7 +24,7 @@ import ast
 import json
 import math
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
@@ -46,6 +46,7 @@ from valgebra_planning.program import (
     aliases,
     named,
     slot,
+    spelled,
 )
 from valgebra_planning.verify import Link, Verification, verify
 
@@ -61,11 +62,15 @@ def _fail(node: ast.AST, what: str) -> ProgramError:
 
 
 def _ref(node: ast.expr) -> Ref:
+    if isinstance(node, ast.Name):
+        return Ref(node.id)
     path: list[str] = []
     while True:
         if isinstance(node, ast.Attribute):
             path.append(node.attr)
             node = node.value
+            if isinstance(node, ast.Name):
+                return Ref(node.id, tuple(reversed(path)))
         elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant):
             if not isinstance(node.slice.value, str):
                 raise _fail(
@@ -179,21 +184,25 @@ def _bindings(call: ast.Call) -> tuple[tuple[str, Ref | Const], ...]:
     """
     bindings: dict[str, Ref | Const] = {}
     for keyword in call.keywords:
-        named: Sequence[tuple[ast.expr | None, ast.expr]] = [(None, keyword.value)]
-        if keyword.arg is None:
-            if not isinstance(keyword.value, ast.Dict):
-                raise _fail(call, "a call passes every argument by name")
-            named = list(zip(keyword.value.keys, keyword.value.values, strict=True))
-        for key, value in named:
-            name = keyword.arg
-            if name is None and isinstance(key, ast.Constant) and isinstance(key.value, str):
-                name = key.value
-            if name is None:
-                raise _fail(call, "a call passes every argument by name")
+        if keyword.arg is not None and keyword.arg not in bindings:
+            bindings[keyword.arg] = _argument(keyword.value)
+            continue
+        named = [(keyword.arg, keyword.value)] if keyword.arg else _unpacked(call, keyword.value)
+        for name, value in named:
             if name in bindings:
                 raise _fail(call, f"the argument {name!r} is passed twice")
             bindings[name] = _argument(value)
     return tuple(bindings.items())
+
+
+def _unpacked(call: ast.Call, display: ast.expr) -> Iterator[tuple[str, ast.expr]]:
+    """Yield each argument a dictionary unpacked into a call names, its key a string."""
+    if not isinstance(display, ast.Dict):
+        raise _fail(call, "a call passes every argument by name")
+    for key, value in zip(display.keys, display.values, strict=True):
+        if not isinstance(key, ast.Constant) or not isinstance(key.value, str):
+            raise _fail(call, "a call passes every argument by name")
+        yield key.value, value
 
 
 def _constants(node: ast.expr) -> tuple[Any, ...]:
@@ -275,7 +284,11 @@ def _falling(statement: ast.If, rest: Sequence[ast.stmt]) -> ast.If:
 
 def _onto(side: Sequence[ast.stmt], rest: Sequence[ast.stmt]) -> list[ast.stmt]:
     """Return ``side`` followed by ``rest`` where control runs out of it, as Python runs on."""
-    return [*side, *rest] if _runs_out(side) else list(side)
+    if not rest or not _runs_out(side):
+        return list(side)
+    if _READ.get() is None:
+        _READ.set({})
+    return [*side, *rest]
 
 
 def _runs_out(statements: Sequence[ast.stmt]) -> bool:
@@ -354,6 +367,7 @@ def _misplaced(statement: ast.stmt, number: int) -> str:
 
 #: Each run of statements a reading has read, by the statements and whether a loop holds them,
 #: so the rest after an `if`, which each side that runs out carries, is read once and shared.
+#: None until a statement carries one: nothing is shared before.
 _READ: ContextVar[dict[tuple[tuple[int, ...], bool], Block] | None] = ContextVar(
     "_READ", default=None
 )
@@ -365,19 +379,21 @@ def _block(
     """Read statements as a block; in a loop's body, running out of them ends the iteration."""
     statements = [s for s in statements if not isinstance(s, ast.Pass)]
     read = _READ.get()
+    if read is None or not statements:
+        return _statements(statements, parent, looping=looping)
     key = (tuple(map(id, statements)), looping)
-    if read is not None and statements and key in read:
-        return read[key]
-    block = _statements(statements, parent, looping=looping)
-    if read is not None and statements:
-        read[key] = block
-    return block
+    if key not in read:
+        read[key] = _statements(statements, parent, looping=looping)
+    return read[key]
 
 
 def _statements(statements: Sequence[ast.stmt], parent: ast.AST | None, *, looping: bool) -> Block:
     """Read statements as a block, each `if` and handler running on into what follows it."""
     calls: list[Call] = []
     for at, statement in enumerate(statements):
+        if isinstance(statement, ast.Assign):
+            calls.append(_call(statement))
+            continue
         rest = statements[at + 1 :]
         if isinstance(statement, ast.For):
             return Block(tuple(calls), _loop(statement, _block(rest, statement, looping=looping)))
@@ -387,8 +403,6 @@ def _statements(statements: Sequence[ast.stmt], parent: ast.AST | None, *, loopi
             return Block(tuple(calls), _branch(_falling(statement, rest), looping=looping))
         if isinstance(statement, ast.Try):
             calls.append(_guarded_call(statement, rest, looping=looping))
-        elif isinstance(statement, ast.Assign):
-            calls.append(_call(statement))
         elif rest:
             raise _fail(statement, _misplaced(statement, len(calls) + 1))
         else:
@@ -424,12 +438,13 @@ def read_program(source: str) -> Block:
     if len(body) == 1 and isinstance(body[0], (ast.FunctionDef, ast.AsyncFunctionDef)):
         body = body[0].body
     body = [s for s in body if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant))]
-    reading = _READ.set({})
     try:
         program = _block(body)
     finally:
-        _READ.reset(reading)
-    paths = _paths(program, {})
+        if shared := _READ.get() is not None:
+            _READ.set(None)
+    # A program sharing nothing writes out the end of each path, so its text bounds them.
+    paths = _paths(program, {}) if shared or len(source) > MAX_PATHS else 0
     if paths > MAX_PATHS:
         what = (
             f"the program runs {paths} paths, past {MAX_PATHS}: each `if` in a row that runs on "
@@ -484,16 +499,16 @@ class Critique:
         return self.verification.weak
 
 
-def _guard(claim: str, spelled: Mapping[str, str]) -> str | None:
+def _guard(claim: str, written: Mapping[str, str]) -> str | None:
     """Return the test that narrows a binding's value into its argument, if the claim is one.
 
-    ``spelled`` holds how a program names each argument, by the name a claim does: a claim
+    ``written`` holds how a program names each argument, by the name a claim does: a claim
     writes ``g1.grasp.width``, and a test of it ``g1_grasp.width``.
     """
     subject, _, named = claim.partition(" <= ")
     if not named or subject.startswith("return ") or "." not in named:
         return None
-    argument = spelled.get(named, named)
+    argument = written.get(named, named)
     if subject[0] in "'\"-0123456789[{" or subject in ("True", "False", "None"):
         return f"write a constant {argument} admits"
     return f"test `if {subject} in {argument}:` and make the call in that branch"
@@ -567,7 +582,7 @@ def _reread(claim: str) -> str | None:
     return None
 
 
-def _remedy(link: Link, spelled: Mapping[str, str]) -> str | None:
+def _remedy(link: Link, written: Mapping[str, str]) -> str | None:
     """Return what a program's author can change to prove a link, if the claim is one."""
     claim = link.claim
     keyed = _keyed(link)
@@ -583,7 +598,7 @@ def _remedy(link: Link, spelled: Mapping[str, str]) -> str | None:
         return _EXPLICIT
     if claim.endswith(" may be retried"):
         return _RETRY
-    return _guard(claim, spelled)
+    return _guard(claim, written)
 
 
 def _crossing(
@@ -655,7 +670,9 @@ def critique(
     its links alone. Raises `ProgramError` for a program the reader does not read. A tool
     whose name Python does not spell is called by its alias (`valgebra_planning.program.alias`).
     """
-    program = named(read_program(source), aliases(contracts))
+    program = read_program(source)
+    if not all(map(spelled, contracts)):
+        program = named(program, aliases(contracts))
     checked = verify(
         program,
         contracts,
@@ -666,20 +683,21 @@ def critique(
         flows=flows,
         postconditions=postconditions,
     )
-    spelled = {
-        argument.name: slot(contract.name, argument.path[0])
-        for contract in contracts.values()
-        for argument in contract.arguments
-    }
     notes = []
+    written: dict[str, str] = {}
     for link in checked.links:
         if link.verdict == "proven":
             continue
+        written = written or {
+            argument.name: slot(contract.name, argument.path[0])
+            for contract in contracts.values()
+            for argument in contract.arguments
+        }
         where = f" (at {link.where})" if link.where else ""
         note = f"{link.verdict}: {link.claim}{where}"
         if link.counterexample:
             note += f"; {link.counterexample[0]!r} lies outside"
-        remedy = _remedy(link, spelled)
+        remedy = _remedy(link, written)
         if remedy is not None:
             note += f"; {remedy}"
         notes.append(note)

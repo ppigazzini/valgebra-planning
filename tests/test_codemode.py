@@ -510,6 +510,7 @@ def test_every_name_a_program_writes_reads_back(names: list[str]) -> None:
         ("c1 = f(**{1: u})\nreturn c1\n", "a call passes every argument by name"),
         ("c1 = f(**{**u})\nreturn c1\n", "a call passes every argument by name"),
         ('c1 = f(a=u, **{"a": u})\nreturn c1\n', "the argument 'a' is passed twice"),
+        ('c1 = f(**{"a": u}, a=u)\nreturn c1\n', "the argument 'a' is passed twice"),
         ('c1 = f(**{"a": u, "a": u})\nreturn c1\n', "the argument 'a' is passed twice"),
         ('if "" in u:\n    return u\nelse:\n    stop(u)\n', "an empty one is none"),
     ],
@@ -561,3 +562,12 @@ def test_a_library_whose_aliases_collide_is_refused_at_load(tmp_path: Path) -> N
     (tmp_path / "tasks.json").write_text('{"tasks": []}', encoding="utf-8")
     with pytest.raises(ValueError, match="'find_parcel' and 'find-parcel' are both called"):
         read_library(tmp_path)
+
+
+def test_a_program_of_tools_each_called_by_its_name_is_kept_as_it_is() -> None:
+    """A block shared by two paths stays shared where no alias is written in it."""
+    program = read_program('if x in ("a",):\n    c1 = look(x=x)\nc2 = say(x=x)\nreturn c2\n')
+    assert named(program, aliases(["look", "say"])) is program
+    moved = named(program, aliases(["look", "g1.say"]))
+    assert moved == program
+    assert moved is not program
