@@ -166,6 +166,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
   holds ends with the time, and not with the call that meets it. A bad or a pending state a lapse
   reaches is reached, so a policy a lapse alone can break is not reported as one nothing breaks.
 
+- A recipe of a consent with a lifetime: a yes that lapses at the gate, and a server's expiring token
+  under an `only` flow, the handle MCP's guidance on stateful tools describes, each refusing a walk
+  past its two minutes.
+
 - A task names the inputs its answer must be read from: `reads` in `tasks.json` and `read_task`.
   A goal's set says what kind of value answers, not whose: every run's events meet "the events
   of a run", so the planner answered with `search_actions()`, reading no run. The verifier refutes

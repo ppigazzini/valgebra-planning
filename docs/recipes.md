@@ -1,5 +1,5 @@
 ---
-description: Tasks done end to end over tool listings in hand -- a model's program checked before it runs, a server answering outside its contract, an approval a policy requires, a notice held to the address on file, a privilege update, a policy that cannot fire, and a contract a plan can mean.
+description: Tasks done end to end over tool listings in hand -- a model's program checked before it runs, a server answering outside its contract, an approval a policy requires, a notice held to the address on file, a privilege update, a policy that cannot fire, a consent with a lifetime, and a contract a plan can mean.
 ---
 
 # Recipes
@@ -741,6 +741,137 @@ Every call that may act withdraws a distance under `"fresh": true`, a grasp the 
 and a walk still withdraws it. The list is the author's claim that nothing else changes what a
 pose reads, so every link it decides names it, and `check` names each tool that may act and the
 list leaves out.
+
+## A consent with a lifetime
+
+A yes given for one walk says nothing of the next hour. Held where the clock is, a lifetime has two
+deployments. At the gate, a lapse leaves the state a yes entered once it was held its seconds, and
+the proxy reads it by its own clock, in front of any server. At the server, the yes is a token that
+expires: MCP has no session, so state across calls is a handle a tool returns and a later one takes,
+whose lifetime its guidance asks the creating tool's description to state, a call on an expired one
+answered with an error that says so (MCP 2026-07-28, server tools, stateful tools), and an `only` flow holds the token to the confirmation
+that issued it. Both refuse a walk two minutes and a second after a yes held for two minutes:
+
+```python
+import asyncio
+import secrets
+
+from mcp import Client, types
+from mcp.server.lowlevel import Server
+
+from valgebra_planning.contracts import read_contract, read_task
+from valgebra_planning.critic import critique
+from valgebra_planning.flows import read_flow
+from valgebra_planning.policy import read_policy
+from valgebra_planning.proxy import proxy
+
+LIFETIME = 120
+TOKEN = {"type": "string", "pattern": "^yes_[0-9a-f]{32}$"}
+
+
+def tool(name, inputs, outputs, description):
+    return {
+        "name": name,
+        "description": description,
+        "inputSchema": {"type": "object", "properties": inputs, "required": sorted(inputs)},
+        "outputSchema": {
+            "type": "object",
+            "properties": outputs,
+            "required": sorted(outputs),
+            "additionalProperties": False,
+        },
+    }
+
+
+listing = [
+    tool("confirm", {}, {"token": TOKEN}, f"Ask the user. A yes expires after {LIFETIME} s."),
+    tool("walk_to", {"token": TOKEN}, {"arrived": {"type": "boolean"}}, "Walk, on a yes."),
+]
+contracts = {spec["name"]: read_contract(spec) for spec in listing}
+held_for = read_policy(
+    {
+        "name": "a walk follows a yes",
+        "initial": "unasked",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "unasked", "tool": "confirm", "result": True, "to": "yes"},
+            {"from": "unasked", "tool": "walk_to", "to": "violated"},
+            {"from": "yes", "after_s": LIFETIME, "to": "unasked"},
+        ],
+    }
+)
+the_users_yes = read_flow(
+    {"name": "the user's yes", "sources": ["confirm"], "sink": "walk_to.token", "only": True}
+)
+
+
+class Clock:
+    now = 0.0
+
+    def __call__(self):
+        return self.now
+
+
+def robot(clock, *, expires):
+    """Serve the robot; where its tokens expire, a walk on an old one is an error naming it."""
+    issued = {}
+
+    async def listed(context, params):
+        return types.ListToolsResult(tools=[types.Tool.model_validate(t) for t in listing])
+
+    async def called(context, params):
+        if params.name == "confirm":
+            token = f"yes_{secrets.token_hex(16)}"
+            issued[token] = clock.now
+            return types.CallToolResult(content=[], structured_content={"token": token})
+        if expires and clock.now - issued[params.arguments["token"]] >= LIFETIME:
+            text = types.TextContent(type="text", text="the confirmation has expired: ask again")
+            return types.CallToolResult(content=[text], is_error=True)
+        return types.CallToolResult(content=[], structured_content={"arrived": True})
+
+    return Server("robot", on_list_tools=listed, on_call_tool=called)
+
+
+async def walked(seconds, *, expires, **rules):
+    clock = Clock()
+    async with Client(robot(clock, expires=expires)) as upstream:
+        tools = (await upstream.list_tools()).tools
+        front = proxy(upstream, tools, contracts, clock=clock, **rules)
+        async with Client(front) as client:
+            yes = await client.call_tool("confirm", {})
+            clock.now += seconds
+            walk = await client.call_tool("walk_to", yes.structured_content)
+    return walk.content[0].text if walk.is_error else "walked"
+
+
+expired = {"walk_to": {"const": "the confirmation has expired: ask again"}}
+for seconds in (119, 121):
+    at_gate = asyncio.run(walked(seconds, expires=False, policies=[held_for]))
+    at_server = asyncio.run(
+        walked(seconds, expires=True, flows=[the_users_yes], error_texts=expired)
+    )
+    print(f"{seconds} s on, at the gate: {at_gate}")
+    print(f"{seconds} s on, at the server: {at_server}")
+
+program = "c1 = confirm()\nc2 = walk_to(token=c1.token)\nreturn c2.arrived\n"
+checked = critique(program, contracts, read_task("walk", {}, True), policies=[held_for])
+print(checked.accepted, *(a for link in checked.verification.links for a in link.assumed))
+```
+
+```text
+119 s on, at the gate: walked
+119 s on, at the server: walked
+121 s on, at the gate: refused: a walk follows a yes: walk_to reached violated; from unasked, confirm, by its result, leads to yes
+121 s on, at the server: the confirmation has expired: ask again
+True the run reaches walk_to within 120 s of entering yes
+```
+
+The critic reads no time, so it accepts the program and names what the proof rests on; the gate, or
+the server, holds it. The gate's clock is its process's, so a proxy started again holds no yes, and a
+lapse is read at each call the policy reads: nothing is withdrawn from a walk already under way. The
+token's lifetime is the server's word, held by no check here: a server that never expires one answers
+a late walk, and the flow holds only that `confirm` returned the token. A lifetime the gate must hold
+in front of such a server is the policy's.
 
 ## A contract a plan can mean
 
