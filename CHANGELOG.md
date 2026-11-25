@@ -136,6 +136,15 @@ studies read every count 0.0.7 recorded, and a study of a humanoid robot's skill
   three are the same, in the same order, and no "1797 more" follows them, in `failures` and in
   each refusal of a proxy and of a run that names them.
 
+- `verify`, `critique`, `render`, `stubs` and `plan` cost more. Against 0.0.7, on CPython 3.15 and
+  with every dependency at one version, `verify` of the program `plan` finds for the parcels'
+  "customs for a parcel" takes 386 µs where it took 36, and for "return a parcel" 1.57 ms where it
+  took 0.37. `critique` of the first takes 483 µs where it took 74, `render` of the second 9.7 µs
+  where it took 6.9, `stubs` of the parcels library 117 µs where it took 56, and `plan` of the
+  bookings' task 2.6 ms where it took 2.0. Each is the median of five `timeit` rounds, which a
+  second environment of 0.0.7 reads within 2% of the first. Which change costs each is not measured;
+  a profile of each would name it.
+
 - `policy.Snapshot` is a named tuple, holding when each state was entered beside the states it held
   as a tuple, and `Monitor.moved` takes `at`, the time a state it enters is entered.
 
