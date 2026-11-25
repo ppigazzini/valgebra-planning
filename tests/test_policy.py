@@ -900,3 +900,39 @@ def test_a_way_out_names_its_result_as_a_test_and_leads_out() -> None:
         }
     )
     assert Monitor(twice).ways_out("walk") == ["from unchecked, check leads to once"]
+
+
+def test_a_result_no_value_is_in_is_walked_as_one_case() -> None:
+    # The set is empty, so it splits into no case on the guard that reads it: the walk goes on as
+    # where none does, every transition on the result possible and none sure.
+    specs: list[dict[str, Any]] = [
+        {
+            "name": "look",
+            "inputSchema": {"type": "object"},
+            "outputSchema": {"type": "object", "properties": {"v": False}, "required": ["v"]},
+        },
+        {"name": "act", "inputSchema": {"type": "object"}, "outputSchema": {"type": "object"}},
+    ]
+    tools = {contract.name: contract for contract in map(read_contract, specs)}
+    policy = read_policy(
+        {
+            "name": "looked",
+            "initial": "start",
+            "bad": ["violated"],
+            "transitions": [
+                {
+                    "from": "start",
+                    "tool": "look",
+                    "result": {"properties": {"v": {"const": 1}}},
+                    "to": "seen",
+                },
+                {"from": "start", "tool": "act", "to": "violated"},
+            ],
+        }
+    )
+    for text, verdict in (
+        ("c0 = look()\nreturn c0\n", "proven"),
+        ("c0 = look()\nc1 = act()\nreturn c1\n", "undecided"),
+    ):
+        links = verify(read_program(text), tools, read_task("t", {}, True), policies=[policy]).links
+        assert [link.verdict for link in links if link.claim == "policy looked holds"] == [verdict]

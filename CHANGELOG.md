@@ -182,6 +182,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A call whose result set is empty is walked under a policy reading its result. The walk split the
+  result by the policy's guards, an empty set into no case, and `verify`, `plan` and `critique`
+  ended with an `IndexError`. It is walked as one case, as a call no policy reads is.
+
 - `check`'s note that a result may carry any string to an agent reads every place a string may
   sit. It read the planner's slots, the fields a result guarantees down to three objects, so an
   optional field, one four objects down, an array's strings, a string in each item and strings

@@ -538,7 +538,8 @@ class _Walk:
         observation splits a belief execution tree in two (Bertoli et al. 2006, Def. 3.6): each
         case holds the result in one cell of the guards' sets and their complements, the belief
         met with the observation (Bertoli et al. 2006, Def. 3.4), and the policy stepped on that
-        cell; a cell valgebra proves empty is dropped.
+        cell; a cell valgebra proves empty is dropped. A result set valgebra proves empty has no
+        cell, and is walked as one case, as a call no guard reads is.
         """
         contract = self.contracts.get(call.tool)
         if contract is None:
@@ -605,10 +606,11 @@ class _Walk:
             for transition in policy.transitions
             if transition.result is not None and transition.reads(call.tool, contract.hints)
         ]
-        if whole is None or not guards:
+        cells = [] if whole is None or not guards else _cells(whole.values, guards)
+        if whole is None or not cells:
             return [(defined, _Path(after, path.tested, left, stale, last, observed, withdrawn))]
         cases = []
-        for cell in _cells(whole.values, guards):
+        for cell in cells:
             stepped = tuple(
                 policy.step(held, call.tool, record, contract.hints, cell)
                 for policy, held in zip(self.policies, states, strict=True)
