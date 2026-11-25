@@ -248,6 +248,20 @@ IMPLEMENTED-BY: policy.py::Lapse, policy.py::Monitor.moved
 
 HELD-BY: test_a_monitor_holds_the_states_the_timed_automaton_does, test_a_yes_lapses_once_it_was_held_its_seconds, test_a_yes_given_again_is_held_from_the_last_one, test_a_chain_of_lapses_is_read_in_the_order_it_came_due, test_a_result_not_read_may_have_entered_its_state_at_any_time_since_the_call, test_a_state_a_call_may_have_left_lapses_beside_the_one_it_reached, test_a_gate_holds_a_yes_for_its_seconds, test_a_walk_a_stop_overtook_enters_its_state_whenever_it_acts_until_it_answers, test_an_outcome_that_came_before_the_stop_is_read_at_a_time_before_it
 
+**The walk of a program reads no time.** A program is read before it runs, its events with no
+times, and a finite timed word whose continuations' times decide a property is read as neither true
+nor false (Bauer et al. 2011, Def. 4.14): every program that asks and then acts on the answer takes
+a time between no program bounds, so a policy with a lapse would be left undecided on it. The walk
+departs from that reading and takes no lapse, so its link is proven under an assumption it names,
+the timing a run and a proxy hold by their clocks. It also walks each such policy with every lapse
+possible before each call and result, and a link proven so rests on no timing and names none. The
+cost is a link proven that a late run breaks, at a check that names the lapse.
+**[DEVIATION: untimed-walk]**
+
+IMPLEMENTED-BY: verify.py::_Walk.obeyed
+
+HELD-BY: test_a_policy_link_names_the_timing_it_rests_on_and_no_other_does, test_a_lapse_that_only_admits_more_is_no_assumption, test_an_end_past_a_lapse_into_an_obligation_or_a_violation_is_named, test_a_walk_after_the_yes_lapsed_is_refused_by_the_policy
+
 **An obligation is decided over the whole program.** A property that no continuation of a
 run's prefix makes true or false for good, as a notice owed after every booking, is not
 monitorable after that prefix (Bauer et al. 2011, Def. 3.4), and a trace rule checked one

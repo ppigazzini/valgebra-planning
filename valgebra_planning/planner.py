@@ -27,6 +27,7 @@ import itertools
 import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from functools import partial
 from typing import Any
 
 from valgebra_planning._valgebra import (
@@ -172,7 +173,8 @@ class Plan:
 
     ``assumed`` names each binding that rests on a mined semantic type or on an output schema
     inferred from observed calls, and each retry, which rests on its tool's errors being
-    transient and, unless its server is trusted, on its annotations.
+    transient and, unless its server is trusted, on its annotations. ``timing`` names when the
+    run must reach each call for the policies whose states lapse to hold, a time no search reads.
     """
 
     program: Block | None
@@ -187,6 +189,7 @@ class Plan:
     #: For a task naming goals in an order, where each return the verifier proves inside the
     #: first lies: the rest return in a goal the task accepts after it.
     preferred: tuple[str, ...] = ()
+    timing: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1158,6 +1161,17 @@ def _input_key(ref: Ref) -> SlotKey:
     return ("input", ".".join((ref.variable, *ref.path)))
 
 
+def _timing(
+    program: Block, policies: Sequence[Policy], checked: Callable[[Block], Verification]
+) -> tuple[str, ...]:
+    """Return when the run must reach each call, as the program's policy links name it."""
+    if not any(policy.lapses for policy in policies):
+        return ()
+    links = checked(program).links
+    found = (named for link in links for named in link.assumed if named.startswith("the run "))
+    return tuple(dict.fromkeys(found))
+
+
 def _assumed(
     block: Block,
     types: Types | None,
@@ -1721,9 +1735,12 @@ def plan(
         reading=task.reads,
     )
 
+    checked = partial(
+        verify, contracts=contracts, task=task, errors=errors, policies=policies, flows=flows
+    )
+
     def reading(program: Block) -> object:
-        checked = verify(program, contracts, task, errors=errors, policies=policies, flows=flows)
-        return _reading(checked)
+        return _reading(checked(program))
 
     def tidied(program: Block) -> Block:
         program = _tidy(_literal(program, literals), search.stops, kept)
@@ -1743,6 +1760,7 @@ def plan(
                 expanded=search.expanded,
                 assumed=tuple(_assumed(program, types, contracts)),
                 preferred=_preferred(program, contracts, task),
+                timing=_timing(program, policies, checked),
             )
     if weak:
         # One search at the full bound: a branch stops only where no continuation exists
@@ -1763,6 +1781,7 @@ def plan(
                 expanded=sum(one.expanded for one in searches),
                 assumed=tuple(_assumed(program, types, contracts)),
                 preferred=_preferred(program, contracts, task),
+                timing=_timing(program, policies, checked),
             )
     return Plan(
         None,

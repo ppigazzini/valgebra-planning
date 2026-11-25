@@ -193,7 +193,10 @@ verifier, which adds a link for it.
   alone is taken where the state has been held that many seconds with no call leaving it, the time
   since the event that entered it last (Bauer et al. 2011, Def. 4.2), so a yes is held for two
   minutes and no longer. A monitor reads it exactly at each event by a clock; no lapse leaves a bad
-  state or a state nothing enters, and no chain of them leads back where it began. A policy reads one program's calls in order
+  state or a state nothing enters, and no chain of them leads back where it began. The walk reads no
+  time and takes no lapse: a policy's link that would not be proven with each taken possibly names,
+  as an assumption, that the run reaches each call within the seconds of entering the state held
+  there, and a plan names the same. A policy reads one program's calls in order
   and, before the
   run, carries no value from one call to another; with `per`, the runner holds one instance per
   value. A transition may read an annotation hint, `destructiveHint` or

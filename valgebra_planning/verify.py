@@ -211,6 +211,56 @@ class _Walk:
     items: dict[int, int] = field(default_factory=dict)
     #: Where each return some execution reaches stands (`Verification.returns`).
     returns: list[str] = field(default_factory=list)
+    #: Each state that lapses read by a call so far, in order: what a loop's body added to it.
+    awaits: list[_Awaited] = field(default_factory=list)
+
+    @property
+    def lapsing(self) -> tuple[Policy, ...]:
+        """Return the policies with lapses, whose states whatever time passed are walked too."""
+        return tuple(policy for policy in self.policies if policy.lapses)
+
+    def initial(self) -> _States:
+        """Return the states a program starts in."""
+        return tuple(frozenset({p.initial}) for p in (*self.policies, *self.lapsing))
+
+    def stepped(
+        self,
+        states: _States,
+        contract: Contract,
+        record: Validator[Any],
+        result: Validator[Any] | None = None,
+    ) -> _States:
+        """Return the states a call leaves, each policy's and each lapsing one's whatever time."""
+        every = len(self.policies)
+        return tuple(
+            policy.step(held, contract.name, record, contract.hints, result, late=at >= every)
+            for at, (policy, held) in enumerate(
+                zip((*self.policies, *self.lapsing), states, strict=True)
+            )
+        )
+
+    def awaiting(
+        self, states: _States, contract: Contract, record: Validator[Any]
+    ) -> frozenset[_Awaited]:
+        """Return each state that lapses held where a call its policy reads, or its result, is."""
+        found: list[_Awaited] = []
+        for policy, held in zip(self.policies, states, strict=False):
+            if not policy.lapses:
+                continue
+            reading = [t for t in policy.transitions if t.reads(contract.name, contract.hints)]
+            sent = policy.sent(held, contract.name, record, contract.hints)
+            found += [
+                (policy.name, what, state)
+                for what, reached, returned in (
+                    (contract.name, held, False),
+                    (f"the result of {contract.name}", sent, True),
+                )
+                for state in sorted(reached)
+                if policy.lapse(state) is not None
+                and any((t.result is not None) == returned for t in reading)
+            ]
+        self.awaits += found
+        return frozenset(found)
 
     def version(self) -> int:
         """Return a version no value has yet.
@@ -276,7 +326,7 @@ class _Walk:
             # A stop hands back the value it names, which the run reads as it reads a return's.
             self.held(env, end.ref, where)
             self.gaps.append(Gap(where, str(end.ref), self.tolerated(env, end.ref)))
-            self.obeyed(where, path.states)
+            self.obeyed(where, path)
             self.ended(path)
         elif isinstance(end, Next):
             if self.ends is not None:
@@ -301,7 +351,7 @@ class _Walk:
                 verdict: Verdict = "proven" if var in read else "refuted"
                 claim = f"return {end.ref} is read from {var}"
                 self.links.append(Link(where, claim, verdict))
-        self.obeyed(where, path.states)
+        self.obeyed(where, path)
         self.ended(path)
 
     def tolerated(self, env: dict[Ref, _Held], ref: Ref) -> bool:
@@ -366,7 +416,7 @@ class _Walk:
             path, self.flows, inner, lambda flow: _makes(end.body, self.contracts, flow.withdraws)
         )
         path = replace(path, withdrawn=listed)
-        states, holding = path.states, path.states
+        states, holding, read = path.states, path.states, len(self.awaits)
         if self.policies:
             # The states once the body ran at least once, to a fixpoint from the first walk's.
             holding = tuple(frozenset() for _ in states)
@@ -384,6 +434,7 @@ class _Walk:
             end.body, inner, inside, replace(path, states=reach, tested=tested), silent=False
         )
         after = path.tested.union(*exits)
+        path = replace(path, awaited=path.awaited.union(self.awaits[read:]))
         sides = self.sides(held, states, holding)
         for label, at in sides:
             here = where if len(sides) == 1 else _join(where, f"{label}:{end.item}")
@@ -461,13 +512,26 @@ class _Walk:
         if self.exits is not None:
             self.exits.append(path.tested)
 
-    def obeyed(self, where: str, states: _States) -> None:
-        """Add a link per policy where a path ends: whether it may end in a bad or pending state."""
-        for policy, held in zip(self.policies, states, strict=True):
+    def obeyed(self, where: str, path: _Path) -> None:
+        """Add a link per policy where a path ends: whether it may end in a bad or pending state.
+
+        The walk reads no time, so a link proven with every lapse left out rests on the run's
+        timing where it is not with each taken possibly, the reading of a finite word whose
+        continuations' times decide the property (Bauer et al. 2011, Def. 4.14): it is proven
+        under the assumption it names, that the run reaches each call the policy reads before the
+        state it holds there lapses.
+        """
+        for at, policy in enumerate(self.policies):
+            held = path.states[at]
             verdict = _OBEYED[policy.reach(held, ended=True)]
             hinted = policy.hints() and not all(c.trusted for c in self.contracts.values())
-            assumed = (f"the annotation hints policy {policy.name} reads",) if hinted else ()
-            self.links.append(Link(where, f"policy {policy.name} holds", verdict, (), assumed))
+            assumed = [f"the annotation hints policy {policy.name} reads"] if hinted else []
+            if policy.lapses and verdict == "proven":
+                late = path.states[len(self.policies) + self.lapsing.index(policy)]
+                if policy.reach(policy.due(late), ended=True) != "never":
+                    assumed += _timing(policy, held, path.awaited)
+            link = Link(where, f"policy {policy.name} holds", verdict, (), tuple(assumed))
+            self.links.append(link)
 
     def branch(self, test: Branch, env: dict[Ref, _Held], where: str, path: _Path) -> None:
         held = self.held(env, test.ref, where)
@@ -563,11 +627,10 @@ class _Walk:
             self.record(call, contract, bound, where, env)
         after = states
         record = record_of({name: held.values for name, held in bound.items()}, closed=True)
+        awaited = path.awaited
         if self.policies:
-            after = tuple(
-                policy.step(held, call.tool, record, contract.hints)
-                for policy, held in zip(self.policies, states, strict=True)
-            )
+            after = self.stepped(states, contract, record)
+            awaited |= self.awaiting(states, contract, record)
         # A tool that answered with an error may still have acted, so its block reads both.
         either = tuple(before | then for before, then in zip(states, after, strict=True))
         # The result is a new version, so no value held under its name before is made fresh, as
@@ -583,7 +646,7 @@ class _Walk:
         withdrawn = _withdrawn(
             path, self.flows, env, lambda flow: flow.withdraws(call.tool, contract.hints)
         )
-        erred = _Path(either, path.tested, failing, stale, unknown, observed, withdrawn)
+        erred = _Path(either, path.tested, failing, stale, unknown, observed, withdrawn, awaited)
         self.failure(call, contract, env, where, erred)
         observed = self.observing(call, env, path, observed, acts=acts)
         shown = self.shown(call, env, path)
@@ -607,14 +670,11 @@ class _Walk:
             if transition.result is not None and transition.reads(call.tool, contract.hints)
         ]
         cells = [] if whole is None or not guards else _cells(whole.values, guards)
+        made = _Path(after, path.tested, left, stale, last, observed, withdrawn, awaited)
         if whole is None or not cells:
-            return [(defined, _Path(after, path.tested, left, stale, last, observed, withdrawn))]
+            return [(defined, made)]
         cases = []
         for cell in cells:
-            stepped = tuple(
-                policy.step(held, call.tool, record, contract.hints, cell)
-                for policy, held in zip(self.policies, states, strict=True)
-            )
             held = _Held(
                 cell,
                 whole.origin,
@@ -624,8 +684,8 @@ class _Walk:
                 returned=whole.returned,
             )
             narrowed = {**defined, Ref(call.result): held}
-            stepping = _Path(stepped, path.tested, left, stale, last, observed, withdrawn)
-            cases.append((narrowed, stepping))
+            stepped = self.stepped(states, contract, record, cell)
+            cases.append((narrowed, replace(made, states=stepped)))
         return cases
 
     def repeated(
@@ -1524,8 +1584,13 @@ def _join(where: str, branch: str) -> str:
     return f"{where}.{branch}" if where else branch
 
 
-#: The states of every policy a path may be in, one set per policy.
+#: The states of every policy a path may be in, one set per policy, and then one per policy with
+#: lapses, the states it may be in whatever time passed (`_Walk.lapsing`).
 _States = tuple[frozenset[str], ...]
+
+#: A policy's state held where a call it reads is reached, or its result: the policy's name, what
+#: is reached and the state.
+_Awaited = tuple[str, str, str]
 
 
 _Acted = frozenset["_Attempt"]
@@ -1657,6 +1722,8 @@ class _Path:
     #: For each fresh rule naming the calls that withdraw it, the versions returned before the
     #: last of those on the way here, by the rule's name (`_withdrawn`).
     withdrawn: tuple[tuple[str, frozenset[int]], ...] = ()
+    #: Each state that lapses held on the way here where a call its policy reads was reached.
+    awaited: frozenset[_Awaited] = frozenset()
 
 
 #: How many smaller witnesses a refutation's is shrunk through at most, and the mark of none.
@@ -1718,6 +1785,26 @@ def _fewer(value: dict[str, Any]) -> Iterator[Any]:
 _EMPTY = compile_schema({"type": "array", "maxItems": 0})
 _HOLDING = compile_schema({"type": "array", "minItems": 1})
 
+
+def _timing(policy: Policy, held: frozenset[str], awaited: frozenset[_Awaited]) -> list[str]:
+    """Return the timing a policy's link proven with no lapse taken rests on, as it names it.
+
+    ``held`` is the states it ends in: one whose lapse would leave an obligation open, or reach a
+    bad state, is left before it comes due.
+    """
+    found = [
+        f"the run reaches {what} within {lapse.seconds:g} s of entering {state}"
+        for name, what, state in sorted(awaited)
+        if name == policy.name and (lapse := policy.lapse(state)) is not None
+    ]
+    return found + [
+        f"the run ends within {lapse.seconds:g} s of entering {state}"
+        for state in sorted(held)
+        if (lapse := policy.lapse(state)) is not None
+        and policy.due(frozenset({state})) & (policy.bad | policy.pending)
+    ]
+
+
 #: Whether a path may reach a bad state, read as a verdict on the policy holding.
 _OBEYED: dict[str, Verdict] = {"never": "proven", "surely": "refuted", "possibly": "undecided"}
 
@@ -1774,5 +1861,5 @@ def verify(
         for var, slots in task.held.items()
         for slot in slots
     }
-    walk.block(program, env, "", _Path(tuple(frozenset({p.initial}) for p in policies)))
+    walk.block(program, env, "", _Path(walk.initial()))
     return Verification(tuple(walk.links), tuple(walk.gaps), tuple(walk.returns))

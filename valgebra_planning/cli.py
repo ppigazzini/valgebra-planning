@@ -115,7 +115,9 @@ def _planned(
             {"where": u.where, "ref": u.ref, "examples": list(u.examples)} for u in found.uncovered
         ],
         "assumed": list(found.assumed),
-    } | ({"preferred": list(found.preferred)} if problem.task.preferred else {}), found
+    } | ({"preferred": list(found.preferred)} if problem.task.preferred else {}) | (
+        {"timing": list(found.timing)} if found.timing else {}
+    ), found
 
 
 def _text(row: dict[str, Any]) -> str:
@@ -134,6 +136,7 @@ def _text(row: dict[str, Any]) -> str:
         f"uncovered at {u['where'] or 'top'}: {u['ref']}, {u['examples']}" for u in row["uncovered"]
     ]
     lines += [f"assumed from the observed calls: {binding}" for binding in row["assumed"]]
+    lines += [f"assumed of the run's timing: {reached}" for reached in row.get("timing", ())]
     return "\n".join(lines)
 
 

@@ -1287,3 +1287,190 @@ def test_a_monitor_holds_the_states_the_timed_automaton_does(
     clock.now = now
     reference.at(now)
     assert monitor.held() == reference.states()
+
+
+#: Tools of no argument, and what each may answer.
+ROBOT = {
+    contract.name: contract
+    for contract in map(
+        read_contract,
+        [
+            {
+                "name": name,
+                "inputSchema": {"type": "object"},
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {"status": {"enum": answers}, "items": {"type": "array"}},
+                    "required": ["status", "items"],
+                },
+            }
+            for name, answers in (("confirm", ["yes"]), ("look", ["ok"]), ("walk", ["walked"]))
+        ],
+    )
+}
+
+
+def _timed_links(
+    spec: dict[str, Any], text: str, **rules: Any
+) -> list[tuple[str, tuple[str, ...]]]:
+    """Return the verdict of each policy link of a program, and what it assumes."""
+    links = verify(
+        read_program(text),
+        ROBOT,
+        read_task("t", {"xs": {"type": "array"}}, True),
+        policies=[read_policy(spec)],
+        **rules,
+    ).links
+    return [(link.verdict, link.assumed) for link in links if link.claim.startswith("policy")]
+
+
+#: A yes by its status, held for 120 seconds.
+STATUS_CONSENT: dict[str, Any] = {
+    "name": "consent",
+    "initial": "unasked",
+    "bad": ["violated"],
+    "transitions": [
+        {
+            "from": "unasked",
+            "tool": "confirm",
+            "result": {"properties": {"status": {"const": "yes"}}},
+            "to": "yes",
+        },
+        {"from": "unasked", "tool": "walk", "to": "violated"},
+        {"from": "yes", "after_s": 120, "to": "unasked"},
+    ],
+}
+WITHIN = "the run reaches walk within 120 s of entering yes"
+
+
+@pytest.mark.parametrize(
+    ("text", "links"),
+    [
+        ("c1 = confirm()\nc2 = walk()\nreturn c2\n", [("proven", (WITHIN,))]),
+        ("c1 = confirm()\nc2 = look()\nc3 = walk()\nreturn c3\n", [("proven", (WITHIN,))]),
+        ("c1 = confirm()\nc2 = look()\nreturn c2\n", [("proven", ())]),
+        ("c1 = walk()\nreturn c1\n", [("refuted", ())]),
+        (
+            "c1 = confirm()\nfor x in xs:\n    c2 = walk()\nreturn c1\n",
+            [("proven", (WITHIN,)), ("proven", ())],
+        ),
+        (
+            "c1 = confirm()\nif c1.status == 'yes':\n    c2 = walk()\n    return c2\nreturn c1\n",
+            [("proven", (WITHIN,))],
+        ),
+    ],
+    ids=[
+        "asks-then-walks",
+        "looks-between",
+        "never-walks",
+        "never-asks",
+        "walks-in-a-loop",
+        "tests",
+    ],
+)
+def test_a_policy_link_names_the_timing_it_rests_on_and_no_other_does(
+    text: str, links: list[tuple[str, tuple[str, ...]]]
+) -> None:
+    assert sorted(_timed_links(STATUS_CONSENT, text)) == sorted(links)
+
+
+@pytest.mark.parametrize(
+    ("text", "links"),
+    [
+        ("c2 = look()\nexcept ToolError:\n    c3 = walk()\n    return c3\n", [(WITHIN,), ()]),
+        ("c2 = look()\nexcept ToolError:\n    return c0\n", [(WITHIN,), (WITHIN,)]),
+    ],
+)
+def test_an_error_block_names_the_calls_before_it_and_its_own(
+    text: str, links: list[tuple[str, ...]]
+) -> None:
+    walked = "c0 = walk()\n" if "c0" in text else ""
+    body, _, handler = text.partition("\n")
+    program = f"c1 = confirm()\n{walked}try:\n    {body}\n{handler}return c2\n"
+    assert _timed_links(STATUS_CONSENT, program) == [("proven", named) for named in links]
+
+
+def test_a_lapse_that_only_admits_more_is_no_assumption() -> None:
+    # A cool-down read as never coming due is the stricter reading: nothing rests on it.
+    cooling = {
+        "name": "cool down",
+        "initial": "free",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "free", "tool": "walk", "to": "hot"},
+            {"from": "hot", "tool": "walk", "to": "violated"},
+            {"from": "hot", "after_s": 2, "to": "free"},
+        ],
+    }
+    assert _timed_links(cooling, "c1 = walk()\nc2 = look()\nreturn c2\n") == [("proven", ())]
+    assert _timed_links(cooling, "c1 = walk()\nc2 = walk()\nreturn c2\n") == [("refuted", ())]
+
+
+def test_an_end_past_a_lapse_into_an_obligation_or_a_violation_is_named() -> None:
+    for spec in ({"pending": ["late"], "bad": []}, {"bad": ["late"]}):
+        due = {
+            "name": "due",
+            "initial": "free",
+            "transitions": [
+                {"from": "free", "tool": "walk", "to": "warm"},
+                {"from": "warm", "after_s": 9, "to": "late"},
+            ],
+            **spec,
+        }
+        assert _timed_links(due, "c1 = walk()\nreturn c1\n") == [
+            ("proven", ("the run ends within 9 s of entering warm",))
+        ]
+        # With no call at all, the state it starts in is the one that lapses.
+        assert _timed_links({**due, "initial": "warm"}, "return xs\n") == [
+            ("proven", ("the run ends within 9 s of entering warm",))
+        ]
+
+
+def test_a_result_read_past_its_call_s_lapse_is_named() -> None:
+    # The call enters a state that lapses, and its result is read from there.
+    asked = {
+        "name": "answered in time",
+        "initial": "idle",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "idle", "tool": "confirm", "to": "asking"},
+            {"from": "asking", "tool": "confirm", "result": True, "to": "answered"},
+            {"from": "asking", "after_s": 30, "to": "unanswered"},
+            {"from": "unanswered", "tool": "walk", "to": "violated"},
+        ],
+    }
+    assert _timed_links(asked, "c1 = confirm()\nc2 = walk()\nreturn c2\n") == [
+        ("proven", ("the run reaches the result of confirm within 30 s of entering asking",))
+    ]
+
+
+def test_a_chain_of_lapses_is_read_to_its_end() -> None:
+    chain = {
+        **STATUS_CONSENT,
+        "transitions": [
+            *STATUS_CONSENT["transitions"][:2],
+            {"from": "yes", "after_s": 120, "to": "stale"},
+            {"from": "stale", "after_s": 5, "to": "unasked"},
+        ],
+    }
+    assert _timed_links(chain, "c1 = confirm()\nc2 = walk()\nreturn c2\n") == [
+        ("proven", (WITHIN,))
+    ]
+
+
+def test_a_plan_names_the_timing_its_policies_rest_on() -> None:
+    lapsing = json.loads((EXAMPLE / "policies.json").read_text(encoding="utf-8"))["policies"][0]
+    lapsing = {
+        **lapsing,
+        "transitions": [
+            *lapsing["transitions"],
+            {"from": "approved", "after_s": 600, "to": lapsing["initial"]},
+        ],
+    }
+    planned = plan(TOOLS, SETTLE, policies=[read_policy(lapsing)])
+    untimed = plan(TOOLS, SETTLE, policies=[FREIGHT])
+    assert planned.program == untimed.program
+    assert planned.timing == (
+        "the run reaches book_freight_return within 600 s of entering approved",
+    )
+    assert untimed.timing == ()

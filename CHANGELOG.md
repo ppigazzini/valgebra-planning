@@ -156,6 +156,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
   when each state was entered, and one that may act later enters its state at no time read yet.
   `proxy` takes its rules as `ProxyRules`; a keyword it does not name is a `TypeError`, as before.
 
+- A policy link names the timing it rests on. The walk of a program reads no time and takes no
+  lapse; a link proven so that would not be with every lapse possible lists, in `Link.assumed`, "the
+  run reaches walk within 120 s of entering yes", or that the run ends within them, and
+  `Plan.timing` and the `plan` command name the same. A lapse that only admits more, as a cool-down
+  coming due, is no assumption.
+
 - A task names the inputs its answer must be read from: `reads` in `tasks.json` and `read_task`.
   A goal's set says what kind of value answers, not whose: every run's events meet "the events
   of a run", so the planner answered with `search_actions()`, reading no run. The verifier refutes

@@ -162,6 +162,16 @@ class Policy:
         """Return the lapse out of ``state``, or None where it is held until a call leaves it."""
         return next((lapse for lapse in self.lapses if lapse.source == state), None)
 
+    def due(self, states: frozenset[str]) -> frozenset[str]:
+        """Return ``states`` and every one their lapses may move them to, whatever time passed."""
+        reached = set(states)
+        for state in states:
+            lapse = self.lapse(state)
+            while lapse is not None and lapse.target not in reached:
+                reached.add(lapse.target)
+                lapse = self.lapse(lapse.target)
+        return frozenset(reached)
+
     def tools(self) -> frozenset[str]:
         """Return every tool a transition names."""
         return frozenset(transition.tool for transition in self.transitions if transition.tool)
@@ -177,6 +187,8 @@ class Policy:
         record: Validator[Any],
         hints: frozenset[str] = frozenset(),
         result: Validator[Any] | None = None,
+        *,
+        late: bool = False,
     ) -> frozenset[str]:
         """Return the states the automaton may be in after a call whose record lies in ``record``.
 
@@ -191,9 +203,23 @@ class Policy:
         they leave: where ``result`` holds the set the result lies in, as in one case of a split
         on it, its guard is read against that set; otherwise it is taken possibly at most, no
         result being known.
+
+        A lapse is not taken, the events of a walk having no times; with ``late``, each may have
+        come due before the call, and before its result.
         """
-        made = self._stepped(states, tool, record, hints, returned=False)
-        return self._stepped(made, tool, record, hints, returned=True, result=result)
+        waited = self.due if late else frozenset
+        made = self._stepped(waited(states), tool, record, hints, returned=False)
+        return self._stepped(waited(made), tool, record, hints, returned=True, result=result)
+
+    def sent(
+        self,
+        states: frozenset[str],
+        tool: str,
+        record: Validator[Any],
+        hints: frozenset[str] = frozenset(),
+    ) -> frozenset[str]:
+        """Return the states the automaton may be in once a call is made and not yet answered."""
+        return self._stepped(states, tool, record, hints, returned=False)
 
     def _stepped(
         self,
