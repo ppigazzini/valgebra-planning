@@ -23,6 +23,8 @@ from valgebra_planning.program import Block, Call, Next, Ref, Return
 from valgebra_planning.run import (
     CanceledRunError,
     Refusal,
+    Run,
+    RunRules,
     ToolError,
     UnansweredError,
     arun,
@@ -1016,3 +1018,167 @@ def test_a_run_s_flow_refusal_carries_the_rule_s_reason() -> None:
         "flow measured: d from d reaches grasp.distance_m: grasp only at a distance the pose "
         "measured"
     )
+
+
+#: A robot that asks before it walks, and a yes held for 120 seconds.
+WALKING = {
+    contract.name: contract
+    for contract in map(
+        read_contract,
+        [
+            {
+                "name": name,
+                "inputSchema": {"type": "object"},
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {"status": {"enum": answers}},
+                    "required": ["status"],
+                },
+            }
+            for name, answers in (("confirm", ["yes"]), ("look", ["ok"]), ("walk", ["walked"]))
+        ],
+    )
+}
+CONSENT: dict[str, Any] = {
+    "name": "consent",
+    "initial": "unasked",
+    "bad": ["violated"],
+    "transitions": [
+        {
+            "from": "unasked",
+            "tool": "confirm",
+            "result": {"properties": {"status": {"const": "yes"}}},
+            "to": "yes",
+        },
+        {"from": "unasked", "tool": "walk", "to": "violated"},
+        {"from": "yes", "after_s": 120, "to": "unasked"},
+    ],
+}
+ASKED = "c1 = confirm()\nc2 = look()\nc3 = walk()\nreturn c3\n"
+ANYTHING = read_task("t", {}, True)
+
+
+class _Waiting:
+    """Tools whose `look` takes ``seconds`` by a clock of their own."""
+
+    def __init__(self, seconds: float) -> None:
+        self.now, self.seconds = 0.0, seconds
+        self.tools = {"confirm": self.confirm, "look": self.look, "walk": self.walk}
+
+    def clock(self) -> float:
+        return self.now
+
+    def confirm(self) -> dict[str, str]:
+        return {"status": "yes"}
+
+    def look(self) -> dict[str, str]:
+        self.now += self.seconds
+        return {"status": "ok"}
+
+    def walk(self) -> dict[str, str]:
+        return {"status": "walked"}
+
+
+def _awaited(*given: Any, **rules: Any) -> Run:
+    return asyncio.run(arun(*given, **rules))
+
+
+@pytest.mark.parametrize("runner", [run, _awaited])
+def test_a_walk_after_the_yes_lapsed_is_refused_by_the_policy(runner: Callable[..., Run]) -> None:
+    policy, program = read_policy(CONSENT), read_program(ASKED)
+    assert verify(program, WALKING, ANYTHING, policies=[policy]).verified
+
+    def ran(seconds: float) -> Run:
+        waiting = _Waiting(seconds)
+        rules: RunRules = {"policies": [policy], "clock": waiting.clock}
+        return runner(program, WALKING, ANYTHING, {}, waiting.tools, **rules)
+
+    assert ran(119).ok
+    late = ran(120)
+    assert late.refused == "consent: walk reached violated"
+    assert late.why == Refusal("policy", "walk", lapsed=True)
+    assert blame(late, WALKING, proven=True) == (
+        "the run reached the call to walk after the lapse its proof assumed: the caller's timing"
+    )
+
+
+def test_a_policy_its_own_calls_break_is_no_lapse_s() -> None:
+    program = read_program("c1 = walk()\nreturn c1\n")
+    waiting = _Waiting(0)
+    ran = run(
+        program,
+        WALKING,
+        ANYTHING,
+        {},
+        waiting.tools,
+        policies=[read_policy(CONSENT)],
+        clock=waiting.clock,
+    )
+    assert ran.why == Refusal("policy", "walk")
+    assert blame(ran, WALKING, proven=False) == "a policy no link of the program proves broke"
+
+
+def test_a_policy_broken_from_either_state_an_error_leaves_is_no_lapse_s() -> None:
+    # The confirmation may not have acted, so the walk breaks the policy with no lapse read.
+    told = {
+        **CONSENT,
+        "transitions": [
+            {"from": "unasked", "tool": "confirm", "to": "yes"},
+            *CONSENT["transitions"][1:],
+        ],
+    }
+
+    def failing() -> Any:
+        raise ToolError
+
+    ran = run(
+        read_program(
+            "try:\n    c1 = confirm()\nexcept ToolError:\n    c2 = walk()\n    return c2\n"
+            "return c1\n"
+        ),
+        WALKING,
+        ANYTHING,
+        {},
+        _Waiting(0).tools | {"confirm": failing},
+        policies=[read_policy(told)],
+        clock=lambda: 0.0,
+    )
+    assert ran.why == Refusal("policy", "walk")
+
+
+def test_a_run_that_ends_past_a_deadline_is_the_caller_s_timing() -> None:
+    due = {
+        **CONSENT,
+        "transitions": [
+            *CONSENT["transitions"][:2],
+            {"from": "yes", "after_s": 5, "to": "violated"},
+        ],
+    }
+    waiting = _Waiting(0)
+
+    def slow() -> float:
+        waiting.now += 2
+        return waiting.now
+
+    ran = run(
+        read_program("c1 = confirm()\nc2 = look()\nreturn c2\n"),
+        WALKING,
+        ANYTHING,
+        {},
+        waiting.tools,
+        policies=[read_policy(due)],
+        clock=slow,
+        enforce=True,
+    )
+    assert ran.why is not None
+    assert ran.why.lapsed
+    assert ran.refused == "consent: a state lapsed into violated"
+    cause = blame(ran, WALKING, proven=True)
+    assert cause is not None
+    assert cause.endswith("after the lapse its proof assumed: the caller's timing")
+
+
+def test_a_rule_a_run_does_not_take_is_refused_by_its_name() -> None:
+    misspelled: Any = {"policy": [read_policy(CONSENT)]}
+    with pytest.raises(TypeError, match="policy"):
+        run(read_program(ASKED), WALKING, ANYTHING, {}, _Waiting(0).tools, **misspelled)

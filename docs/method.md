@@ -367,8 +367,11 @@ a tool answering outside its own contract is the case a run must not pass on. Wi
 the runner records every break and goes on, a diagnosis rather than a guard. `blame` names why a run
 broke: a proven program breaks only where something it rests on fails, a server returning outside
 the output schema it declares, a schema inferred from observed calls not holding, an error
-outlasting a retry's attempts; an argument record, a policy or a returned value breaking in a proven
-program is a defect to report, and in an unproven one its own unproven link. A lying annotation and
+outlasting a retry's attempts, a policy's state lapsed before the call that needed it, which is the
+caller's timing; an argument record, a policy its calls break or a returned value breaking in a
+proven program is a defect to report, and in an unproven one its own unproven link. A run reads a
+policy's lapses by a clock, `time.monotonic` or the one it is given, at each call, each result and
+its end. A lying annotation and
 a wrong mined type break no check a run can see. `valgebra_planning/proxy.py` holds the same checks
 as an MCP server in front of another, for an agent no program governs: each call is answered with a
 tool error naming the check it breaks, a policy's refusal with the calls that move it on from where

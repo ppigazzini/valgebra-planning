@@ -143,6 +143,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
   leads back. A policy
   with none reads no clock. `Lapse` and `Span` are public.
 
+- A run reads a clock. `run`, `arun` and `run_on_server` take `clock` and hold a policy's lapses by
+  it, a walk after its yes lapsed ending on the `policy` check; `Refusal.lapsed` says a policy broke
+  by the time that passed alone, as a twin of it with no lapse keeps the same calls, and `blame`
+  names it the caller's timing. The three take their rules as one set of keywords, `RunRules`; a
+  keyword it does not name is a `TypeError`, as before.
+
 - A task names the inputs its answer must be read from: `reads` in `tasks.json` and `read_task`.
   A goal's set says what kind of value answers, not whose: every run's events meet "the events
   of a run", so the planner answered with `search_actions()`, reading no run. The verifier refutes

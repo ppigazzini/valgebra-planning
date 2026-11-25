@@ -18,9 +18,10 @@ from __future__ import annotations
 import asyncio
 import inspect
 import sys
+import time
 from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
-from dataclasses import dataclass, field
-from typing import Any, Literal, TypeVar
+from dataclasses import dataclass, field, replace
+from typing import Any, Literal, TypedDict, TypeVar, Unpack
 
 from valgebra_planning._valgebra import JSON, Validator, compile_schema, json_key
 from valgebra_planning.contracts import (
@@ -43,6 +44,7 @@ __all__ = [
     "Refusal",
     "RefusedResultError",
     "Run",
+    "RunRules",
     "ToolError",
     "UnansweredError",
     "arun",
@@ -114,12 +116,14 @@ class Refusal:
     output schema its server declares and outside its closed reading, and `postcondition` a
     read outside what a postcondition of the library says it shows.
 
-    ``tool`` is the tool the check was on, where it was on one.
+    ``tool`` is the tool the check was on, where it was on one. ``lapsed`` says a policy broke by
+    the time that passed alone: without its lapses the same calls keep it.
     """
 
     check: str
     tool: str | None = None
     retried: bool = False
+    lapsed: bool = False
 
 
 #: How a run ends, as `Run.outcome` reads it.
@@ -219,6 +223,8 @@ class _Runner:
     tools: Mapping[str, Callable[..., Any]]
     task: Task
     monitors: list[Monitor]
+    #: Each policy's monitor with its lapses left out, where it has any: what the walk proved.
+    untimed: list[Monitor | None]
     enforce: bool
     broken: list[str] = field(default_factory=list)
     postconditions: tuple[Postcondition, ...] = ()
@@ -238,11 +244,29 @@ class _Runner:
     tested: frozenset[str] = frozenset()
     iterated: frozenset[str] = frozenset()
 
-    def breaks(self, message: str, check: str, tool: str | None = None) -> Run | None:
+    def breaks(
+        self, message: str, check: str, tool: str | None = None, *, lapsed: bool = False
+    ) -> Run | None:
         """Record a broken check; return the run it ends when contracts are enforced."""
         self.broken.append(message)
         if self.enforce:
-            return Run(None, None, tuple(self.broken), message, Refusal(check, tool))
+            why = Refusal(check, tool, lapsed=lapsed)
+            return Run(None, None, tuple(self.broken), message, why)
+        return None
+
+    def policed(self, step: Callable[[Monitor], bool], tool: str | None = None) -> Run | None:
+        """Take one step of every policy; return the run the first one broken ends.
+
+        The walk reads no time, so it proves a policy with its lapses left out, and that monitor
+        is stepped beside the timed one: a policy only the timed one breaks, broke by its lapse.
+        """
+        for monitor, untimed in zip(self.monitors, self.untimed, strict=True):
+            broke = step(monitor)
+            kept = untimed is not None and not step(untimed)
+            if broke:
+                refused = self.breaks(monitor.violations[-1], "policy", tool, lapsed=kept)
+                if refused is not None:
+                    return refused
         return None
 
     def given(self, inputs: Mapping[str, Any]) -> Run | None:
@@ -306,12 +330,7 @@ class _Runner:
 
     def settled(self) -> Run | None:
         """Check each policy where the run ends; return the run a pending state ends."""
-        for monitor in self.monitors:
-            if monitor.ended():
-                refused = self.breaks(monitor.violations[-1], "policy")
-                if refused is not None:
-                    return refused
-        return None
+        return self.policed(Monitor.ended)
 
     def call(self, call: Call, env: _Env) -> _Steps[_Env | Run | None]:
         """Make one call; return the values held after it, the run it ended, or None (`block`)."""
@@ -394,12 +413,10 @@ class _Runner:
             refused = self.breaks(message, check, call.tool)
             if refused is not None:
                 return refused
-        for monitor in self.monitors:
-            if monitor.returned(call.tool, arguments, result, contract.hints):
-                refused = self.breaks(monitor.violations[-1], "policy", call.tool)
-                if refused is not None:
-                    return refused
-        return None
+        return self.policed(
+            lambda monitor: monitor.returned(call.tool, arguments, result, contract.hints),
+            call.tool,
+        )
 
     def admitted(
         self, call: Call, contract: Contract, arguments: dict[str, Any], env: _Env
@@ -418,12 +435,7 @@ class _Runner:
             refused = self.breaks(message, "flow", tool)
             if refused is not None:
                 return refused
-        for monitor in self.monitors:
-            if monitor.observe(tool, arguments, contract.hints):
-                refused = self.breaks(monitor.violations[-1], "policy", tool)
-                if refused is not None:
-                    return refused
-        return None
+        return self.policed(lambda monitor: monitor.observe(tool, arguments, contract.hints), tool)
 
     def flowing(self, call: Call, arguments: dict[str, Any], env: _Env) -> list[str]:
         """Return each flow rule whose sink the call fills that it breaks, as its message.
@@ -568,16 +580,11 @@ class _Runner:
         policy's step into one does; return that run.
         """
         if not unanswered:
-            for monitor in self.monitors:
+            for monitor in (*self.monitors, *filter(None, self.untimed)):
                 monitor.errored()
             return None
         hints = self.contracts[call.tool].hints
-        for monitor in self.monitors:
-            if monitor.unread(call.tool, arguments, hints):
-                refused = self.breaks(monitor.violations[-1], "policy", call.tool)
-                if refused is not None:
-                    return refused
-        return None
+        return self.policed(lambda monitor: monitor.unread(call.tool, arguments, hints), call.tool)
 
     def branch(self, branch: Branch, env: _Env) -> _Steps[Run | None]:
         """Take the side a test reads; what runs there runs under a test on the tested value."""
@@ -633,23 +640,35 @@ def _program(runner: _Runner, program: Block, inputs: Mapping[str, Any]) -> _Ste
     return ended
 
 
+class RunRules(TypedDict, total=False):
+    """What `run`, `arun` and `run_on_server` hold a run to, each by its keyword.
+
+    With ``enforce``, the default, the first broken check ends the run.
+    """
+
+    policies: Sequence[Policy]
+    enforce: bool
+    postconditions: Sequence[Postcondition]
+    flows: Sequence[Flow]
+    #: The JSON Schema each tool's error text lies in to be kept in `Run.error`.
+    error_texts: Mapping[str, object] | None
+    #: The clock a policy's lapses are read by, in seconds, `time.monotonic` where none is given.
+    clock: Callable[[], float]
+
+
 def run(
     program: Block,
     contracts: Mapping[str, Contract],
     task: Task,
     inputs: Mapping[str, Any],
     tools: Mapping[str, Callable[..., Any]],
-    *,
-    policies: Sequence[Policy] = (),
-    enforce: bool = True,
-    postconditions: Sequence[Postcondition] = (),
-    flows: Sequence[Flow] = (),
-    error_texts: Mapping[str, object] | None = None,
+    **rules: Unpack[RunRules],
 ) -> Run:
     """Run ``program`` on ``inputs``, calling ``tools`` by name, checking every contract.
 
     Each policy is stepped on a call before it is made, and reaching a bad state is a broken
     check like a broken contract, as is a run ending, in a return or a stop, in a pending one.
+    A policy's lapses are read by ``clock``, in seconds, at each call, each result and the end.
     With ``enforce``, the default, the first broken check ends the run, named in `Run.refused`;
     without it every break is recorded and the run goes on. Before the first call, each input
     the task names is held to its set, a broken check like the others. A tool raising anything
@@ -663,9 +682,7 @@ def run(
     a task naming an input as a tool.
     """
     unclashed(task, contracts)
-    runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
-    runner.postconditions, runner.flows = tuple(postconditions), tuple(flows)
-    runner.error_texts = _compiled(error_texts)
+    runner = _runner(contracts, tools, task, **rules)
     steps = _program(runner, program, inputs)
     try:
         tool, arguments = next(steps)
@@ -673,6 +690,35 @@ def run(
             tool, arguments = steps.send(_made(tools[tool], arguments))
     except StopIteration as ended:
         return ended.value
+
+
+def _runner(
+    contracts: Mapping[str, Contract],
+    tools: Mapping[str, Callable[..., Any]],
+    task: Task,
+    *,
+    policies: Sequence[Policy] = (),
+    enforce: bool = True,
+    postconditions: Sequence[Postcondition] = (),
+    flows: Sequence[Flow] = (),
+    error_texts: Mapping[str, object] | None = None,
+    clock: Callable[[], float] = time.monotonic,
+) -> _Runner:
+    """Return the interpreter of one run, held to `RunRules`; a rule it lacks is a `TypeError`.
+
+    Each policy has a monitor, and a second one with its lapses left out where it has any.
+    """
+    return _Runner(
+        contracts,
+        tools,
+        task,
+        [Monitor(policy, clock=clock) for policy in policies],
+        [Monitor(replace(policy, lapses=())) if policy.lapses else None for policy in policies],
+        enforce,
+        postconditions=tuple(postconditions),
+        flows=tuple(flows),
+        error_texts=_compiled(error_texts),
+    )
 
 
 def _compiled(error_texts: Mapping[str, object] | None) -> dict[str, Validator[Any]]:
@@ -720,12 +766,7 @@ async def arun(
     task: Task,
     inputs: Mapping[str, Any],
     tools: Mapping[str, Callable[..., Any]],
-    *,
-    policies: Sequence[Policy] = (),
-    enforce: bool = True,
-    postconditions: Sequence[Postcondition] = (),
-    flows: Sequence[Flow] = (),
-    error_texts: Mapping[str, object] | None = None,
+    **rules: Unpack[RunRules],
 ) -> Run:
     """Run ``program`` as `run` does, awaiting each call a tool answers with an awaitable.
 
@@ -738,9 +779,7 @@ async def arun(
     (`CanceledRunError`).
     """
     unclashed(task, contracts)
-    runner = _Runner(contracts, tools, task, [Monitor(policy) for policy in policies], enforce)
-    runner.postconditions, runner.flows = tuple(postconditions), tuple(flows)
-    runner.error_texts = _compiled(error_texts)
+    runner = _runner(contracts, tools, task, **rules)
     steps = _program(runner, program, inputs)
     try:
         tool, arguments = next(steps)
@@ -807,7 +846,8 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
     from observed calls is that assumption's, as one with a key its output schema does not
     declare is the closed reading's, a read outside what a postcondition says it shows is
     that declaration's, and an error a retry could not outlast is the fairness a retry
-    assumes. An argument record, a flow rule, a policy or a returned value breaking in a
+    assumes. A policy broken by a lapse alone is the caller's timing, which the walk reads none
+    of. An argument record, a flow rule, a policy or a returned value breaking in a
     proven program is a check the verification proved: a defect of this package or of valgebra.
     An unproven program's break is its own link's.
     """
@@ -834,7 +874,11 @@ def blame(result: Run, contracts: Mapping[str, Contract], *, proven: bool) -> st
         else f"an error of {tool} the program does not handle",
         "ended": "the program ends an iteration outside a loop: the program's",
         "canceled": f"the run was canceled at {tool}: the caller's",
+        "lapsed": f"the run reached {'its end' if tool is None else f'the call to {tool}'} after"
+        " the lapse its proof assumed: the caller's timing",
     }
+    if result.why.lapsed:
+        check = "lapsed"
     if check in named:
         return named[check]
     broke = _CHECKED.get(check, check)

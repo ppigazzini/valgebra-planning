@@ -24,15 +24,20 @@ import concurrent.futures
 import shlex
 import threading
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from typing import Any, Unpack
 
 from mcp import Client, InputRequiredRoundsExceededError, MCPError, StdioServerParameters, types
 
-from valgebra_planning.contracts import Contract, Postcondition, Task, read_contract
-from valgebra_planning.flows import Flow
-from valgebra_planning.policy import Policy
+from valgebra_planning.contracts import Contract, Task, read_contract
 from valgebra_planning.program import Block
-from valgebra_planning.run import RefusedResultError, Run, ToolError, UnansweredError, run
+from valgebra_planning.run import (
+    RefusedResultError,
+    Run,
+    RunRules,
+    ToolError,
+    UnansweredError,
+    run,
+)
 
 __all__ = [
     "MAX_PAGES",
@@ -140,17 +145,13 @@ async def run_on_server(
     task: Task,
     inputs: Mapping[str, Any],
     client: Client,
-    *,
-    policies: Sequence[Policy] = (),
-    enforce: bool = True,
-    postconditions: Sequence[Postcondition] = (),
-    flows: Sequence[Flow] = (),
-    error_texts: Mapping[str, object] | None = None,
+    **rules: Unpack[RunRules],
 ) -> Run:
     """Run ``program`` against the server ``client`` is connected to, failing closed.
 
     The checks are `valgebra_planning.run.run`'s, ``postconditions`` and ``flows`` among
-    them, and an error's text is kept in `Run.error` inside the set ``error_texts`` gives.
+    them, a policy's lapses read by ``clock``, and an error's text is kept in `Run.error` inside
+    the set ``error_texts`` gives.
     Canceling the task that awaits it cancels the call in flight and sends no call after it.
     """
     loop = asyncio.get_running_loop()
@@ -196,11 +197,7 @@ async def run_on_server(
             task,
             inputs,
             tools,
-            policies=policies,
-            enforce=enforce,
-            postconditions=postconditions,
-            flows=flows,
-            error_texts=error_texts,
+            **rules,
         )
     except asyncio.CancelledError:
         with guard:

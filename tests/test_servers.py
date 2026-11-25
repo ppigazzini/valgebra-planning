@@ -119,6 +119,47 @@ def test_an_error_result_is_a_tool_error_and_an_unhandled_one_stops_the_run() ->
     assert result.broken == ("open_claim answered with an error nothing handles",)
 
 
+@pytest.mark.parametrize(("taken", "outcome"), [(59, "refused"), (60, "returned")])
+def test_a_run_against_a_server_reads_the_clock_it_is_given(taken: float, outcome: str) -> None:
+    # A parcel is read once a minute: the reading lapses.
+    policy = read_policy(
+        {
+            "name": "once a minute",
+            "initial": "start",
+            "bad": ["violated"],
+            "transitions": [
+                {"from": "start", "tool": "find_parcel", "to": "read"},
+                {"from": "read", "tool": "find_parcel", "to": "violated"},
+                {"from": "read", "after_s": 60, "to": "start"},
+            ],
+        }
+    )
+    now = 0.0
+
+    def answer(name: str, arguments: dict[str, Any]) -> Any:
+        nonlocal now
+        now += taken
+        return drawn(name, arguments)
+
+    async def once() -> Any:
+        async with Client(_server(answer)) as client:
+            return await run_on_server(
+                read_program(
+                    "c1 = find_parcel(tracking=tracking)\n"
+                    "c2 = find_parcel(tracking=tracking)\nreturn c2\n"
+                ),
+                TOOLS,
+                read_task("read", {"tracking": {"type": "string"}}, True),
+                {"tracking": "AB123456789IT"},
+                client,
+                policies=[policy],
+                clock=lambda: now,
+            )
+
+    drawn = _drawn(random.Random(0))
+    assert asyncio.run(once()).outcome == outcome
+
+
 class _Label(TypedDict):
     label_id: str
 

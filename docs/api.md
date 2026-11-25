@@ -71,7 +71,7 @@ extra.
 | `valgebra_planning.verify` | `Gap`, `Link`, `Verdict`, `Verification`, `verify` | |
 | `valgebra_planning.critic` | `Critique`, `ProgramError`, `critique`, `read_program` | |
 | `valgebra_planning.codemode` | `Repair`, `feedback`, `repair`, `stub`, `stubs` | |
-| `valgebra_planning.run` | `CanceledRunError`, `Outcome`, `Refusal`, `RefusedResultError`, `Run`, `ToolError`, `UnansweredError`, `arun`, `blame`, `run` | |
+| `valgebra_planning.run` | `CanceledRunError`, `Outcome`, `Refusal`, `RefusedResultError`, `Run`, `RunRules`, `ToolError`, `UnansweredError`, `arun`, `blame`, `run` | |
 | `valgebra_planning.policy` | `Lapse`, `Monitor`, `Policy`, `Reach`, `Snapshot`, `Span`, `Transition`, `listing`, `read_policy` | |
 | `valgebra_planning.flows` | `Flow`, `read_flow` | |
 | `valgebra_planning.mining` | `SlotKey`, `Types`, `infer_outputs`, `mine` | |
