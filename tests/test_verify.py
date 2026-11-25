@@ -7,9 +7,10 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from valgebra_planning import verify as verifier
 from valgebra_planning._valgebra import Validator, compile_schema
 from valgebra_planning.codemode import repair
-from valgebra_planning.contracts import read_contract, read_task
+from valgebra_planning.contracts import inside, read_contract, read_task, sides
 from valgebra_planning.critic import read_program
 from valgebra_planning.program import Block, Branch, Call, Ref, Return, Stop, render, steps
 from valgebra_planning.run import run
@@ -401,3 +402,150 @@ def test_a_shrunk_witness_stays_held_and_outside(
     assert found != 0
     assert compile_schema(held).is_valid(found)
     assert not compile_schema(taken).is_valid(found)
+
+
+def _looked(schema: dict[str, Any]) -> dict[str, Any]:
+    """Return the tools of a program that looks at ``schema`` and tests it."""
+    look = {"name": "look", "inputSchema": {"type": "object"}, "outputSchema": schema}
+    return {"look": read_contract(look)}
+
+
+_LOOKED: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "status": {"enum": ["open", "shipped", "lost"]},
+        "at": {
+            "type": "object",
+            "properties": {"total": {"type": "integer", "minimum": 0, "maximum": 9}},
+            "required": ["total"],
+        },
+        "note": {"type": "string", "pattern": "^n"},
+    },
+    "required": ["status", "at", "note"],
+}
+_TESTED = (
+    "c1 = look()\n"
+    'if c1.status in ("open", "shipped"):\n'
+    "    if c1.at.total in (3, 9):\n"
+    "        return c1\n"
+    "    return c1\n"
+    'if c1.status in ("open",):\n'
+    "    return c1\n"
+    "if c1.at.total in (10,):\n"
+    "    return c1\n"
+    "return c1\n"
+)
+
+
+@pytest.mark.parametrize(
+    "more",
+    [
+        {},
+        {"allOf": [{"properties": {"status": {"const": "lost"}}}]},
+        {"not": {"properties": {"status": {"const": "lost"}}}},
+        {"additionalProperties": False},
+        {"dependentRequired": {"status": ["more"]}},
+        {"oneOf": [{"properties": {"status": {"const": "lost"}}}, {"required": ["more"]}]},
+        {"minProperties": 9, "additionalProperties": False},
+    ],
+    ids=["plain", "allOf", "not", "closed", "dependent", "oneOf", "empty"],
+)
+def test_the_returns_reached_are_the_ones_the_whole_belief_shows(
+    more: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A return shown field by field is one the belief asked whole reaches, and no other is."""
+    tools, task = _looked({**_LOOKED, **more}), read_task("look", {}, True)
+    program = read_program(_TESTED)
+    shown = verify(program, tools, task)
+    monkeypatch.setattr(verifier._Walk, "carried", lambda *_: False)
+    assert verify(program, tools, task) == shown
+
+
+def test_a_return_its_fields_show_asks_no_whole_belief(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The whole belief of a result of many fields is dear, and its tested fields are not."""
+    asked = []
+    belief = verifier._Walk.belief
+    monkeypatch.setattr(
+        verifier._Walk, "belief", lambda self, *a: asked.append(a[1]) or belief(self, *a)
+    )
+    task = read_task("look", {}, True)
+    program = read_program('c1 = look()\nif c1.status in ("open",):\n    return c1\nreturn c1\n')
+    assert verify(program, _looked(_LOOKED), task).returns == ("then", "else")
+    assert asked == []
+    tied = {**_LOOKED, "allOf": [{"properties": {"status": {"const": "lost"}}}]}
+    assert verify(program, _looked(tied), task).returns == ("else",)
+    assert asked == ["c1", "c1"]
+
+
+def test_a_value_tested_whole_is_asked_whole() -> None:
+    """A test on the result itself narrows every field, so no field shows a return reached."""
+    tools, task = _looked(_LOOKED), read_task("look", {}, True)
+    inner = '    if c1.status in ("lost",):\n        return c1\n'
+    source = f'c1 = look()\nif "gone" in c1:\n{inner}return c1\n'
+    assert verify(read_program(source), tools, task).returns == ("then.then", "then.else", "else")
+    shut = _looked({**_LOOKED, "additionalProperties": False})
+    assert verify(read_program(source), shut, task).returns == ("else",)
+
+
+@pytest.mark.parametrize(("first", "second"), [("look", "tied"), ("tied", "look")])
+def test_a_return_is_reached_where_every_value_tested_is(first: str, second: str) -> None:
+    """One value shown to meet its tests says nothing of another, whichever is read first."""
+    tied = {
+        "name": "tied",
+        "inputSchema": {"type": "object"},
+        "outputSchema": {**_LOOKED, "allOf": [{"properties": {"status": {"const": "lost"}}}]},
+    }
+    tools = {**_looked(_LOOKED), "tied": read_contract(tied)}
+    program = read_program(
+        f'c1 = {first}()\nc2 = {second}()\nif c1.status in ("open",):\n'
+        '    if c2.status in ("open",):\n        return c1\nreturn c1\n'
+    )
+    reached = verify(program, tools, read_task("look", {}, True)).returns
+    assert "then.then" not in reached
+    assert "else" in reached
+
+
+def test_a_record_tested_for_a_key_is_asked_whole() -> None:
+    """A record a test narrows is met by the value tried there, and no member stands for it."""
+    task = read_task("look", {}, True)
+    program = read_program('c1 = look()\nif "gone" in c1.at:\n    return c1\nreturn c1\n')
+    assert verify(program, _looked(_LOOKED), task).returns == ("then", "else")
+    at = {**_LOOKED["properties"]["at"], "additionalProperties": False}
+    shut = _looked({**_LOOKED, "properties": {**_LOOKED["properties"], "at": at}})
+    assert list(shut["look"].shown())
+    assert verify(program, shut, task).returns == ("else",)
+
+
+def test_a_program_no_rule_reads_builds_no_record_and_draws_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A policy alone reads a plain call's record, and a witness alone needs a drawn value."""
+
+    def refused(*_: object, **__: object) -> None:
+        raise AssertionError
+
+    task = read_task("look", {}, True)
+    monkeypatch.setattr(verifier, "record_of", refused)
+    monkeypatch.setattr(verifier.random, "Random", refused)
+    assert verify(read_program("c1 = look()\nreturn c1\n"), _looked(_LOOKED), task).proven
+
+
+def test_a_program_verified_again_asks_no_difference_again() -> None:
+    """An inclusion of what a test left out is dear, and one asked of the same sets is kept.
+
+    It is asked so after one test left the value out, whatever a later test keeps of it, and an
+    inclusion of what each test kept is read off the schemas.
+    """
+    goal = {"enum": ["open", "shipped", "lost"]}
+    task = read_task("look", {}, goal)
+    program = read_program(
+        'c1 = look()\nif c1.status in ("open",):\n    return c1.status\n'
+        'if c1.status in ("lost",):\n    return c1.status\nreturn c1.status\n'
+    )
+    first = verify(program, _looked(_LOOKED), task)
+    assert first.proven
+    asked = [kept.cache_info() for kept in (sides, inside)]
+    assert verify(program, _looked(_LOOKED), task) == first
+    again = [kept.cache_info() for kept in (sides, inside)]
+    assert [info.misses for info in again] == [info.misses for info in asked]
+    assert [new.hits - old.hits for new, old in zip(again, asked, strict=True)] == [2, 2]

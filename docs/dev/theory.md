@@ -528,14 +528,16 @@ every link of which is proven, some execution of which returns, and every stop o
 valgebra proves inside the set its task names there is weak in that sense, every other end
 being one the task accepts. A return under a test valgebra proves no value of the path's
 belief meets is reached on no execution (Bertoli et al. 2006, Def. 3.4): its link is proven of
-no value, and it counts for nothing. `repair` ends on one where asked, `accept="weak"`, so a
-task no program covers on every path is met by one stopping only where it may. A program
-stopping on every execution returns on none, and is never accepted so.
+no value, and it counts for nothing. A value of the belief, found among the members known of
+its fields, shows it holds one, and valgebra is asked of the belief whole where none is found.
+`repair` ends on one where asked, `accept="weak"`, so a task no program covers on every path is
+met by one stopping only where it may. A program stopping on every execution returns on none, and
+is never accepted so.
 **[LOAD-BEARING: weak-acceptance]**
 
-IMPLEMENTED-BY: verify.py::Verification.weak, verify.py::_Walk.reaches
+IMPLEMENTED-BY: verify.py::Verification.weak, verify.py::_Walk.reaches, verify.py::_Walk.carried
 
-HELD-BY: test_a_weak_program_stops_only_where_its_task_tolerates, test_repair_accepts_a_weak_program_where_asked_and_stays_strict_by_default, test_a_weak_program_reaches_the_return_it_counts
+HELD-BY: test_a_weak_program_stops_only_where_its_task_tolerates, test_repair_accepts_a_weak_program_where_asked_and_stays_strict_by_default, test_a_weak_program_reaches_the_return_it_counts, test_the_returns_reached_are_the_ones_the_whole_belief_shows, test_a_return_its_fields_show_asks_no_whole_belief, test_a_value_tested_whole_is_asked_whole, test_a_contract_shows_a_value_of_its_fields_members
 
 **A return in a loop's body ends the program at the first item reaching it.** A strong
 solution's execution structure is acyclic, and all its terminal states are in the goal (Cimatti

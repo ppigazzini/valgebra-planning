@@ -24,8 +24,9 @@ import json
 import math
 import random
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, field, replace
-from typing import Any, Literal
+from dataclasses import dataclass, field
+from functools import lru_cache
+from typing import Any, Literal, NamedTuple
 
 from valgebra_planning._valgebra import (
     ARRAY,
@@ -44,12 +45,16 @@ from valgebra_planning.contracts import (
     Postcondition,
     Slot,
     Task,
+    apart,
     field_slot,
     having,
+    inside,
     item_slots,
     listed,
+    placed,
     record_of,
     selecting,
+    sides,
     unclashed,
     unread,
     within,
@@ -68,6 +73,10 @@ DRAWS = 40
 #: How many values a loop's item is proven held on as templates, and how many records lacking
 #: a key are tried for an item.
 _BUILT = 4
+#: No value is found.
+_NONE: Any = object()
+#: How many references a walk reads values under are kept (`_ref`).
+_REFS = 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,25 +144,37 @@ class Verification:
         return sum(link.verdict == verdict for link in self.links)
 
 
-@dataclass(frozen=True, slots=True)
-class _Held:
+class _Held(NamedTuple):
     """The set a reference lies in at a point of a program, and the slot it came from."""
 
     values: Validator[Any]
     origin: Slot
     #: Where the value is a loop's item: the array it is read from.
-    loop: _Loop | None = field(default=None, compare=False)
+    loop: _Loop | None = None
     #: Whether the value is a call's result narrowed, to one case of a split on a policy's
     #: result guard or by a postcondition, so a branch none of its values reaches is no path.
-    case: bool = field(default=False, compare=False)
+    case: bool = False
+    #: Whether a test left the value outside a set: an inclusion of a difference is asked of
+    #: valgebra's sets, and any other is read off the schemas.
+    outside: bool = False
     #: The postconditions a call's result was narrowed by, each link over it naming them.
-    assumed: tuple[str, ...] = field(default=(), compare=False)
+    assumed: tuple[str, ...] = ()
     #: The value's version: each call's result, each loop's item and each task input is one, so
     #: two references read one value where their roots hold one version, on the path walked.
-    version: int = field(default=0, compare=False)
+    version: int = 0
     #: The version of the call that returned the value, a loop's item's being its array's, an
     #: input's its own: what a flow rule reading when and for what a value was returned reads.
-    returned: int = field(default=0, compare=False)
+    returned: int = 0
+
+    def inside(self, target: Validator[Any]) -> str:
+        """Return valgebra's answer on whether every value held lies in ``target``."""
+        return inside(self.values, target) if self.outside else self.values.relation_to(target)
+
+
+@lru_cache(maxsize=_REFS)
+def _ref(variable: str, path: tuple[str, ...] = ()) -> Ref:
+    """Return the reference a walk reads a value under, one kept for each name and path."""
+    return Ref(variable, path)
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -184,7 +205,6 @@ class _Walk:
     contracts: Mapping[str, Contract]
     task: Task
     examples: Mapping[str, Sequence[Any]]
-    rng: random.Random
     errors: bool
     policies: tuple[Policy, ...]
     flows: tuple[Flow, ...]
@@ -198,6 +218,8 @@ class _Walk:
     #: apart from `rng`, so a witness drawn elsewhere is the same with loops or without.
     drawn: dict[int, tuple[_Held, list[Any]]] = field(default_factory=dict)
     builder: random.Random | None = None
+    #: What every other witness is drawn from, made at the first draw: most programs need none.
+    rng: random.Random | None = None
     seed: int = 0
     postconditions: tuple[Postcondition, ...] = ()
     #: The arguments each call was given, by its result's version, each a literal or the
@@ -305,7 +327,7 @@ class _Walk:
         """
         if ref is None or isinstance(ref, Const):
             return ref
-        root = env.get(Ref(ref.variable))
+        root = env.get(_ref(ref.variable))
         return None if root is None else (root.version, ref.path)
 
     def block(self, block: Block, env: dict[Ref, _Held], where: str, path: _Path) -> None:
@@ -345,7 +367,7 @@ class _Walk:
             if self.reaches(env):
                 self.returns.append(where)
         if self.task.reads:
-            root = env.get(Ref(end.ref.variable))
+            root = env.get(_ref(end.ref.variable))
             read = set() if root is None else self.lineage(root.returned)
             for var in sorted(self.task.reads):
                 verdict: Verdict = "proven" if var in read else "refuted"
@@ -362,7 +384,7 @@ class _Walk:
         or input it came from. A loop's item is read as no whole value of its tool: a stop on it
         is never tolerated.
         """
-        root = env.get(Ref(ref.variable))
+        root = env.get(_ref(ref.variable))
         if root is None or root.loop is not None:
             return False
         allowed = dict(self.task.stops).get(root.origin.tool)
@@ -395,27 +417,27 @@ class _Walk:
         if held is None:
             return
         item = self.element(held)
-        inner = {ref: held for ref, held in env.items() if ref.variable != end.item}
+        inner = _unbound(env, end.item)
         # The item is a value of its own, returned by the call that returned its array.
-        array = env.get(Ref(end.ref.variable))
-        inner[Ref(end.item)] = _Held(
+        array = env.get(_ref(end.ref.variable))
+        inner[_ref(end.item)] = _Held(
             item.values,
             item,
             _Loop(end.ref, end.item, env),
             version=self.version(),
             returned=held.returned if array is None else array.returned,
         )
-        self.items[inner[Ref(end.item)].version] = inner[Ref(end.item)].returned
+        self.items[inner[_ref(end.item)].version] = inner[_ref(end.item)].returned
         inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
         if _acts(end.body, self.contracts):
             stale = path.stale | {held.returned for ref, held in inner.items() if not ref.path}
-            path = replace(path, stale=stale, last=None, observed=frozenset())
+            path = path._replace(stale=stale, last=None, observed=frozenset())
         else:
             path = _rebound(path, end.item)
         listed = _withdrawn(
             path, self.flows, inner, lambda flow: _makes(end.body, self.contracts, flow.withdraws)
         )
-        path = replace(path, withdrawn=listed)
+        path = path._replace(withdrawn=listed)
         states, holding, read = path.states, path.states, len(self.awaits)
         if self.policies:
             # The states once the body ran at least once, to a fixpoint from the first walk's.
@@ -423,7 +445,7 @@ class _Walk:
             ran = states
             while True:
                 ends, _ = self.iterate(
-                    end.body, inner, inside, replace(path, states=ran, tested=tested), silent=True
+                    end.body, inner, inside, path._replace(states=ran, tested=tested), silent=True
                 )
                 grown = tuple(s.union(*(e[i] for e in ends)) for i, s in enumerate(holding))
                 if grown == holding:
@@ -431,14 +453,14 @@ class _Walk:
                 holding = ran = grown
         reach = tuple(before | then for before, then in zip(states, holding, strict=True))
         _, exits = self.iterate(
-            end.body, inner, inside, replace(path, states=reach, tested=tested), silent=False
+            end.body, inner, inside, path._replace(states=reach, tested=tested), silent=False
         )
         after = path.tested.union(*exits)
-        path = replace(path, awaited=path.awaited.union(self.awaits[read:]))
+        path = path._replace(awaited=path.awaited.union(self.awaits[read:]))
         sides = self.sides(held, states, holding)
         for label, at in sides:
             here = where if len(sides) == 1 else _join(where, f"{label}:{end.item}")
-            self.block(end.after, env, here, replace(path, states=at, tested=after))
+            self.block(end.after, env, here, path._replace(states=at, tested=after))
 
     def sides(self, held: _Held, empty: _States, holding: _States) -> list[tuple[str, _States]]:
         """Return the sides of a loop what follows it is walked on, each with its states.
@@ -544,21 +566,22 @@ class _Walk:
             tested = listed(test.values)
         if held is None or tested is None:
             return
-        inside, outside = (
+        kept, left = (
             _Held(
-                intersection(held.values, side),
+                values,
                 held.origin,
                 held.loop,
+                outside=held.outside or difference,
                 version=held.version,
                 returned=held.returned,
             )
-            for side in (tested, complement(tested))
+            for values, difference in zip(sides(held.values, tested), (False, True), strict=True)
         )
         # Which branch runs carries the tested value's influence: an implicit flow.
-        tested = replace(path, tested=path.tested | {held.origin.tool})
+        tested = path._replace(tested=path.tested | {held.origin.tool})
         for side, narrowed, name in (
-            (test.then, inside, "then"),
-            (test.otherwise, outside, "else"),
+            (test.then, kept, "then"),
+            (test.otherwise, left, "else"),
         ):
             branched = {**env, test.ref: narrowed}
             if not self.reached(branched, test.ref.variable):
@@ -575,11 +598,38 @@ class _Walk:
         narrowed = {
             ref.variable for ref, held in env.items() if held.values is not held.origin.values
         }
-        return all(
-            self.belief(env, variable).relation_to(nothing) != "subset"
-            for variable in narrowed
-            if Ref(variable) in env
-        )
+        for variable in narrowed:
+            root = env.get(_ref(variable))
+            if root is None or self.carried(env, variable, root):
+                continue
+            if self.belief(env, variable).relation_to(nothing) == "subset":
+                return False
+        return True
+
+    def carried(self, env: Mapping[Ref, _Held], variable: str, root: _Held) -> bool:
+        """Return whether a value found lies in ``variable``'s belief.
+
+        Each value the contract shows (`Contract.shown`) is tried with a known member at each
+        field a test narrowed, and lies in the belief where valgebra holds it in the value's own
+        set and each such field in the set the tests left it (Bertoli et al. 2006, Def. 3.4).
+        """
+        contract = self.contracts.get(root.origin.tool)
+        if contract is None or root.origin.path:
+            return False
+        fields = [
+            (ref.path, held)
+            for ref, held in env.items()
+            if ref.variable == variable and ref.path and held.values is not held.origin.values
+        ]
+        for value in contract.shown():
+            found = value
+            for path, held in fields:
+                found = _meeting(found, path, held)
+                if found is _NONE:
+                    break
+            if found is not _NONE and root.values.is_valid(found):
+                return True
+        return False
 
     def reached(self, env: dict[Ref, _Held], variable: str) -> bool:
         """Return whether a branch is a path: not where a case's value is proven to miss it.
@@ -588,7 +638,7 @@ class _Walk:
         branch only where some value of the case meets every test on the way; a case and a
         branch valgebra proves disjoint are no execution (Bertoli et al. 2006, Def. 3.4).
         """
-        root = env.get(Ref(variable))
+        root = env.get(_ref(variable))
         if root is None or not root.case:
             return True
         return self.belief(env, variable).relation_to(nothing) != "subset"
@@ -611,28 +661,21 @@ class _Walk:
             return [(env, path)]
         self.flowing(call, env, where, path)
         version = self.version()
-        self.given[version] = tuple((name, self.keyed(env, ref)) for name, ref in call.bindings)
+        if self.flows or self.task.reads:
+            # A flow rule and a task's required inputs alone read what a call was given.
+            keys = ((name, self.keyed(env, ref)) for name, ref in call.bindings)
+            self.given[version] = tuple(keys)
         acted = path.acted
         failing = (
             self.repeated(call, contract, where, env, path) if acted or call.on_error else acted
         )
         states = path.states
-        bound = self.bind(call, env, where)
-        for slot in contract.arguments:
-            if slot.required and slot.path[0] not in dict(call.bindings):
-                self.links.append(Link(where, f"{slot.name} is bound", "refuted"))
+        bound = self.bind(call, contract, env, where)
         self.fixed(call, env, where)
         self.read_fresh(call, env, where, path)
         if not contract.plain and len(bound) == len(call.bindings):
             self.record(call, contract, bound, where, env)
-        after = states
-        record = record_of({name: held.values for name, held in bound.items()}, closed=True)
-        awaited = path.awaited
-        if self.policies:
-            after = self.stepped(states, contract, record)
-            awaited |= self.awaiting(states, contract, record)
-        # A tool that answered with an error may still have acted, so its block reads both.
-        either = tuple(before | then for before, then in zip(states, after, strict=True))
+        record, after, awaited = self.sent(contract, bound, path)
         # The result is a new version, so no value held under its name before is made fresh, as
         # the error's block, which reads that value, reads it.
         stale = path.stale
@@ -646,13 +689,19 @@ class _Walk:
         withdrawn = _withdrawn(
             path, self.flows, env, lambda flow: flow.withdraws(call.tool, contract.hints)
         )
-        erred = _Path(either, path.tested, failing, stale, unknown, observed, withdrawn, awaited)
+        erred = path
+        if call.on_error is not None:
+            # A tool that answered with an error may still have acted, so its block reads both.
+            either = tuple(before | then for before, then in zip(states, after, strict=True))
+            erred = _Path(
+                either, path.tested, failing, stale, unknown, observed, withdrawn, awaited
+            )
         self.failure(call, contract, env, where, erred)
         observed = self.observing(call, env, path, observed, acts=acts)
         shown = self.shown(call, env, path)
-        defined = {ref: held for ref, held in env.items() if ref.variable != call.result}
+        defined = _unbound(env, call.result)
         for slot in contract.results:
-            defined[Ref(call.result, slot.path)] = _Held(
+            defined[_ref(call.result, slot.path)] = _Held(
                 slot.values, slot, version=version, returned=version
             )
         # An attempt is held by the values it was given, so a name bound again leaves it.
@@ -661,7 +710,7 @@ class _Walk:
         whole = (
             self.narrowed(defined, call, contract, shown)
             if shown
-            else defined.get(Ref(call.result))
+            else defined.get(_ref(call.result))
         )
         guards = [
             transition.result
@@ -683,10 +732,23 @@ class _Walk:
                 version=whole.version,
                 returned=whole.returned,
             )
-            narrowed = {**defined, Ref(call.result): held}
+            narrowed = {**defined, _ref(call.result): held}
             stepped = self.stepped(states, contract, record, cell)
-            cases.append((narrowed, replace(made, states=stepped)))
+            cases.append((narrowed, made._replace(states=stepped)))
         return cases
+
+    def sent(
+        self, contract: Contract, bound: Mapping[str, _Held], path: _Path
+    ) -> tuple[Validator[Any], _States, frozenset[_Awaited]]:
+        """Return a call's record, the policy states it leaves, and the states awaited once sent.
+
+        A policy alone reads the record, so with none it is not built.
+        """
+        if not self.policies:
+            return nothing, path.states, path.awaited
+        record = record_of({name: held.values for name, held in bound.items()}, closed=True)
+        after = self.stepped(path.states, contract, record)
+        return record, after, path.awaited | self.awaiting(path.states, contract, record)
 
     def repeated(
         self, call: Call, contract: Contract, where: str, env: dict[Ref, _Held], path: _Path
@@ -706,10 +768,13 @@ class _Walk:
         2026, §4.1). Only an error block holds a call that may have acted, so a path outside one
         asks nothing.
         """
+        before = [done for done in path.acted if done.tool == call.tool]
+        if not before and call.on_error is None:
+            return path.acted
         attempt = self.attempt(call, env)
         unread = False
-        for done in path.acted:
-            if done.tool != call.tool or _disjoint(done.record, attempt.record):
+        for done in before:
+            if _disjoint(done.record, attempt.record):
                 continue
             post = self.unacted(done, env, path)
             if post is None:
@@ -747,7 +812,7 @@ class _Walk:
         """Return the postcondition whose read shows ``made`` did not act here, or None."""
         for done, variable, index in path.observed:
             post = self.postconditions[index]
-            if done is not made or Ref(variable) not in env:
+            if done is not made or _ref(variable) not in env:
                 continue
             shown = intersection(self.belief(env, variable), post.shows)
             if shown.relation_to(nothing) == "subset":
@@ -802,7 +867,7 @@ class _Walk:
         if path.last is None or not self.postconditions:
             return []
         tool, bindings, result = path.last
-        if Ref(result) not in env:
+        if _ref(result) not in env:
             return []
         given, reading = dict(bindings), dict(call.bindings)
         found = []
@@ -830,7 +895,7 @@ class _Walk:
         Each field slot is met with the set ``shown`` gives that field, so a record built of
         the result's fields is asked inside it as the whole is.
         """
-        whole = defined.get(Ref(call.result))
+        whole = defined.get(_ref(call.result))
         if not shown or whole is None:
             return whole
         whole = _Held(
@@ -841,11 +906,11 @@ class _Walk:
             version=whole.version,
             returned=whole.returned,
         )
-        defined[Ref(call.result)] = whole
+        defined[_ref(call.result)] = whole
         for slot in contract.results:
             if slot.path:
                 fields = (post.field(slot.path) for post in shown)
-                defined[Ref(call.result, slot.path)] = _Held(
+                defined[_ref(call.result, slot.path)] = _Held(
                     intersection(slot.values, *fields),
                     slot,
                     version=whole.version,
@@ -857,11 +922,16 @@ class _Walk:
         """Return the postconditions the value ``ref`` reads was narrowed by."""
         if not self.postconditions or not isinstance(ref, Ref):
             return ()
-        root = env.get(Ref(ref.variable))
+        root = env.get(_ref(ref.variable))
         return () if root is None else root.assumed
 
-    def bind(self, call: Call, env: dict[Ref, _Held], where: str) -> dict[str, _Held]:
-        """Add the link of each binding inside its argument; return the set each argument holds."""
+    def bind(
+        self, call: Call, contract: Contract, env: dict[Ref, _Held], where: str
+    ) -> dict[str, _Held]:
+        """Add the link of each binding inside its argument; return the set each argument holds.
+
+        A required argument no binding fills is refuted.
+        """
         bound: dict[str, _Held] = {}
         for name, ref in call.bindings:
             slot = self.argument(call.tool, name, where)
@@ -875,6 +945,10 @@ class _Walk:
                 continue
             bound[name] = held
             self.inclusion(where, f"{ref} <= {slot.name}", ref, held, slot.values, env)
+        given = dict(call.bindings)
+        for slot in contract.arguments:
+            if slot.required and slot.path[0] not in given:
+                self.links.append(Link(where, f"{slot.name} is bound", "refuted"))
         return bound
 
     def flowing(self, call: Call, env: dict[Ref, _Held], where: str, path: _Path) -> None:
@@ -939,7 +1013,7 @@ class _Walk:
         version the path holds under a name, not the name (`_Walk.version`). A value failing
         either reaches the sink only inside the endorsed set, as a value from elsewhere does.
         """
-        root = env.get(Ref(ref.variable))
+        root = env.get(_ref(ref.variable))
         returner = held.returned if root is None else root.returned
         tool = held.origin.tool
         said = f"flow {flow.name}: {ref} from {tool} was returned"
@@ -1031,7 +1105,7 @@ class _Walk:
         found: tuple[Any, ...] = ()
         if verdict != "proven":
             refs = dict(call.bindings)
-            choices = [self.candidates(Ref(name), held)[:3] for name, held in bound.items()]
+            choices = [self.candidates(_ref(name), held)[:3] for name, held in bound.items()]
             for values in itertools.islice(itertools.product(*choices), 64):
                 value = dict(zip(bound, values, strict=True))
                 if not contract.accepts.is_valid(value) and self.jointly(env, refs, value):
@@ -1078,7 +1152,7 @@ class _Walk:
         value drawn for the reference refutes only where valgebra proves a value of that
         belief carries it there.
         """
-        answer = held.values.relation_to(target)
+        answer = held.inside(target)
         found: tuple[Any, ...] = ()
         if answer != "subset":
             # Realize a witness first: a wrong program is refuted on one question of valgebra,
@@ -1122,10 +1196,11 @@ class _Walk:
         lies in what its record's schema declares of it,
         `valgebra_planning.contracts.field_slot`.
         """
-        if ref in env:
-            return _Read(env[ref])
+        held = env.get(ref)
+        if held is not None:
+            return _Read(held)
         for depth in range(len(ref.path) - 1, -1, -1):
-            held = env.get(Ref(ref.variable, ref.path[:depth]))
+            held = env.get(_ref(ref.variable, ref.path[:depth]))
             if held is None:
                 continue
             for at in range(depth, len(ref.path)):
@@ -1199,11 +1274,11 @@ class _Walk:
         value holding the array is read as the program holds it ``now``, `_holder`; where that
         is only what it held when the loop began, a refutation is undecided.
         """
-        held = env.get(Ref(variable))
+        held = env.get(_ref(variable))
         if held is None:
             return "undecided"
         if answer is None:
-            answer = held.values.relation_to(question)
+            answer = held.inside(question)
         tested = _tested(env, variable)
         if answer != "subset" and tested:
             answer = self.belief(env, variable).relation_to(question)
@@ -1224,7 +1299,7 @@ class _Walk:
         2006, Def. 3.4), so a value the program may hold here carries each field a test
         narrowed inside that field's narrowed set.
         """
-        meet = env[Ref(variable)].values
+        meet = env[_ref(variable)].values
         for path, values in _tested(env, variable):
             meet = intersection(meet, selecting(path, values))
         return meet
@@ -1240,10 +1315,10 @@ class _Walk:
         if read.record is None:
             return ()
         key, path = ref.path[read.at], ref.path[: read.at]
-        root = env.get(Ref(ref.variable))
+        root = env.get(_ref(ref.variable))
         building = root is not None and root.loop is not None
         seen: list[str] = []
-        for value in self.candidates(Ref(ref.variable, path), read.record):
+        for value in self.candidates(_ref(ref.variable, path), read.record):
             if not isinstance(value, dict):
                 continue
             bare = {name: item for name, item in value.items() if name != key}
@@ -1298,7 +1373,7 @@ class _Walk:
         item's belief may admit a value no item of the array takes, so for an item the value
         is built, `_Walk.built`.
         """
-        held = env.get(Ref(variable))
+        held = env.get(_ref(variable))
         if held is None:
             return False
         if held.loop is not None or now is not None:
@@ -1327,7 +1402,7 @@ class _Walk:
         not empty. Where the program holds the holder ``now`` only as it did when the loop
         began, `_holder`, nothing is proven.
         """
-        held = env[Ref(variable)]
+        held = env[_ref(variable)]
         loop = held.loop
         holder, exact = (env, True) if loop is None else _holder(now, loop)
         if not exact:
@@ -1376,6 +1451,8 @@ class _Walk:
     def candidates(self, ref: Ref, held: _Held) -> list[Any]:
         """Return values the reference may hold there: the examples given, then draws."""
         given = [v for v in self.examples.get(str(ref), ()) if held.values.is_valid(v)]
+        if self.rng is None:
+            self.rng = random.Random(self.seed)
         try:
             drawn = Sampler(held.origin.root, self.rng).draw(held.origin.schema, DRAWS)
         except (Unsupported, RecursionError):
@@ -1392,13 +1469,13 @@ class _Walk:
         is read off their annotations, a hint their server gives, so a link proven over them
         lists that assumption unless every server is trusted.
         """
-        given = dict(call.bindings)
         for tool, argument in self.task.fresh:
+            given = dict(call.bindings)
             if tool != call.tool or argument not in given:
                 continue
             ref = given[argument]
             claim = f"{tool}.{argument} is read after every call before it that may act"
-            root = env.get(Ref(ref.variable)) if isinstance(ref, Ref) else None
+            root = env.get(_ref(ref.variable)) if isinstance(ref, Ref) else None
             fresh = root is not None and root.returned not in path.stale
             hinted = fresh and not all(c.trusted for c in self.contracts.values())
             assumed = ("the read-only annotations of the calls before it",) if hinted else ()
@@ -1411,12 +1488,11 @@ class _Walk:
         passing another, a literal or a held value that may differ, is refuted there, and so is
         one leaving the argument out: the tool then reads its own default, which no task fixed.
         """
-        given = dict(call.bindings)
         for tool, argument, value in self.task.constants:
             if tool != call.tool:
                 continue
             claim = f"{call.tool}.{argument} is the task's {Const.of(value)}"
-            ref = given.get(argument)
+            ref = dict(call.bindings).get(argument)
             if ref is None:
                 self.links.append(Link(where, claim, "refuted"))
                 continue
@@ -1444,6 +1520,9 @@ class _Walk:
         some value, or one a member of the root is found lacking, is refuted; a field whose
         presence valgebra leaves undecided is undecided.
         """
+        held = env.get(ref)
+        if held is not None:
+            return held
         read = self.resolve(env, ref)
         if read.held is not None:
             return read.held
@@ -1470,8 +1549,7 @@ class _Walk:
             return None
 
 
-@dataclass(frozen=True, slots=True)
-class _Read:
+class _Read(NamedTuple):
     """A reference read: its set, or valgebra's answer where it stopped, and the record there."""
 
     held: _Held | None
@@ -1492,7 +1570,7 @@ def _apart(env: dict[Ref, _Held], refs: Iterable[Ref | Const]) -> bool:
     for ref in refs:
         if isinstance(ref, Const):
             continue
-        held = env.get(Ref(ref.variable))
+        held = env.get(_ref(ref.variable))
         if ref.path or held is None or held.origin.path or _tested(env, ref.variable):
             return False
         variables.append(ref.variable)
@@ -1509,7 +1587,7 @@ def _holder(now: Mapping[Ref, _Held], loop: _Loop) -> tuple[Mapping[Ref, _Held],
     hold one the body excluded.
     """
     variable = loop.array.variable
-    if now.get(Ref(variable)) is loop.env.get(Ref(variable)):
+    if now.get(_ref(variable)) is loop.env.get(_ref(variable)):
         return now, True
     return loop.env, variable == loop.item
 
@@ -1613,10 +1691,25 @@ def _disjoint(
 ) -> bool:
     """Return whether valgebra proves two argument records disjoint at some argument."""
     sets = dict(other)
-    return any(
-        name in sets and intersection(held, sets[name]).relation_to(nothing) == "subset"
-        for name, held in one
-    )
+    return any(name in sets and apart(held, sets[name]) for name, held in one)
+
+
+def _meeting(value: Any, path: tuple[str, ...], held: _Held) -> Any:
+    """Return ``value`` with the field at ``path`` in the set ``held``, or `_NONE`."""
+    at = value
+    for key in path:
+        at = at.get(key, _NONE) if isinstance(at, dict) else _NONE
+    if at is not _NONE and held.values.is_valid(at):
+        return value
+    member = next(filter(held.values.is_valid, held.origin.members()), _NONE)
+    return _NONE if member is _NONE else placed(value, path, member)
+
+
+def _unbound(env: dict[Ref, _Held], name: str) -> dict[Ref, _Held]:
+    """Return what the program holds under any name but ``name``."""
+    if not any(ref.variable == name for ref in env):
+        return env.copy()
+    return {ref: held for ref, held in env.items() if ref.variable != name}
 
 
 def _unnamed(observed: frozenset[_Observed], name: str) -> frozenset[_Observed]:
@@ -1627,7 +1720,7 @@ def _unnamed(observed: frozenset[_Observed], name: str) -> frozenset[_Observed]:
 def _rebound(path: _Path, name: str) -> _Path:
     """Return ``path`` once ``name`` holds another value: nothing read under it covers."""
     last = None if path.last is not None and name in _named(path.last) else path.last
-    return replace(path, last=last, observed=_unnamed(path.observed, name))
+    return path._replace(last=last, observed=_unnamed(path.observed, name))
 
 
 def _named(made: _Made) -> set[str]:
@@ -1689,6 +1782,8 @@ def _withdrawn(
 
     It is the versions returned before the last such call: every value held where one is made.
     """
+    if not any(flow.withdrawn_by for flow in flows):
+        return ()
     held = dict(path.withdrawn)
     returned = frozenset(value.returned for ref, value in env.items() if not ref.path)
     return tuple(
@@ -1701,8 +1796,7 @@ def _withdrawn(
     )
 
 
-@dataclass(frozen=True, slots=True)
-class _Path:
+class _Path(NamedTuple):
     """What a path carries beside its values: policy states, and the sources it tested."""
 
     states: _States
@@ -1849,15 +1943,15 @@ def verify(
     name could tell apart.
     """
     unclashed(task, contracts)
-    walk = _Walk(
-        contracts, task, examples or {}, random.Random(seed), errors, tuple(policies), tuple(flows)
-    )
+    walk = _Walk(contracts, task, examples or {}, errors, tuple(policies), tuple(flows))
     walk.seed, walk.postconditions = seed, tuple(postconditions)
     # Each input is a value of its own, returned by no call: its version is its own.
     versions = {var: walk.version() for var in task.held}
     walk.inputs = {version: var for var, version in versions.items()}
     env = {
-        Ref(var, slot.path): _Held(slot.values, slot, version=versions[var], returned=versions[var])
+        _ref(var, slot.path): _Held(
+            slot.values, slot, version=versions[var], returned=versions[var]
+        )
         for var, slots in task.held.items()
         for slot in slots
     }

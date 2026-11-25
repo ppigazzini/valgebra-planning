@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import itertools
 import json
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -14,16 +16,24 @@ from valgebra_planning._valgebra import (
     ValidationError,
     anything,
     compile_schema,
+    complement,
+    intersection,
     nothing,
 )
 from valgebra_planning.contracts import (
     RESULT_DEPTH,
+    Contract,
+    apart,
     contract_names,
     failures,
     field_slot,
+    inside,
+    listed,
+    meet,
     read_contract,
     read_task,
     record_of,
+    sides,
 )
 from valgebra_planning.critic import critique, read_program
 from valgebra_planning.library import asserts_format, read_library, reads_closed
@@ -748,3 +758,107 @@ def test_a_constant_past_the_float_range_is_proven_inside_no_other(schema: dict[
     checked = verify(program, tools, read_task("t", {}, {"type": "boolean"}))
     verdicts = {link.claim: link.verdict for link in checked.links}
     assert verdicts["c0.v <= write_level.v"] == "refuted"
+
+
+def _returning(schema: dict[str, Any]) -> Contract:
+    """Return a tool whose result is ``schema``."""
+    return read_contract(
+        {"name": "look", "inputSchema": {"type": "object"}, "outputSchema": schema}
+    )
+
+
+def _record_schema(**properties: object) -> dict[str, Any]:
+    return {"type": "object", "properties": properties, "required": sorted(properties)}
+
+
+STATUS = {"enum": ["open", "lost"]}
+TOTAL = {"type": "integer", "minimum": 0, "maximum": 9}
+PLAIN_FIELDS = _record_schema(status=STATUS, total=TOTAL, note={"type": "string", "pattern": "^n"})
+
+
+def test_a_contract_shows_a_value_of_its_fields_members() -> None:
+    """The record of the fields it guarantees comes first, then it with each key it may hold."""
+    look = _returning(_record_schema(order=PLAIN_FIELDS, count=TOTAL))
+    (shown,) = look.shown()
+    assert shown["count"] == 0
+    assert shown["order"]["status"] == "open"
+    assert shown["order"]["note"].startswith("n")
+    assert look.result().values.is_valid(shown)
+    wider = _record_schema(status=STATUS)
+    wider["properties"]["more"] = TOTAL
+    assert list(_returning(wider).shown()) == [{"status": "open"}, {"status": "open", "more": 0}]
+    assert list(_returning({"type": "string", "pattern": "^n$"}).shown()) == ["n"]
+    assert list(_returning({"type": "object"}).shown()) == [{}]
+
+
+def test_a_contract_shows_nothing_of_a_field_with_no_member_known() -> None:
+    empty = {"type": "integer", "minimum": 5, "maximum": 4}
+    assert list(_returning(_record_schema(status=STATUS, total=empty)).shown()) == []
+
+
+@pytest.mark.parametrize(
+    ("schema", "members"),
+    [
+        ({"enum": ["lost", 2, None]}, ("lost", 2, None)),
+        ({"const": 0.5}, (0.5,)),
+        ({"type": "integer", "minimum": 3, "maximum": 9}, (3, 9, 6)),
+        ({"type": "number", "exclusiveMinimum": 0.5, "maximum": 4}, (4, 2)),
+        ({"type": "string", "minLength": 4, "maxLength": 4}, None),
+        ({"type": "array", "minItems": 3, "items": TOTAL}, None),
+    ],
+    ids=["enum", "const", "range", "open", "length", "array"],
+)
+def test_a_slot_s_members_are_those_its_schema_names(
+    schema: dict[str, Any], members: tuple[Any, ...] | None
+) -> None:
+    """Where it names none, one is drawn, and each lies in the slot's set."""
+    slot = _returning(_record_schema(at=schema)).result("at")
+    found = slot.members()
+    assert found
+    assert all(map(slot.values.is_valid, found))
+    assert members is None or found[: len(members)] == members
+    assert slot.members() is found
+
+
+def test_a_listed_value_its_asserted_format_refuses_is_no_member() -> None:
+    """The schema lists it, and the set read with formats asserted holds it not."""
+    dated = {"enum": ["soon", "2026-11-25"], "format": "date"}
+    spec = {"name": "look", "inputSchema": {"type": "object"}}
+    look = read_contract({**spec, "outputSchema": _record_schema(on=dated)}, assert_format=True)
+    assert look.result("on").listed() == ("soon", "2026-11-25")
+    assert look.result("on").members() == ("2026-11-25",)
+
+
+def test_a_declared_field_s_slot_is_read_once_and_an_undeclared_one_is_not_kept() -> None:
+    """The schema's properties bound what a slot keeps, whatever keys programs read."""
+    whole = _returning(PLAIN_FIELDS).result()
+    assert field_slot(whole, "total") is field_slot(whole, "total")
+    assert field_slot(whole, "total").path == ("total",)
+    assert field_slot(whole, "other") is not field_slot(whole, "other")
+    assert replace(whole) == whole
+    assert field_slot(replace(whole), "total") is not field_slot(whole, "total")
+
+
+@pytest.mark.parametrize(
+    "values",
+    [[1], [True], [1.5], ["a", None], [[1, {"a": 1}]], [float("inf")], [10**400], [], ["\ud83d"]],
+    ids=["one", "true", "fraction", "text", "nested", "infinite", "large", "none", "surrogate"],
+)
+def test_a_listed_set_is_the_enum_s_whether_its_text_was_read_or_not(values: list[Any]) -> None:
+    """Equal texts list one set: `1` and `true` are two."""
+    assert listed(values) == compile_schema({"enum": values})
+    assert listed(tuple(values)) is listed(values)
+    assert listed([1]) != listed([True])
+
+
+def test_a_test_s_sides_and_an_inclusion_are_those_asked_afresh() -> None:
+    weight = compile_schema({"type": "integer", "minimum": 1, "maximum": 30})
+    light = compile_schema({"type": "integer", "minimum": 1, "maximum": 10})
+    kept, left = sides(weight, light)
+    assert kept == intersection(weight, light)
+    assert left == intersection(weight, complement(light))
+    assert sides(weight, light) is sides(weight, light)
+    for values, target in itertools.product((weight, light, kept, left), repeat=2):
+        assert inside(values, target) == values.relation_to(target)
+        assert meet(values, target) == intersection(values, target).relation_to(nothing)
+        assert apart(values, target) == (meet(values, target) == "subset")

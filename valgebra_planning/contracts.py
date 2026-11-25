@@ -12,20 +12,27 @@ so a slot a reading yields is kept only where valgebra proves the whole schema's
 from __future__ import annotations
 
 import functools
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+import json
+import random
+from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from valgebra_planning._valgebra import (
     ANNOTATIONS,
     Compiler,
+    Sampler,
     Unsupported,
     ValidationError,
     Validator,
     anything,
     closed,
     compile_schema,
+    complement,
+    finite,
     intersection,
+    interval,
+    nothing,
     older,
     read_tool,
     union,
@@ -47,6 +54,40 @@ __all__ = [
 #: How deep a result field is read for the fields it guarantees in turn. A value three
 #: objects down is still one an agent can pass on by its path.
 RESULT_DEPTH = 3
+
+#: Values at the edges of common bounds, tried in a set before any draw.
+EDGES: tuple[Any, ...] = (
+    None,
+    True,
+    False,
+    0,
+    1,
+    -1,
+    2,
+    100,
+    1000,
+    0.5,
+    -0.5,
+    1.5,
+    float("inf"),
+    "",
+    "a",
+    "0",
+    [],
+    [None],
+    {},
+)
+
+#: How many ends a closed range has.
+_ENDS = 2
+
+#: No value is known.
+_UNKNOWN: Any = object()
+
+#: How many pairs of sets keep whether they share a value (`meet`), and how many tests keep the
+#: sets they leave (`sides`, `inside`): a library asks few, and each entry holds its sets.
+_PAIRS = 1024
+_TESTS = 256
 
 #: Root keywords an input schema may carry and still constrain each argument on its own,
 #: so that every argument proven inside its slot makes the whole record a member.
@@ -75,11 +116,76 @@ class Slot:
     #: Whether ``format`` in the schema is read as an assertion, as the library asks: every set
     #: read from the slot's schema later is read alike, so a proof and a run hold one set.
     asserted: bool = False
+    #: The slot of each declared field read below this one, kept from its first reading, as a
+    #: slot never changes: the schema's properties bound how many (`Slot.below`).
+    _below: Mapping[str, Slot] = field(default_factory=dict, init=False, repr=False, compare=False)
+    #: What `listed`, `members` and `declared` found, each in a tuple of one, kept from its
+    #: first call.
+    _listed: tuple[Sequence[Any] | None, ...] = field(
+        default=(), init=False, repr=False, compare=False
+    )
+    _members: tuple[Sequence[Any], ...] = field(default=(), init=False, repr=False, compare=False)
+    _declared: tuple[Sequence[str], ...] = field(default=(), init=False, repr=False, compare=False)
 
     @property
     def name(self) -> str:
         """Return the slot as a program writes it: ``tool.path``."""
         return ".".join((self.tool, *self.path)) if self.path else self.tool
+
+    def listed(self) -> Sequence[Any] | None:
+        """Return every JSON value the slot's schema lists, or None where it lists none."""
+        if not self._listed:
+            found = finite(self.schema, self.root)
+            object.__setattr__(self, "_listed", (found if found is None else tuple(found),))
+        return self._listed[0]
+
+    def members(self) -> Sequence[Any]:
+        """Return some of the slot's values, the ones its schema names before one drawn from it.
+
+        What to try is read off the schema's spelling alone: a value stands for nothing until the
+        set holds it.
+        """
+        if not self._members:
+            found = tuple(filter(self.values.is_valid, _tries(self.schema)))
+            if not found:
+                found = tuple(filter(self.values.is_valid, self._drawn()))
+            object.__setattr__(self, "_members", (found,))
+        return self._members[0]
+
+    def _drawn(self) -> Sequence[Any]:
+        try:
+            return Sampler(self.root, random.Random(0)).draw(self.schema, 1)
+        except (Unsupported, RecursionError):
+            return ()
+
+    def declared(self) -> Sequence[str]:
+        """Return the keys the slot's schema declares, as `below` reads them."""
+        if not self._declared:
+            node = _object_node(Compiler(self.root, assert_format=self.asserted), self.schema)
+            found = tuple(sorted(_properties(node)[0])) if node is not None else ()
+            object.__setattr__(self, "_declared", (found,))
+        return self._declared[0]
+
+    def below(self, key: str) -> Slot:
+        """Return the slot of the field ``key``, as `field_slot` reads it, a declared one kept."""
+        if (kept := self._below.get(key)) is not None:
+            return kept
+        compiler = Compiler(self.root, assert_format=self.asserted)
+        node = _object_node(compiler, self.schema)
+        properties, _ = _properties(node) if node is not None else ({}, frozenset())
+        schema = properties.get(key, True)
+        slot = Slot(
+            self.tool,
+            (*self.path, key),
+            schema,
+            compiler.compile(schema),
+            required=True,
+            root=self.root,
+            asserted=self.asserted,
+        )
+        if key in properties:
+            object.__setattr__(self, "_below", {**self._below, key: slot})
+        return slot
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +218,8 @@ class Contract:
     #: then holds the narrower set, an assumption every link and binding resting on a result
     #: names. None where the result is read as declared.
     declared: Validator[Any] | None = None
+    #: What `shown` found, in a tuple of one, kept from its first call: a contract never changes.
+    _shown: tuple[Any, ...] = field(default=(), init=False, repr=False, compare=False)
 
     def argument(self, name: str) -> Slot:
         """Return the argument slot called ``name``, or raise `KeyError`."""
@@ -126,6 +234,26 @@ class Contract:
             if slot.path == path:
                 return slot
         raise KeyError(".".join(path))
+
+    def shown(self) -> Iterator[Any]:
+        """Yield a few values the result may hold, of its fields' known members.
+
+        The record of the guaranteed fields comes first, and then it with each other key the
+        result declares, so a test on a key is met by one and missed by another. Where some
+        guaranteed field has no member known, none is.
+        """
+        if not self._shown:
+            found = _built(self.results)
+            object.__setattr__(self, "_shown", (found,))
+        (found,) = self._shown
+        if found is _UNKNOWN:
+            return
+        yield found
+        if isinstance(found, dict):
+            whole = self.results[0]
+            for key in whole.declared():
+                if key not in found and (known := whole.below(key).members()):
+                    yield {**found, key: known[0]}
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,19 +375,7 @@ def field_slot(slot: Slot, key: str) -> Slot:
     al. 2006, §3) that other keywords of the record may narrow further. A key no property
     declares takes any JSON value. Whether the field is present is not the slot's to say.
     """
-    compiler = Compiler(slot.root, assert_format=slot.asserted)
-    node = _object_node(compiler, slot.schema)
-    properties, _ = _properties(node) if node is not None else ({}, frozenset())
-    schema = properties.get(key, True)
-    return Slot(
-        slot.tool,
-        (*slot.path, key),
-        schema,
-        compiler.compile(schema),
-        required=True,
-        root=slot.root,
-        asserted=slot.asserted,
-    )
+    return slot.below(key)
 
 
 #: MCP's tool annotation hints, each read as the protocol reads a tool that sets none.
@@ -530,7 +646,18 @@ def _sink(task: str, sink: str, what: str) -> tuple[str, str]:
 
 def listed(values: Sequence[Any]) -> Validator[Any]:
     """Return the set of JSON values ``values`` lists, as an ``enum`` reads them."""
-    return compile_schema({"enum": list(values)})
+    try:
+        text = json.dumps(list(values))
+    except (TypeError, ValueError):
+        # A value no JSON text holds is compiled as it stands, or refused.
+        return compile_schema({"enum": list(values)})
+    return _listed(text)
+
+
+@functools.lru_cache(maxsize=_TESTS)
+def _listed(text: str) -> Validator[Any]:
+    """Return the set an ``enum`` of the JSON array ``text`` holds, kept by its text."""
+    return compile_schema({"enum": json.loads(text)})
 
 
 def record_of(fields: Mapping[str, Validator[Any]], *, closed: bool) -> Validator[Any]:
@@ -558,6 +685,73 @@ def record_of(fields: Mapping[str, Validator[Any]], *, closed: bool) -> Validato
 def having(key: str) -> Validator[Any]:
     """Return the objects holding ``key``, whatever else they hold."""
     return record_of({key: anything}, closed=False)
+
+
+@functools.lru_cache(maxsize=_PAIRS)
+def meet(one: Validator[Any], other: Validator[Any]) -> str:
+    """Return valgebra's answer on whether two sets share no value, ``subset`` where proven.
+
+    A library's sets are asked against one another by each search, each task planned over it and
+    each verification, so an answer is kept: equal validators denote one set.
+    """
+    return intersection(one, other).relation_to(nothing)
+
+
+@functools.lru_cache(maxsize=_TESTS)
+def inside(values: Validator[Any], target: Validator[Any]) -> str:
+    """Return valgebra's answer on whether ``values`` lie in ``target``, kept as `meet`'s is."""
+    return values.relation_to(target)
+
+
+@functools.lru_cache(maxsize=_TESTS)
+def sides(values: Validator[Any], tested: Validator[Any]) -> tuple[Validator[Any], Validator[Any]]:
+    """Return what a test on ``values`` leaves in ``tested`` and out of it, kept as `meet` is."""
+    return intersection(values, tested), intersection(values, complement(tested))
+
+
+def apart(one: Validator[Any], other: Validator[Any]) -> bool:
+    """Return whether valgebra proves two sets share no value (`meet`)."""
+    return meet(one, other) == "subset"
+
+
+def _built(slots: Sequence[Slot]) -> Any:
+    """Return the value holding a member of each innermost slot at its path, or `_UNKNOWN`."""
+    outer = {slot.path[:at] for slot in slots for at in range(len(slot.path))}
+    built: Any = _UNKNOWN
+    for slot in slots:
+        if slot.path in outer:
+            continue
+        known = slot.members()
+        if not known:
+            return _UNKNOWN
+        built = placed(built, slot.path, known[0])
+    return built
+
+
+def placed(value: Any, path: tuple[str, ...], held: Any) -> Any:
+    """Return ``value`` with ``held`` at ``path``, each record on the way made where it is none."""
+    if not path:
+        return held
+    record = value if isinstance(value, dict) else {}
+    return {**record, path[0]: placed(record.get(path[0]), path[1:], held)}
+
+
+def _tries(schema: object) -> Iterator[Any]:
+    """Yield values ``schema`` may admit: those it names, a range's ends and middle, and edges."""
+    if isinstance(schema, dict):
+        named = schema.get("enum")
+        yield from named if isinstance(named, list) else ()
+        if "const" in schema:
+            yield schema["const"]
+    read = interval(schema)
+    if read is not None:
+        ends = [at for at in (read.low, read.high) if at is not None]
+        for at in ends:
+            # A bound with a fraction was read from a float, so a float holds it.
+            yield int(at) if at.denominator == 1 else float(at)
+        if len(ends) == _ENDS:
+            yield int((ends[0] + ends[1]) / 2)
+    yield from EDGES
 
 
 def selecting(path: tuple[str, ...], values: Validator[Any]) -> Validator[Any]:
