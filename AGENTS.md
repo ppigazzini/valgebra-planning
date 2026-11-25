@@ -70,8 +70,9 @@ a link and on the nav to a warning, so a dead link, a dead anchor or a page off 
   or valgebra-jsonschema, and `tests/test_boundaries.py` holds it.
 - `examples/` — the tool libraries, tasks, policies, flow rules, observed calls and written
   programs the studies read.
-- `tools/` — the study drivers, `case.py`, `bench.py` and `faults.py`, the lint, `docs_lint.py`, and the
-  check holding the changelog to the public API's changes, `api_changes.py`.
+- `tools/` — the study drivers, `case.py`, `bench.py` and `faults.py`, the lint, `docs_lint.py`, the
+  check holding the changelog to the public API's changes, `api_changes.py`, and the counter of the
+  instructions a call takes, `perf.py`.
 - `docs/` — the user guide `mkdocs.yml` builds and the workflow `Docs` publishes, with
   `llms.txt`, at <https://ppigazzini.github.io/valgebra-planning/>; `docs/dev/` holds the
   developer pages, releasing and writing, which are not published, and `docs/studies/` the

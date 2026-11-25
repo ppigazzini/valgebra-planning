@@ -135,9 +135,10 @@ release; the commit names each one held back, and why.
 git diff --stat "v$LAST" -- valgebra_planning
 ```
 
-Where the diff moves no code nothing is timed, and the bump's message says so. Elsewhere each
-function it changes is timed on the input the change is about, in two environments of the last
-release and in the tree, on one interpreter and with every dependency at one version:
+Where the diff moves no code nothing is counted and nothing timed, and the bump's message says
+so. Elsewhere each function it changes is counted on the input the change is about, then timed, in
+environments of the last release and in the tree, on one interpreter and with every dependency at
+one version:
 
 ```bash
 uv sync --locked
@@ -145,6 +146,16 @@ for env in /tmp/last1 /tmp/last2; do
   uv venv --python .venv/bin/python "$env"
   VIRTUAL_ENV="$env" uv pip install "valgebra-planning[mcp]==$LAST" -c constraints.txt
 done
+uv run --no-sync python tools/perf.py --against /tmp/last1
+uv run --no-sync python tools/perf.py --against /tmp/last1 --first
+```
+
+`tools/perf.py` counts the instructions of a call among many on one library, and with `--first`
+of the first on contracts just read, under cachegrind. A count is the same on a loaded box, so
+it says which function moved and by how much; it reads no cache and no branch, so a time is read
+beside it. A case the window's change is about joins `CASES` there, in the change.
+
+```bash
 uptime
 tree="$PWD"; cd /
 for round in 1 2 3 4 5; do
