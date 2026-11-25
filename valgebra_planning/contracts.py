@@ -84,8 +84,8 @@ _ENDS = 2
 #: No value is known.
 _UNKNOWN: Any = object()
 
-#: How many pairs of sets keep whether they share a value (`meet`), and how many tests keep the
-#: sets they leave (`sides`, `inside`): a library asks few, and each entry holds its sets.
+#: How many pairs of sets keep whether they share a value (`meet`) or one lies in the other
+#: (`inside`), and how many tests keep the sets they leave (`sides`), each entry holding its own.
 _PAIRS = 1024
 _TESTS = 256
 
@@ -126,6 +126,8 @@ class Slot:
     )
     _members: tuple[Sequence[Any], ...] = field(default=(), init=False, repr=False, compare=False)
     _declared: tuple[Sequence[str], ...] = field(default=(), init=False, repr=False, compare=False)
+    #: The seed and the count `stream` last drew with, the values, and the stream's state after.
+    _stream: tuple[Any, ...] = field(default=(), init=False, repr=False, compare=False)
 
     @property
     def name(self) -> str:
@@ -151,6 +153,23 @@ class Slot:
                 found = tuple(filter(self.values.is_valid, self._drawn()))
             object.__setattr__(self, "_members", (found,))
         return self._members[0]
+
+    def stream(self, seed: int, tries: int) -> tuple[Sequence[Any], Any]:
+        """Return the values drawn first from a seed's stream, and the stream's state after them.
+
+        Each verification of a contract draws them, so a slot keeps those of one seed. A caller
+        reads the values and changes none.
+        """
+        kept = self._stream
+        if kept[:2] != (seed, tries):
+            rng = random.Random(seed)
+            try:
+                found: Sequence[Any] = Sampler(self.root, rng).draw(self.schema, tries)
+            except (Unsupported, RecursionError):
+                found = ()
+            kept = (seed, tries, tuple(found), rng.getstate())
+            object.__setattr__(self, "_stream", kept)
+        return kept[2], kept[3]
 
     def _drawn(self) -> Sequence[Any]:
         try:
@@ -697,7 +716,7 @@ def meet(one: Validator[Any], other: Validator[Any]) -> str:
     return intersection(one, other).relation_to(nothing)
 
 
-@functools.lru_cache(maxsize=_TESTS)
+@functools.lru_cache(maxsize=_PAIRS)
 def inside(values: Validator[Any], target: Validator[Any]) -> str:
     """Return valgebra's answer on whether ``values`` lie in ``target``, kept as `meet`'s is."""
     return values.relation_to(target)

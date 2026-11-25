@@ -73,9 +73,12 @@ where an `allOf` narrows it, so a link on a field its declared set does not prov
 the value the field belongs to: whether the field lies inside on every such value carrying it.
 That value is asked in its belief, its own set met with each field of it a test on the way
 narrowed, so its answer is exact both ways, and a value drawn for the field is reported only
-where valgebra proves a value of that belief carries it there. A constant's link is decided by
-membership alone, the constant being its own counterexample where it lies outside. The verifier reads neither the cells nor the
-search.
+where a value of that belief carries it there. One is looked for before valgebra is asked the
+whole belief: a value built of the contract's fields, holding the one drawn and a member of
+each tested field's set, shows it where valgebra holds it in the value's own set, and a value
+the tests on the field refuse is carried by none. A constant's link is decided by membership
+alone, the constant being its own counterexample where it lies outside. The verifier reads
+neither the cells nor the search.
 
 A loop, `for item in ref:` over an array, is walked once for an arbitrary item of the array's
 item set, the item and its fields read as a result's are, a test showing a key included. The
@@ -117,14 +120,14 @@ predicate it lies inside and the complement of each it lies outside but for one 
 inside it already excludes. The two spell one set, and each is decided where the other is not:
 the second holds the complement of a predicate a cell lies outside by a relation, which some meets
 of arrays of records need, and the first holds only the predicates it was cut by, which keeps a
-cell of many overlapping ranges within what valgebra decides. Schemas valgebra compiles to one validator, a
-description or a default apart, are one predicate, since equal validators denote one set.
-Relations between two predicates settle most cuts, each read once: a candidate value refutes
-one, and valgebra is asked where none does. The concrete values are the edges of common bounds, every listed value, draws
-from each schema and objects merged from those draws, since an open record meets another where a
-value carries both their keys. The predicates are cut in the order of their names: which meets
-valgebra leaves undecided depends on the order the cut splits by and draws in, so a fixed order
-makes a library's cells the same however it lists its tools.
+cell of many overlapping ranges within what valgebra decides. Schemas valgebra compiles to one
+validator, a description or a default apart, are one predicate, since equal validators denote
+one set. Relations between two predicates settle most cuts, each read once: a candidate value
+refutes one, and valgebra is asked where none does. The concrete values are the edges of common
+bounds, every listed value, draws from each schema and objects merged from those draws, since an
+open record meets another where a value carries both their keys. The predicates are cut in the
+order of their names: which meets valgebra leaves undecided depends on the order the cut splits
+by and draws in, so a fixed order makes a library's cells the same however it lists its tools.
 
 Before any cell is cut, the planner keeps only the tools a program can reach the goal through:
 callable, every required argument meeting a value the agent may hold, and mattering, a result

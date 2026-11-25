@@ -119,14 +119,15 @@ compute. A field read lies in the subschema its record's schema declares for the
 holding every value the field takes (Bertoli et al. 2006, §3) that another keyword of the
 record, as an `allOf`, may narrow further; valgebra proves each subschema the walk reads holds
 the values it stands for, or the field takes any value. A proof over it stands. The cost is a value the
-declared set admits that no member carries, so a witness drawn from it refutes only once valgebra
-proves a value of the root's belief carries it, and a loop's item read in the array's declared
-`items`, which another keyword of the array may narrow, as item-links below asks.
+declared set admits that no member carries, so a witness drawn from it refutes only where a value
+of the root's belief carries it, one found or valgebra's proof of one, and a loop's item read in
+the array's declared `items`, which another keyword of the array may narrow, as item-links below
+asks.
 **[DEVIATION: declared-fields]**
 
-IMPLEMENTED-BY: contracts.py::field_slot, verify.py::_Walk.lacking
+IMPLEMENTED-BY: contracts.py::field_slot, verify.py::_Walk.lacking, verify.py::_Walk.member, verify.py::_Walk.holds
 
-HELD-BY: test_a_flow_rule_reads_a_field_the_verifier_reads_below_an_item, test_a_field_another_keyword_requires_is_held, test_reading_the_field_without_the_test_is_refuted_by_a_record_lacking_it, test_a_value_no_member_carries_is_never_a_witness, test_a_result_slot_the_whole_schema_refuses_is_no_slot, test_a_field_read_its_record_refuses_takes_any_value, test_a_loop_over_items_the_walk_misreads_is_asked_of_the_array
+HELD-BY: test_a_flow_rule_reads_a_field_the_verifier_reads_below_an_item, test_a_field_another_keyword_requires_is_held, test_reading_the_field_without_the_test_is_refuted_by_a_record_lacking_it, test_a_value_no_member_carries_is_never_a_witness, test_a_value_found_refutes_a_link_on_a_field_beside_one_a_predicate_reads, test_a_member_is_shown_by_a_value_found_and_refused_by_its_field, test_a_value_drawn_for_an_object_is_no_witness_where_a_test_inside_it_refuses_it, test_a_result_slot_the_whole_schema_refuses_is_no_slot, test_a_field_read_its_record_refuses_takes_any_value, test_a_loop_over_items_the_walk_misreads_is_asked_of_the_array
 
 **A link on a field is asked of the value it belongs to.** The projection of a type on a label
 is the least type the record holding that label under it includes (Castagna 2023, §4.2), so the
@@ -535,7 +536,7 @@ met by one stopping only where it may. A program stopping on every execution ret
 is never accepted so.
 **[LOAD-BEARING: weak-acceptance]**
 
-IMPLEMENTED-BY: verify.py::Verification.weak, verify.py::_Walk.reaches, verify.py::_Walk.carried
+IMPLEMENTED-BY: verify.py::Verification.weak, verify.py::_Walk.reaches, verify.py::_Walk.holds
 
 HELD-BY: test_a_weak_program_stops_only_where_its_task_tolerates, test_repair_accepts_a_weak_program_where_asked_and_stays_strict_by_default, test_a_weak_program_reaches_the_return_it_counts, test_the_returns_reached_are_the_ones_the_whole_belief_shows, test_a_return_its_fields_show_asks_no_whole_belief, test_a_value_tested_whole_is_asked_whole, test_a_contract_shows_a_value_of_its_fields_members
 

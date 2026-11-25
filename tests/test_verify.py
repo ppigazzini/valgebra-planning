@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import math
+import random
 from typing import Any
 
 import pytest
@@ -457,7 +459,7 @@ def test_the_returns_reached_are_the_ones_the_whole_belief_shows(
     tools, task = _looked({**_LOOKED, **more}), read_task("look", {}, True)
     program = read_program(_TESTED)
     shown = verify(program, tools, task)
-    monkeypatch.setattr(verifier._Walk, "carried", lambda *_: False)
+    monkeypatch.setattr(verifier._Walk, "holds", lambda *_: False)
     assert verify(program, tools, task) == shown
 
 
@@ -531,11 +533,7 @@ def test_a_program_no_rule_reads_builds_no_record_and_draws_nothing(
 
 
 def test_a_program_verified_again_asks_no_difference_again() -> None:
-    """An inclusion of what a test left out is dear, and one asked of the same sets is kept.
-
-    It is asked so after one test left the value out, whatever a later test keeps of it, and an
-    inclusion of what each test kept is read off the schemas.
-    """
+    """What a test leaves in a set and out of it, and each inclusion, is asked of its sets once."""
     goal = {"enum": ["open", "shipped", "lost"]}
     task = read_task("look", {}, goal)
     program = read_program(
@@ -548,4 +546,183 @@ def test_a_program_verified_again_asks_no_difference_again() -> None:
     assert verify(program, _looked(_LOOKED), task) == first
     again = [kept.cache_info() for kept in (sides, inside)]
     assert [info.misses for info in again] == [info.misses for info in asked]
-    assert [new.hits - old.hits for new, old in zip(again, asked, strict=True)] == [2, 2]
+    assert [new.hits - old.hits for new, old in zip(again, asked, strict=True)] == [2, 3]
+
+
+@pytest.mark.parametrize(
+    "beside",
+    [
+        {"type": "integer", "multipleOf": 2**60 + 1},
+        {"type": "array", "uniqueItems": True},
+        {"type": "integer"},
+    ],
+    ids=["multiple", "unique", "plain"],
+)
+def test_a_value_found_refutes_a_link_on_a_field_beside_one_a_predicate_reads(
+    beside: dict[str, Any],
+) -> None:
+    """A whole value holding the field's outside its target is a proof, whatever reads the rest."""
+    fields = {"a": beside, "b": {"type": "integer", "minimum": 0}}
+    look = {"type": "object", "properties": fields, "required": ["a", "b"]}
+    task = read_task("look", {}, {"type": "integer", "maximum": 5})
+    (link,) = verify(read_program("c1 = look()\nreturn c1.b\n"), _looked(look), task).links
+    assert (link.verdict, link.counterexample) == ("refuted", (6,))
+
+
+def test_a_member_is_shown_by_a_value_found_and_refused_by_its_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The belief is asked whole of neither: a witness is many of them, each dear."""
+    asked = []
+    belief = verifier._Walk.belief
+    monkeypatch.setattr(
+        verifier._Walk, "belief", lambda self, *a: asked.append(a[1]) or belief(self, *a)
+    )
+    task = read_task("look", {}, {"const": "open"})
+    source = (
+        "c1 = look()\n"
+        "if c1.at.total in (3, 9):\n    return c1.status\n"
+        'if c1.status in ("lost",):\n    return c1.at.total\n'
+        "return c1.note\n"
+    )
+    links = verify(read_program(source), _looked(_LOOKED), task).links
+    assert [link.verdict for link in links] == ["refuted"] * 3
+    assert all(link.counterexample for link in links)
+    assert asked == []
+
+
+def test_a_value_found_keeps_each_field_the_program_is_shown_with() -> None:
+    """Two fields a schema ties hold their values together or not at all."""
+    tied = {
+        "type": "object",
+        "properties": {"a": {"enum": [1, 2]}, "b": {"enum": [1, 2]}},
+        "required": ["a", "b"],
+        "oneOf": [{"properties": {"a": {"const": n}, "b": {"const": n}}} for n in (1, 2)],
+    }
+    pay = {
+        "name": "pay",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"a": {"enum": [1, 2]}, "b": {"enum": [1, 2]}},
+            "required": ["a", "b"],
+            "not": {"properties": {"a": {"const": 1}, "b": {"const": 2}}, "required": ["a", "b"]},
+        },
+        "outputSchema": {"type": "object"},
+    }
+    tools = {**_looked(tied), "pay": read_contract(pay)}
+    program = read_program("c1 = look()\nc2 = pay(a=c1.a, b=c1.b)\nreturn c2\n")
+    (record,) = [
+        link
+        for link in verify(program, tools, read_task("pay", {}, True)).links
+        if link.claim.startswith("the arguments")
+    ]
+    assert record.counterexample == ()
+    assert record.verdict == "undecided"
+
+
+def test_a_slot_keeps_the_values_a_seed_draws_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every verification of a contract draws them first, so they are drawn once a seed."""
+    draws = []
+    draw = verifier.Sampler.draw
+
+    def counted(self: verifier.Sampler, schema: Any, tries: int) -> list[Any]:
+        if tries == verifier.DRAWS:
+            draws.append(schema)
+        return draw(self, schema, tries)
+
+    monkeypatch.setattr(verifier.Sampler, "draw", counted)
+    task = read_task("look", {}, {"type": "boolean"})
+    program = read_program(
+        "c1 = look()\nif c1.at.total in (3, 9):\n    return c1.status\nreturn c1.note\n"
+    )
+    tools = _looked(_LOOKED)
+    once = verify(program, tools, task)
+    assert [len(link.counterexample) for link in once.links] == [1, 1]
+    assert len(draws) == 2
+    assert verify(program, tools, task).links == once.links
+    assert len(draws) == 3
+    verify(program, tools, task, seed=7)
+    assert verify(program, tools, task).links == once.links
+    assert verify(program, _looked(_LOOKED), task).links == once.links
+
+
+@pytest.mark.parametrize(
+    ("source", "inside"),
+    [
+        ("c1 = look()\nreturn c1.at\n", "witness"),
+        ("c1 = look()\nreturn c1.more\n", "lacking"),
+        ("c1 = look()\nc2 = put(at=c1.at, like=c1.like)\nreturn c2\n", "record"),
+    ],
+    ids=["value", "lacking", "record"],
+)
+def test_a_witness_a_caller_writes_is_not_the_slots(source: str, inside: str) -> None:
+    """A link's witness is its own value: writing one leaves the next verification's as it was."""
+    at = {"type": "object", "properties": {"n": {"const": 1}}, "required": ["n"]}
+    looked = {
+        "type": "object",
+        "properties": {"at": at, "like": at, "more": {"type": "integer"}},
+        "required": ["at", "like"],
+    }
+    put = {
+        "name": "put",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"at": at, "like": at},
+            "required": ["at", "like"],
+            "not": {"required": ["at"], "properties": {"at": {"required": ["n"]}}},
+        },
+        "outputSchema": {"type": "string"},
+    }
+    tools = {**_looked(looked), "put": read_contract(put)}
+    program, task = read_program(source), read_task("look", {}, {"type": "string"})
+
+    def witness() -> Any:
+        (link,) = [link for link in verify(program, tools, task).links if link.counterexample]
+        return link.counterexample[0]
+
+    first = witness()
+    kept = copy.deepcopy(first)
+    written = first if inside == "witness" else first["at"]
+    written["extra"] = "written by the caller"
+    assert witness() == kept
+
+
+def test_a_slot_s_kept_draws_are_those_a_seeded_stream_draws() -> None:
+    """By any seed and count in turn, and what the stream draws next is what it drew next."""
+    slot = _looked(_LOOKED)["look"].result("note")
+    for seed, tries in ((0, 4), (0, 9), (7, 9), (0, 4), (0, 4)):
+        rng = random.Random(seed)
+        values, state = slot.stream(seed, tries)
+        assert list(values) == verifier.Sampler(slot.root, rng).draw(slot.schema, tries)
+        assert state == rng.getstate()
+
+
+def test_a_witness_is_the_one_a_walk_s_stream_draws(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The first draw of a walk is kept and the next goes on from where it left the stream."""
+    monkeypatch.setattr(verifier._Walk, "shrunk", lambda *a: a[-1])
+    code = {"type": "string", "pattern": "^[a-z]{8}$"}
+    fields = {"code": code, "ok": {"type": "boolean"}}
+    tools = _looked({"type": "object", "properties": fields, "required": ["code", "ok"]})
+    program = read_program(
+        "c1 = look()\nif c1.ok in (True,):\n    return c1.code\nreturn c1.code\n"
+    )
+    rng = random.Random(0)
+    drawn = [verifier.Sampler(code, rng).draw(code, verifier.DRAWS)[0] for _ in range(2)]
+    assert drawn[0] != drawn[1]
+    for _ in range(2):
+        links = verify(program, tools, read_task("look", {}, {"type": "boolean"})).links
+        assert [link.counterexample for link in links] == [(value,) for value in drawn]
+
+
+def test_a_value_drawn_for_an_object_is_no_witness_where_a_test_inside_it_refuses_it() -> None:
+    """Moving the tested field into its set makes another object, so it shows nothing of this."""
+    program = read_program("c1 = look()\nif c1.at.total in (3, 9):\n    return c1.at\nstop(c1)\n")
+    tools = _looked(_LOOKED)
+
+    def goal(total: dict[str, Any]) -> Link:
+        output = {"type": "object", "properties": {"total": total}}
+        return verify(program, tools, read_task("look", {}, output)).links[0]
+
+    held, narrower = goal({"enum": [3, 9]}), goal({"const": 3})
+    assert (held.verdict, held.counterexample) == ("proven", ())
+    assert (narrower.verdict, narrower.counterexample) == ("refuted", ({"total": 9},))

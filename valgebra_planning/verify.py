@@ -19,6 +19,7 @@ proof.
 
 from __future__ import annotations
 
+import copy
 import itertools
 import json
 import math
@@ -154,9 +155,6 @@ class _Held(NamedTuple):
     #: Whether the value is a call's result narrowed, to one case of a split on a policy's
     #: result guard or by a postcondition, so a branch none of its values reaches is no path.
     case: bool = False
-    #: Whether a test left the value outside a set: an inclusion of a difference is asked of
-    #: valgebra's sets, and any other is read off the schemas.
-    outside: bool = False
     #: The postconditions a call's result was narrowed by, each link over it naming them.
     assumed: tuple[str, ...] = ()
     #: The value's version: each call's result, each loop's item and each task input is one, so
@@ -165,10 +163,6 @@ class _Held(NamedTuple):
     #: The version of the call that returned the value, a loop's item's being its array's, an
     #: input's its own: what a flow rule reading when and for what a value was returned reads.
     returned: int = 0
-
-    def inside(self, target: Validator[Any]) -> str:
-        """Return valgebra's answer on whether every value held lies in ``target``."""
-        return inside(self.values, target) if self.outside else self.values.relation_to(target)
 
 
 @lru_cache(maxsize=_REFS)
@@ -218,7 +212,9 @@ class _Walk:
     #: apart from `rng`, so a witness drawn elsewhere is the same with loops or without.
     drawn: dict[int, tuple[_Held, list[Any]]] = field(default_factory=dict)
     builder: random.Random | None = None
-    #: What every other witness is drawn from, made at the first draw: most programs need none.
+    #: What every other witness is drawn from: the state the first draw leaves the seed's stream
+    #: in, and the stream, made at the second draw. Most programs need neither.
+    state: Any = None
     rng: random.Random | None = None
     seed: int = 0
     postconditions: tuple[Postcondition, ...] = ()
@@ -571,11 +567,10 @@ class _Walk:
                 values,
                 held.origin,
                 held.loop,
-                outside=held.outside or difference,
                 version=held.version,
                 returned=held.returned,
             )
-            for values, difference in zip(sides(held.values, tested), (False, True), strict=True)
+            for values in sides(held.values, tested)
         )
         # Which branch runs carries the tested value's influence: an implicit flow.
         tested = path._replace(tested=path.tested | {held.origin.tool})
@@ -600,19 +595,26 @@ class _Walk:
         }
         for variable in narrowed:
             root = env.get(_ref(variable))
-            if root is None or self.carried(env, variable, root):
+            if root is None or self.holds(env, variable):
                 continue
             if self.belief(env, variable).relation_to(nothing) == "subset":
                 return False
         return True
 
-    def carried(self, env: Mapping[Ref, _Held], variable: str, root: _Held) -> bool:
-        """Return whether a value found lies in ``variable``'s belief.
+    def holds(
+        self,
+        env: Mapping[Ref, _Held],
+        variable: str,
+        given: Sequence[tuple[tuple[str, ...], Any]] = (),
+    ) -> bool:
+        """Return whether a value found lies in ``variable``'s belief, each one given at its path.
 
-        Each value the contract shows (`Contract.shown`) is tried with a known member at each
-        field a test narrowed, and lies in the belief where valgebra holds it in the value's own
-        set and each such field in the set the tests left it (Bertoli et al. 2006, Def. 3.4).
+        Each value the contract shows (`Contract.shown`) is tried with those given, and with a
+        known member at each field a test narrowed, and lies in the belief where valgebra holds it
+        in the value's own set and each such field in the set the tests left it (Bertoli et al.
+        2006, Def. 3.4).
         """
+        root = env[_ref(variable)]
         contract = self.contracts.get(root.origin.tool)
         if contract is None or root.origin.path:
             return False
@@ -623,11 +625,15 @@ class _Walk:
         ]
         for value in contract.shown():
             found = value
+            for path, one in given:
+                found = placed(found, path, one)
             for path, held in fields:
                 found = _meeting(found, path, held)
                 if found is _NONE:
                     break
-            if found is not _NONE and root.values.is_valid(found):
+            if found is _NONE or any(_at(found, path) is not one for path, one in given):
+                continue
+            if root.values.is_valid(found):
                 return True
         return False
 
@@ -1117,7 +1123,8 @@ class _Walk:
         if self.postconditions:
             named += [a for _, ref in call.bindings for a in self.resting(env, ref)]
         assumed = tuple(dict.fromkeys(named))
-        self.links.append(Link(where, claim, "refuted" if found else verdict, found, assumed))
+        verdict = "refuted" if found else verdict
+        self.links.append(Link(where, claim, verdict, _own(found), assumed))
 
     def jointly(
         self, env: dict[Ref, _Held], refs: Mapping[str, Ref | Const], record: Mapping[str, Any]
@@ -1152,7 +1159,7 @@ class _Walk:
         value drawn for the reference refutes only where valgebra proves a value of that
         belief carries it there.
         """
-        answer = held.inside(target)
+        answer = inside(held.values, target)
         found: tuple[Any, ...] = ()
         if answer != "subset":
             # Realize a witness first: a wrong program is refuted on one question of valgebra,
@@ -1165,6 +1172,7 @@ class _Walk:
                 whole = None if ref.path else answer
                 answer = self.asked(env, ref.variable, within(ref.path, target), whole)
         verdict = "refuted" if found else _VERDICTS[answer]
+        found = _own(found)
         assumed = self.assumption(held)
         if rested := self.resting(env, ref):
             assumed = tuple(dict.fromkeys((*assumed, *rested)))
@@ -1278,7 +1286,7 @@ class _Walk:
         if held is None:
             return "undecided"
         if answer is None:
-            answer = held.inside(question)
+            answer = inside(held.values, question)
         tested = _tested(env, variable)
         if answer != "subset" and tested:
             answer = self.belief(env, variable).relation_to(question)
@@ -1363,25 +1371,33 @@ class _Walk:
         self,
         env: Mapping[Ref, _Held],
         variable: str,
-        placed: Sequence[tuple[tuple[str, ...], Any]],
+        given: Sequence[tuple[tuple[str, ...], Any]],
         now: Mapping[Ref, _Held] | None = None,
     ) -> bool:
-        """Return whether valgebra proves a value of ``variable``'s belief holds each one placed.
+        """Return whether valgebra proves a value of ``variable``'s belief holds each one given.
 
-        Each value is placed at its path, the empty path being the whole value; the value
+        Each value is given at its path, the empty path being the whole value; the value
         also carries every field a test on the way narrowed inside its narrowed set. A loop's
         item's belief may admit a value no item of the array takes, so for an item the value
-        is built, `_Walk.built`.
+        is built, `_Walk.built`. A belief holds every value possible there (Bertoli et al. 2006,
+        §3), so a field's own set refuses a value the belief refuses, a value found holding each
+        (`_Walk.holds`) shows one, and the belief itself is asked of the rest.
         """
         held = env.get(_ref(variable))
         if held is None:
             return False
         if held.loop is not None or now is not None:
-            return self.built(env, variable, placed, env if now is None else now)
+            return self.built(env, variable, given, env if now is None else now)
+        for path, value in given:
+            field = env.get(_ref(variable, path))
+            if field is not None and not field.values.is_valid(value):
+                return False
+        if self.holds(env, variable, given):
+            return True
         belief = self.belief(env, variable)
-        if [path for path, _ in placed] == [()]:
-            return belief.is_valid(placed[0][1])
-        for path, value in placed:
+        if [path for path, _ in given] == [()]:
+            return belief.is_valid(given[0][1])
+        for path, value in given:
             belief = intersection(belief, selecting(path, listed([value])))
         return belief.relation_to(nothing) == "not_subset"
 
@@ -1451,13 +1467,20 @@ class _Walk:
     def candidates(self, ref: Ref, held: _Held) -> list[Any]:
         """Return values the reference may hold there: the examples given, then draws."""
         given = [v for v in self.examples.get(str(ref), ()) if held.values.is_valid(v)]
+        return given + [v for v in self.draw(held.origin) if held.values.is_valid(v)]
+
+    def draw(self, slot: Slot) -> Sequence[Any]:
+        """Return the values drawn for ``slot`` next in the walk's stream, its first ones kept."""
+        if self.state is None:
+            drawn, self.state = slot.stream(self.seed, DRAWS)
+            return drawn
         if self.rng is None:
-            self.rng = random.Random(self.seed)
+            self.rng = random.Random()
+            self.rng.setstate(self.state)
         try:
-            drawn = Sampler(held.origin.root, self.rng).draw(held.origin.schema, DRAWS)
+            return Sampler(slot.root, self.rng).draw(slot.schema, DRAWS)
         except (Unsupported, RecursionError):
-            drawn = []
-        return given + [v for v in drawn if held.values.is_valid(v)]
+            return ()
 
     def read_fresh(self, call: Call, env: Mapping[Ref, _Held], where: str, path: _Path) -> None:
         """Add a link for each argument the task reads fresh: no call that may act came between.
@@ -1529,7 +1552,8 @@ class _Walk:
         claim = f"{ref} is a value the program holds"
         lacking = self.lacking(env, ref, read)
         refuted = bool(lacking) or read.answer in ("unbound", "not_subset")
-        self.links.append(Link(where, claim, "refuted" if refuted else "undecided", lacking))
+        verdict: Verdict = "refuted" if refuted else "undecided"
+        self.links.append(Link(where, claim, verdict, _own(lacking)))
         return None
 
     def argument(self, tool: str, name: str, where: str) -> Slot | None:
@@ -1694,11 +1718,21 @@ def _disjoint(
     return any(name in sets and apart(held, sets[name]) for name, held in one)
 
 
+def _own(found: tuple[Any, ...]) -> tuple[Any, ...]:
+    """Return a witness the link alone holds: a slot keeps what it draws, and a caller may write."""
+    return copy.deepcopy(found) if found else ()
+
+
+def _at(value: Any, path: tuple[str, ...]) -> Any:
+    """Return what ``value`` holds at ``path``, or `_NONE`."""
+    for key in path:
+        value = value.get(key, _NONE) if isinstance(value, dict) else _NONE
+    return value
+
+
 def _meeting(value: Any, path: tuple[str, ...], held: _Held) -> Any:
     """Return ``value`` with the field at ``path`` in the set ``held``, or `_NONE`."""
-    at = value
-    for key in path:
-        at = at.get(key, _NONE) if isinstance(at, dict) else _NONE
+    at = _at(value, path)
     if at is not _NONE and held.values.is_valid(at):
         return value
     member = next(filter(held.values.is_valid, held.origin.members()), _NONE)

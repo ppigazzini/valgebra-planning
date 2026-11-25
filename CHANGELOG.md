@@ -15,9 +15,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
   0.87, `render` 0.82, `stubs` 0.97, `read_program` 1.01, and the notes `check` makes of two
   libraries' contracts 0.35 and 1.13. A return is shown reached by one value found, built of its
   result's fields' members and held in the belief, and by the whole belief where none is. What a
-  test leaves in a set and out of it, an inclusion of what it leaves out, and whether two sets share
-  a value are asked once, by the sets, and a planner's candidates refute a relation before valgebra
-  is asked one.
+  test leaves in a set and out of it, an inclusion, and whether two sets share a value are asked
+  once, by the sets, and a planner's candidates refute a relation before valgebra is asked one.
+
+- A link on a field is refuted by a value found that carries one outside its target, where it read
+  undecided or refuted without one: a value built of the contract's fields, held in the value's own
+  set and in each tested field's, refutes before the whole belief is asked, so a field beside one
+  valgebra reads by a predicate, as `uniqueItems` or a `multipleOf` past 2**53, is refuted with its
+  witness. A link's witness is the caller's to write.
 
 - A first call costs more than one repeated. The first program verified on a contract costs 1.1 to
   3.3 times 0.0.7's, where 0.0.8 cost 3.8 to 15.6, for the value drawn for each pattern its result
