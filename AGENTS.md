@@ -127,8 +127,9 @@ instead.
 
 - **A cut follows the releasing page**, from
   [Before the bump](docs/dev/releasing.md#before-the-bump) on, every step in its order.
-  Performance is read for the code the window changed and for no other. A push, a dispatch, a
-  tag and an advisory each wait for the maintainer's word, given for that one.
+  Performance is read for the code the window changed and for no other, a time on a quiet box.
+  A push, a dispatch, a tag and an advisory each wait for the maintainer's word, given for that
+  one.
 - **Write American English, names included.** `behavior`, `normalize`, `modeled`, `labeled`,
   `license`, in prose, comments, docstrings, messages, identifiers and file names. A
   quotation, a published title and a third party's name keep the spelling they were published
