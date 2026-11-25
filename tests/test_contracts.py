@@ -3,15 +3,23 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from valgebra_planning._valgebra import Unsupported, anything, compile_schema, nothing
+from valgebra_planning._valgebra import (
+    Unsupported,
+    ValidationError,
+    anything,
+    compile_schema,
+    nothing,
+)
 from valgebra_planning.contracts import (
     RESULT_DEPTH,
+    contract_names,
+    failures,
     field_slot,
     read_contract,
     read_task,
@@ -646,3 +654,72 @@ def test_a_task_fixing_an_argument_it_reads_fresh_is_refused() -> None:
             fresh=["grasp.distance"],
         )
     read_task("t", {}, True, constants={"grasp.distance": 0.3}, fresh=["grasp.force"])
+
+
+#: A tool taking rows that each hold a name and a number in bounds, and no other key.
+SEARCH = read_contract(
+    {
+        "name": "search",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "maxLength": 8},
+                            "elo": {"type": "number", "minimum": -1000, "maximum": 1000},
+                        },
+                        "required": ["name", "elo"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+            "required": ["rows"],
+            "additionalProperties": False,
+        },
+    }
+)
+
+
+def test_a_refusal_of_a_value_failing_everywhere_lists_three_failures() -> None:
+    rows = [{"name": f"t{n}", "elo": 5000} for n in range(1800)]
+    assert failures(SEARCH.accepts, {"rows": rows}, contract_names(SEARCH)) == (
+        "rows[0].elo: union_error; rows[1].elo: union_error; rows[2].elo: union_error"
+    )
+    two = [*rows[:2], {"name": "t", "elo": 0}]
+    assert failures(SEARCH.accepts, {"rows": two}, contract_names(SEARCH)) == (
+        "rows[0].elo: union_error; rows[1].elo: union_error"
+    )
+
+
+@given(
+    rows=st.lists(
+        st.dictionaries(
+            st.sampled_from(["name", "elo", "secret"]),
+            st.integers(-2000, 2000) | st.text(max_size=12) | st.none(),
+        )
+        | st.integers(),
+        max_size=6,
+    )
+)
+@settings(deadline=None)
+def test_a_refusal_lists_the_first_three_failures_the_full_report_holds(rows: list[Any]) -> None:
+    arguments = {"rows": rows}
+    try:
+        SEARCH.accepts.validate(arguments)
+    except ValidationError as error:
+        full = error.errors
+    else:
+        full = []
+    written = [
+        "".join(
+            f"[{step}]" if isinstance(step, int) else f".{'*' if step == 'secret' else step}"
+            for step in cast("tuple[str | int, ...]", failure["path"])
+        ).removeprefix(".")
+        + f": {failure['code']}"
+        for failure in full
+    ]
+    expected = "; ".join(written[:3]) if full else "no failure valgebra names"
+    assert failures(SEARCH.accepts, arguments, contract_names(SEARCH)) == expected

@@ -367,11 +367,12 @@ program is a defect to report, and in an unproven one its own unproven link. A l
 a wrong mined type break no check a run can see. `valgebra_planning/proxy.py` holds the same checks
 as an MCP server in front of another, for an agent no program governs: each call is answered with a
 tool error naming the check it breaks, a policy's refusal with the calls that move it on from where
-it leaves the run, and each failure's path and code but never the value or a key
-the schemas do not declare, so a refused result reaches the agent through no error. A result that
-passes is answered with the checked value as its text, its JSON where the server answered with
-structured content, and with a block other than text only for a tool `tools.json` names under
-`"nonTextBlocks"`, since a client hands a model the text and the gate checks the value. An error
+it leaves the run, and the paths and codes of the value's first three failures, at most, but never
+the value or a key the schemas do not declare, so a refused result reaches the agent through no
+error. A result that passes is answered with the checked value as its text, its JSON where the
+server answered with structured content, and with a block other than text only for a tool
+`tools.json` names under `"nonTextBlocks"`, since a client hands a model the text and the gate
+checks the value. An error
 the server answers reaches the agent with a fixed text naming the tool, or as written where its
 text lies in the set `tools.json` names for the tool under `"errorTexts"`, and a protocol error
 with the tool and the error's code, never its message. The mcp client

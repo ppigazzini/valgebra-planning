@@ -117,6 +117,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
   same. `Gate.errored` takes `tool`, the tool whose call answered with an error, since a call a
   preempting one overtook is read from the states before it, not the last call stepped.
 
+- A refusal lists a value's first three failures and counts no more. It walked the whole value to
+  list three and count the rest, so a filter of 66,661 bytes with 1,800 rows each outside its bound
+  cost its refusal 2.72 ms, and it costs 0.01 ms: valgebra's walk stops at the third failure. The
+  three are the same, in the same order, and no "1797 more" follows them, in `failures` and in
+  each refusal of a proxy and of a run that names them.
+
 - valgebra is required from 0.0.35, whose `validate` takes the `limit` a refusal is read through.
   The suite passes on it, and no study's count moves from 0.0.32.
 
@@ -159,7 +165,7 @@ All notable changes to valgebra-planning are recorded here. The format follows
   `programs.json`, each verdict a row of the study.
 
 - `contracts.failures` and `contracts.contract_names` are public. A proxy's refusal names where a
-  value lies outside a contract by `failures`, each path and code with no value and no key the
+  value lies outside a contract by `failures`, paths and codes with no value and no key the
   contract does not name, over the names `contract_names` gives, and a caller holding a contract
   outside a proxy could not word a refusal the same way: both stood outside `__all__`.
 

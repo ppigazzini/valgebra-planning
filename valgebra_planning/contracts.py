@@ -595,7 +595,7 @@ def unread(slot: Slot) -> Slot:
 #: may print, since the document publishes them.
 _NAMING = frozenset({"properties", "dependentRequired", "dependentSchemas"})
 
-#: How many failures a refusal lists before it counts the rest.
+#: How many failures a refusal lists: the walk stops at the last of them.
 _FAILURES_SHOWN = 3
 
 
@@ -746,22 +746,20 @@ def contract_names(contract: Contract) -> frozenset[str]:
 
 
 def failures(values: Validator[Any], value: object, names: frozenset[str]) -> str:
-    """Return where ``value`` lies outside ``values``: each failure's path and code.
+    """Return where ``value`` lies outside ``values``: its first failures' paths and codes.
 
-    The value is never written, nor a key ``names`` does not hold, which is written ``*``:
-    a refusal reaches whoever made the call, and a value outside its contract, or a key it
-    chose, would reach them through it.
+    At most three are listed, the first valgebra's full report holds, in its order, and the
+    walk stops there: how many follow is not counted, so a value failing a thousand times
+    costs its refusal no more than one failing three. The value is never written, nor a key
+    ``names`` does not hold, which is written ``*``: a refusal reaches whoever made the call,
+    and a value outside its contract, or a key it chose, would reach them through it.
     """
     try:
-        values.validate(value)
+        values.validate(value, limit=_FAILURES_SHOWN)
     except ValidationError as error:
-        listed = [
-            f"{_where(failure['path'], names)}{failure['code']}"
-            for failure in error.errors[:_FAILURES_SHOWN]
-        ]
-        if len(error.errors) > _FAILURES_SHOWN:
-            listed.append(f"{len(error.errors) - _FAILURES_SHOWN} more")
-        return "; ".join(listed)
+        return "; ".join(
+            f"{_where(failure['path'], names)}{failure['code']}" for failure in error.errors
+        )
     return "no failure valgebra names"
 
 
