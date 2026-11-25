@@ -23,7 +23,7 @@ a schema in the companion; neither is worked around here by a guess.
 | a published count | [the results](docs/results.md), and the study file its command checks |
 | a citation | [the works cited](docs/references.md) |
 | code that implements a paper's result | [the theory page](docs/dev/theory.md), [citing a paper](docs/dev/writing.md#citing-a-paper) |
-| a release, or a dependency's floor | [the releasing page](docs/dev/releasing.md) |
+| a release, from its first commit to its advisory, or a dependency's floor | [the releasing page](docs/dev/releasing.md) |
 | any prose at all: a page, a comment, a docstring, a commit message | [the writing rules](docs/dev/writing.md) |
 
 ## Setup
@@ -125,6 +125,10 @@ instead.
   goes on [the works cited](docs/references.md) with its DOI or arXiv identifier, and
   the text cites its key.
 
+- **A cut follows the releasing page**, from
+  [Before the bump](docs/dev/releasing.md#before-the-bump) on, every step in its order.
+  Performance is read for the code the window changed and for no other. A push, a dispatch, a
+  tag and an advisory each wait for the maintainer's word, given for that one.
 - **Write American English, names included.** `behavior`, `normalize`, `modeled`, `labeled`,
   `license`, in prose, comments, docstrings, messages, identifiers and file names. A
   quotation, a published title and a third party's name keep the spelling they were published
