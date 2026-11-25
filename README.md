@@ -59,7 +59,8 @@ The guide has [how a program is proven, a diagram for each step](https://ppigazz
 [the Python names each module promises](https://ppigazzini.github.io/valgebra-planning/api/),
 [how a model's program is proven before it runs](https://ppigazzini.github.io/valgebra-planning/code-mode/),
 [tasks done end to end in Python](https://ppigazzini.github.io/valgebra-planning/recipes/), a policy, a flow rule and a privilege
-update among them, [the method and its limits](https://ppigazzini.github.io/valgebra-planning/method/), and
+update among them, [the method and its limits](https://ppigazzini.github.io/valgebra-planning/method/),
+[what a call costs and how the speed is made](https://ppigazzini.github.io/valgebra-planning/performance/), and
 [the studies](https://ppigazzini.github.io/valgebra-planning/results/): on a parcel-returns library of ten tools, eight tasks get programs whose every
 link valgebra proves, from 3 of 3 to 24 of 24.
 

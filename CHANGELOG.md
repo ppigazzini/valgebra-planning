@@ -22,16 +22,21 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
-- `verify`, `critique`, `render` and `plan` cost less than in 0.0.7, and `read_program` and `stubs`
-  what they cost there, with 0.0.8's answers but for the record above. By instructions under
-  cachegrind, on CPython 3.15 and over calls repeated on one library, `verify` of nine programs
-  counts 0.16 to 0.69 of 0.0.7's, where 0.0.8 counts 1.22 to 7.47, `critique` of three 0.31 to 0.83,
-  `plan` of six tasks 0.18 to 0.87, `render` 0.82, `stubs` 0.97, `read_program` 1.01, and the notes
-  `check` makes of two libraries' contracts 0.35 and 1.13. A return is shown reached by one value
-  found, built of its result's fields' members and held in the belief, and by the whole belief where
-  none is. What a test leaves in a set and out of it, an inclusion, and whether two sets share a
-  value are asked once, by the sets, and a planner's candidates refute a relation before valgebra is
-  asked one.
+- `verify`, `critique`, `render` and `plan` cost less than in 0.0.7, and `read_program`, `stubs`
+  and the notes `check` makes about what they cost there, with 0.0.8's answers but for the record
+  above and the links below. Counted by `tools/perf.py` under cachegrind, on CPython 3.15 and over
+  calls repeated on one library, `verify` of nine programs takes 0.16 to 0.68 of 0.0.7's
+  instructions, where 0.0.8 takes 1.23 to 7.41, `verify` of sixty programs with mistakes 0.57 where
+  it takes 1.45, `critique` of three 0.30 to 0.83 where it takes 1.32 to 4.72, `plan` of four tasks
+  0.18 to 0.87 where it takes 1.05 to 1.21, `render` 0.81, `stubs` 0.97, `read_program` 1.01, and
+  the notes of two libraries 0.34 and 1.12, the second reading an optional field 0.0.7 does not.
+  Timed in the releasing page's loop on a quiet box, `verify` of the parcels' first task takes 52 µs
+  where 0.0.7 took 366 and 0.0.8 1,550, `plan` of it 3.3 ms where they took 20.3 and 22.0, and the
+  sixty programs with mistakes 125 ms where they took 207 and 322. A return is shown reached by one
+  value found, built of its result's fields' members and held in the belief, and by the whole belief
+  where none is. What a test leaves in a set and out of it, an inclusion, and whether two sets share
+  a value are asked once, by the sets, and a planner's candidates refute a relation before valgebra
+  is asked one.
 
 - A link on a field is refuted by a value found that carries one outside its target, where it read
   undecided or refuted without one: a value built of the contract's fields, held in the value's own
@@ -39,9 +44,18 @@ All notable changes to valgebra-planning are recorded here. The format follows
   valgebra reads by a predicate, as `uniqueItems` or a `multipleOf` past 2**53, is refuted with its
   witness. A link's witness is the caller's to write.
 
-- A first call costs more than one repeated. The first program verified on a contract costs 1.1 to
-  3.3 times 0.0.7's, where 0.0.8 cost 3.8 to 15.6, for the value drawn for each pattern its result
-  holds, and the first `stubs` 1.7 times, for the `Literal` of each listed argument.
+- A first call costs more than one repeated. Counted as above on contracts just read, the first
+  program verified takes 0.83 to 3.30 of 0.0.7's instructions, where 0.0.8 takes 1.02 to 15.54, for
+  the value drawn for each pattern its result holds; the first `critique` 1.27 to 2.35, where it
+  takes 2.90 to 9.73, and the first `stubs` 1.65, for the `Literal` of each listed argument, where
+  it takes 1.83. A first `plan` takes 0.45 to 0.90, where it takes 1.06 to 1.16.
+
+### Added
+
+- [The performance page](https://ppigazzini.github.io/valgebra-planning/performance/) says how a
+  call is counted, which of its questions valgebra answers by a rule and which by its sets, how to
+  spend less, how the speed is made, and what is measured and not taken. `tools/perf.py` counts the
+  instructions of a call in the tree and in a release's environment, a call among many or the first.
 
 ## [0.0.8] - 2026-11-25
 
