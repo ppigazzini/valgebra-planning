@@ -45,6 +45,7 @@ from valgebra_planning.program import (
     Stop,
     aliases,
     named,
+    slot,
 )
 from valgebra_planning.verify import Link, Verification, verify
 
@@ -167,12 +168,32 @@ def _call(statement: ast.Assign) -> Call:
             value = value.value
     if not isinstance(value, ast.Call) or value.args:
         raise _fail(statement, "a call passes every argument by name")
-    bindings = []
-    for keyword in value.keywords:
+    return Call(_tool(value.func), _bindings(value), statement.targets[0].id, retry=retry)
+
+
+def _bindings(call: ast.Call) -> tuple[tuple[str, Ref | Const], ...]:
+    """Read a call's arguments: each by keyword, or by name in a dictionary unpacked into it.
+
+    ``**{"from": sender}`` passes an argument Python spells no keyword for, its key a string. An
+    argument named twice is refused, as Python refuses the call.
+    """
+    bindings: dict[str, Ref | Const] = {}
+    for keyword in call.keywords:
+        named: Sequence[tuple[ast.expr | None, ast.expr]] = [(None, keyword.value)]
         if keyword.arg is None:
-            raise _fail(statement, "a call passes every argument by name")
-        bindings.append((keyword.arg, _argument(keyword.value)))
-    return Call(_tool(value.func), tuple(bindings), statement.targets[0].id, retry=retry)
+            if not isinstance(keyword.value, ast.Dict):
+                raise _fail(call, "a call passes every argument by name")
+            named = list(zip(keyword.value.keys, keyword.value.values, strict=True))
+        for key, value in named:
+            name = keyword.arg
+            if name is None and isinstance(key, ast.Constant) and isinstance(key.value, str):
+                name = key.value
+            if name is None:
+                raise _fail(call, "a call passes every argument by name")
+            if name in bindings:
+                raise _fail(call, f"the argument {name!r} is passed twice")
+            bindings[name] = _argument(value)
+    return tuple(bindings.items())
 
 
 def _constants(node: ast.expr) -> tuple[Any, ...]:
@@ -197,6 +218,19 @@ def _constants(node: ast.expr) -> tuple[Any, ...]:
     return tuple(values)
 
 
+def _slot(node: ast.expr) -> tuple[str, str] | None:
+    """Read a tool's argument as a test names it, ``send.to`` or ``send["from"]``, or None."""
+    if isinstance(node, ast.Attribute):
+        return _tool(node.value), node.attr
+    if (
+        isinstance(node, ast.Subscript)
+        and isinstance(node.slice, ast.Constant)
+        and isinstance(node.slice.value, str)
+    ):
+        return _tool(node.value), node.slice.value
+    return None
+
+
 def _branch(statement: ast.If, *, looping: bool = False) -> Branch:
     test = statement.test
     if not (isinstance(test, ast.Compare) and len(test.ops) == 1):
@@ -210,11 +244,12 @@ def _branch(statement: ast.If, *, looping: bool = False) -> Branch:
     if isinstance(left, ast.Constant) and isinstance(left.value, str):
         if not isinstance(op, (ast.In, ast.NotIn)):
             raise _fail(statement, "a key is tested with `in` or `not in`")
+        if not left.value:
+            raise _fail(statement, "a key is tested by its name, and an empty one is none")
         return Branch(_ref(right), "", "", then, otherwise, key=left.value)
     ref = _ref(left)
-    if isinstance(op, (ast.In, ast.NotIn)) and isinstance(right, ast.Attribute):
-        tool, argument = _tool(right.value), right.attr
-        return Branch(ref, tool, argument, then, otherwise)
+    if isinstance(op, (ast.In, ast.NotIn)) and (tested := _slot(right)) is not None:
+        return Branch(ref, *tested, then, otherwise)
     if (
         isinstance(op, (ast.In, ast.NotIn))
         and isinstance(right, ast.Constant)
@@ -449,14 +484,19 @@ class Critique:
         return self.verification.weak
 
 
-def _guard(claim: str) -> str | None:
-    """Return the test that narrows a binding's value into its argument, if the claim is one."""
-    subject, _, slot = claim.partition(" <= ")
-    if not slot or subject.startswith("return ") or "." not in slot:
+def _guard(claim: str, spelled: Mapping[str, str]) -> str | None:
+    """Return the test that narrows a binding's value into its argument, if the claim is one.
+
+    ``spelled`` holds how a program names each argument, by the name a claim does: a claim
+    writes ``g1.grasp.width``, and a test of it ``g1_grasp.width``.
+    """
+    subject, _, named = claim.partition(" <= ")
+    if not named or subject.startswith("return ") or "." not in named:
         return None
+    argument = spelled.get(named, named)
     if subject[0] in "'\"-0123456789[{" or subject in ("True", "False", "None"):
-        return f"write a constant {slot} admits"
-    return f"test `if {subject} in {slot}:` and make the call in that branch"
+        return f"write a constant {argument} admits"
+    return f"test `if {subject} in {argument}:` and make the call in that branch"
 
 
 _POLICY = (
@@ -527,7 +567,7 @@ def _reread(claim: str) -> str | None:
     return None
 
 
-def _remedy(link: Link) -> str | None:
+def _remedy(link: Link, spelled: Mapping[str, str]) -> str | None:
     """Return what a program's author can change to prove a link, if the claim is one."""
     claim = link.claim
     keyed = _keyed(link)
@@ -543,7 +583,7 @@ def _remedy(link: Link) -> str | None:
         return _EXPLICIT
     if claim.endswith(" may be retried"):
         return _RETRY
-    return _guard(claim)
+    return _guard(claim, spelled)
 
 
 def _crossing(
@@ -626,6 +666,11 @@ def critique(
         flows=flows,
         postconditions=postconditions,
     )
+    spelled = {
+        argument.name: slot(contract.name, argument.path[0])
+        for contract in contracts.values()
+        for argument in contract.arguments
+    }
     notes = []
     for link in checked.links:
         if link.verdict == "proven":
@@ -634,7 +679,7 @@ def critique(
         note = f"{link.verdict}: {link.claim}{where}"
         if link.counterexample:
             note += f"; {link.counterexample[0]!r} lies outside"
-        remedy = _remedy(link)
+        remedy = _remedy(link, spelled)
         if remedy is not None:
             note += f"; {remedy}"
         notes.append(note)

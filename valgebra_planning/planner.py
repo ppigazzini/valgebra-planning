@@ -24,6 +24,7 @@ program the same without it; the command line verifies every program it prints.
 from __future__ import annotations
 
 import itertools
+import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -98,7 +99,23 @@ class _Guard:
 def _members(schema: object) -> tuple[Any, ...] | None:
     """Return the members a schema lists, an ``enum`` or a ``const`` beside a ``type``, or None."""
     listing = _listing(schema)
-    return None if listing is None or listing[0] else listing[1]
+    return None if listing is None or listing[0] else _written(listing[1])
+
+
+def _written(members: Sequence[Any]) -> tuple[Any, ...]:
+    """Return the members a program's test writes: every one that holds no infinity.
+
+    A listing may hold a number past the float range, which `json.loads` reads as an infinity:
+    no JSON text of a program's constant holds one, and a test without it is the narrower set.
+    """
+    written = []
+    for member in members:
+        try:
+            json.dumps(member, allow_nan=False)
+        except ValueError:
+            continue
+        written.append(member)
+    return tuple(written)
 
 
 def _guards(policies: Sequence[Policy]) -> dict[str, tuple[_Guard, ...]]:
@@ -109,8 +126,9 @@ def _guards(policies: Sequence[Policy]) -> dict[str, tuple[_Guard, ...]]:
             listing = _listing(transition.result_schema)
             if transition.result is None or not transition.tool or listing is None:
                 continue
-            path, values = listing
-            found.setdefault(transition.tool, []).append(_Guard(path, values, transition.result))
+            if values := _written(listing[1]):
+                guard = _Guard(listing[0], values, transition.result)
+                found.setdefault(transition.tool, []).append(guard)
     return {tool: tuple(guards) for tool, guards in found.items()}
 
 

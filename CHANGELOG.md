@@ -182,6 +182,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- An argument Python does not spell is passed by its name. A program wrote `send(from=sender)` for
+  an argument named `from`, and `send(reply-to=to)`, text no Python parses, so a plan of such a tool
+  rendered to a program `read_program` refused and the stubs of its library parsed as no Python. It
+  is written `send(**{"from": sender})`, its test `send["from"]`, the reader reads both, and a stub
+  names such arguments. The test a critique asks for is written as a program writes it,
+  `g1_grasp.width` where it read `g1.grasp.width`; a key past the Basic Multilingual Plane is
+  written so that it reads back, and one Python would normalize is subscripted; a planned test
+  leaves out a listed infinity, which no constant of a program is; and a test of an empty key is
+  refused, where it was read as a test of nothing.
+
 - A call whose result set is empty is walked under a policy reading its result. The walk split the
   result by the policy's guards, an empty set into no case, and `verify`, `plan` and `critique`
   ended with an `IndexError`. It is walked as one case, as a call no policy reads is.

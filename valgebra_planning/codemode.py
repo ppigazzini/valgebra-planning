@@ -21,7 +21,7 @@ from typing import Any, Literal
 from valgebra_planning._valgebra import finite
 from valgebra_planning.contracts import Contract, Slot, Task
 from valgebra_planning.critic import Critique, ProgramError, critique
-from valgebra_planning.program import alias
+from valgebra_planning.program import alias, quoted, spelled
 
 __all__ = ["Repair", "feedback", "repair", "stub", "stubs"]
 
@@ -101,11 +101,14 @@ def _literal(slot: Slot) -> str | None:
 
 def stub(contract: Contract) -> str:
     """Return a tool's stub: its signature, and its input and output schemas as its docstring."""
-    arguments = ", ".join(
+    arguments = [
         f"{slot.path[0]}: {_literal(slot) or _hint(slot.schema)}"
         + ("" if slot.required else " = ...")
         for slot in sorted(contract.arguments, key=lambda slot: not slot.required)
-    )
+        if spelled(slot.path[0])
+    ]
+    unspelled = sorted(s.path[0] for s in contract.arguments if not spelled(s.path[0]))
+    parameters = (["*", *arguments] if arguments else []) + ["**named: Any"] * bool(unspelled)
     inputs = contract.arguments[0].root if contract.arguments else {"type": "object"}
     returns = contract.result().schema if contract.results else None
     doc = [f"Arguments, as JSON Schema: {json.dumps(inputs, sort_keys=True)}"]
@@ -117,8 +120,13 @@ def stub(contract: Contract) -> str:
     called = alias(contract.name)
     if called != contract.name:
         doc.insert(0, f"The tool {contract.name!r}, called by this name.")
+    if unspelled:
+        names = ", ".join(map(quoted, unspelled))
+        doc.insert(
+            0, f"Passed by name in a dictionary, as **{{{quoted(unspelled[0])}: x}}: {names}."
+        )
     body = "\n\n".join(f"    {line}" for line in doc)
-    signature = f"def {called}(*, {arguments})" if arguments else f"def {called}()"
+    signature = f"def {called}({', '.join(parameters)})"
     return f'{signature} -> {_hint(returns)}:\n    """{body.strip()}\n    """\n    ...\n'
 
 

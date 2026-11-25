@@ -15,8 +15,10 @@ from __future__ import annotations
 import json
 import keyword
 import re
+import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
+from itertools import groupby
 from typing import Any
 
 __all__ = [
@@ -35,6 +37,37 @@ __all__ = [
 ]
 
 
+def spelled(name: str) -> bool:
+    """Return whether Python spells ``name``: an identifier, no keyword, that it reads unchanged.
+
+    Python reads an identifier in its NFKC form, so a name in another form, as one holding the
+    ligature U+FB01, would be read as another name.
+    """
+    return (
+        name.isidentifier()
+        and not keyword.iskeyword(name)
+        and unicodedata.normalize("NFKC", name) == name
+    )
+
+
+#: The first code point past the Basic Multilingual Plane.
+_ASTRAL = 0x10000
+
+
+def quoted(name: str) -> str:
+    """Return ``name`` as the Python string literal a program writes it as.
+
+    JSON escapes a character past the Basic Multilingual Plane as two surrogates, which a Python
+    literal reads as two characters and not as the one: such a name is written by `repr`.
+    """
+    return json.dumps(name) if all(ord(char) < _ASTRAL for char in name) else repr(name)
+
+
+def _member(name: str) -> str:
+    """Return how a program writes the field or the argument ``name`` after what holds it."""
+    return f".{name}" if spelled(name) else f"[{quoted(name)}]"
+
+
 @dataclass(frozen=True, slots=True)
 class Ref:
     """A variable, and the fields below it: ``c1.order.status`` is ``c1`` at ``order.status``."""
@@ -48,12 +81,7 @@ class Ref:
         A key that is no Python identifier, or is a keyword, as `a-b` or `class`, reads back only
         as a subscript, `x["a-b"]`, the form the critic reads it in.
         """
-        return self.variable + "".join(
-            f".{key}"
-            if key.isidentifier() and not keyword.iskeyword(key)
-            else f"[{json.dumps(key)}]"
-            for key in self.path
-        )
+        return self.variable + "".join(map(_member, self.path))
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +156,7 @@ class Branch:
     def against(self) -> str:
         """Return the set as a program writes it."""
         if self.tool:
-            return f"{alias(self.tool)}.{self.argument}"
+            return slot(self.tool, self.argument)
         # Each value as a Python literal, as a call writes a constant, so the test reads back.
         return "(" + "".join(f"{v!r}, " for v in self.values).rstrip(" ") + ")"
 
@@ -159,6 +187,15 @@ class Block:
     end: Return | Stop | Branch | For | Next
 
 
+def slot(tool: str, argument: str) -> str:
+    """Return how a program's test names the argument ``argument`` of ``tool``.
+
+    The tool is written by its alias, and an argument Python does not spell subscripted, as a
+    field is: ``send["from"]``.
+    """
+    return alias(tool) + _member(argument)
+
+
 def alias(name: str) -> str:
     """Return the identifier a program calls a tool by: its name, where Python spells one.
 
@@ -168,12 +205,12 @@ def alias(name: str) -> str:
     ``_``, a leading digit taking a leading ``_`` and a keyword a trailing ``_``, as
     ``g1_grasp``, ``get_run`` and ``class_``.
     """
-    if name.isidentifier() and not keyword.iskeyword(name):
+    if spelled(name):
         return name
-    spelled = re.sub(r"[^A-Za-z0-9_]", "_", name)
-    if not spelled or spelled[0].isdigit():
-        spelled = "_" + spelled
-    return spelled + "_" if keyword.iskeyword(spelled) else spelled
+    written = re.sub(r"[^A-Za-z0-9_]", "_", name)
+    if not written or written[0].isdigit():
+        written = "_" + written
+    return written + "_" if keyword.iskeyword(written) else written
 
 
 def aliases(names: Iterable[str]) -> dict[str, str]:
@@ -185,12 +222,12 @@ def aliases(names: Iterable[str]) -> dict[str, str]:
     named: dict[str, str] = {}
     listed = set(names)
     for name in sorted(listed):
-        spelled = alias(name)
-        other = named.get(spelled) or (spelled if spelled != name and spelled in listed else None)
+        written = alias(name)
+        other = named.get(written) or (written if written != name and written in listed else None)
         if other is not None:
-            message = f"tools {other!r} and {name!r} are both called {spelled!r} in a program"
+            message = f"tools {other!r} and {name!r} are both called {written!r} in a program"
             raise ValueError(message)
-        named[spelled] = name
+        named[written] = name
     return named
 
 
@@ -217,6 +254,21 @@ def named(block: Block, names: Mapping[str, str]) -> Block:
     return Block(calls, end)
 
 
+def _passed(bindings: Iterable[tuple[str, Ref | Const]]) -> str:
+    """Return a call's arguments as a program writes them.
+
+    An argument Python does not spell, as ``from`` or ``reply-to``, is no keyword of a call, and
+    is passed by its name in a dictionary unpacked into it: ``send(to=to, **{"from": sender})``.
+    """
+    passed: list[str] = []
+    for keyworded, run in groupby(bindings, key=lambda binding: spelled(binding[0])):
+        if keyworded:
+            passed += [f"{name}={ref}" for name, ref in run]
+        else:
+            passed.append("**{" + ", ".join(f"{quoted(name)}: {ref}" for name, ref in run) + "}")
+    return ", ".join(passed)
+
+
 def render(block: Block, indent: str = "") -> str:
     """Return the program as Python-like text, one step a line.
 
@@ -227,7 +279,7 @@ def render(block: Block, indent: str = "") -> str:
         raise TypeError(message)
     lines = []
     for call in block.calls:
-        made = f"{alias(call.tool)}(" + ", ".join(f"{n}={ref}" for n, ref in call.bindings) + ")"
+        made = f"{alias(call.tool)}({_passed(call.bindings)})"
         line = f"{call.result} = " + (f"retry({made})" if call.retry else made)
         if call.on_error is None:
             lines.append(f"{indent}{line}")
@@ -246,7 +298,7 @@ def render(block: Block, indent: str = "") -> str:
         lines += [f"{indent}for {end.item} in {end.ref}:", render(end.body, indent + "    ")]
         lines.append(render(end.after, indent))
     else:
-        tested = f"{json.dumps(end.key)} in {end.ref}" if end.key else f"{end.ref} in {end.against}"
+        tested = f"{quoted(end.key)} in {end.ref}" if end.key else f"{end.ref} in {end.against}"
         lines.append(f"{indent}if {tested}:")
         lines.append(render(end.then, indent + "    "))
         lines.append(f"{indent}else:")

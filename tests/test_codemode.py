@@ -7,13 +7,26 @@ from pathlib import Path
 from typing import Any, Literal
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from valgebra_planning.codemode import PREAMBLE, repair, stubs
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import ProgramError, critique, read_program
 from valgebra_planning.library import read_library
 from valgebra_planning.planner import plan
-from valgebra_planning.program import alias, aliases, render
+from valgebra_planning.program import (
+    Block,
+    Branch,
+    Call,
+    Ref,
+    Return,
+    Stop,
+    alias,
+    aliases,
+    named,
+    render,
+)
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "parcels"
 LISTING = json.loads((EXAMPLE / "tools.json").read_text(encoding="utf-8"))["tools"]
@@ -404,6 +417,128 @@ def test_a_dotted_library_is_planned_written_and_read_back_by_its_aliases() -> N
     ast.parse(written)
     assert "def parcels_find_parcel(" in written
     assert "The tool 'parcels.find_parcel', called by this name." in written
+
+
+#: Argument names a schema may hold that no Python keyword spells, and two one does.
+NAMES = [
+    "from",
+    "reply-to",
+    "",
+    "x y",
+    "a.b",
+    "q\"'",
+    "n\n",
+    "\u2028",
+    "\U0001f600",
+    "\ufb01",
+    "to",
+    "é",
+]
+
+
+def _posting(values: dict[str, Any]) -> dict[str, Any]:
+    """Return a listing whose `post.send` takes every one of `NAMES`, and a reader of a value."""
+    specs: list[dict[str, Any]] = [
+        {
+            "name": "post.send",
+            "inputSchema": {
+                "type": "object",
+                "properties": dict.fromkeys(NAMES, values),
+                "required": NAMES,
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {"ok": {"type": "boolean"}},
+                "required": ["ok"],
+            },
+        }
+    ]
+    return {contract.name: contract for contract in map(read_contract, specs)}
+
+
+def test_an_argument_python_does_not_spell_is_planned_written_and_read_back() -> None:
+    tools = _posting({"type": "string"})
+    task = read_task("t", {"u": {"type": "string"}}, {"type": "boolean"})
+    planned = plan(tools, task).program
+    assert planned is not None
+    text = render(planned)
+    assert named(read_program(text), aliases(tools)) == planned
+    assert critique(text, tools, task).accepted
+    written = stubs(tools)
+    ast.parse(written)
+    assert "def post_send(*, to: str, é: str, **named: Any)" in written
+    assert 'Passed by name in a dictionary, as **{"": x}: ' in written
+
+
+def test_the_test_a_critique_asks_for_is_one_the_reader_reads() -> None:
+    # The claim names the tool and the argument as the listing does, and no program does.
+    tools = _posting({"enum": ["a", "b"]})
+    task = read_task("t", {"u": {"type": "string"}}, {"type": "boolean"})
+    passed = ", ".join(f"{json.dumps(name)}: u" for name in NAMES if name != "\U0001f600")
+    call = f'c1 = post_send(**{{{passed}, "\U0001f600": u}})'
+    notes = critique(f"{call}\nreturn c1.ok\n", tools, task).notes
+    asked = [note.partition("test `")[2].partition(":`")[0] for note in notes]
+    assert 'if u in post_send["from"]' in asked
+    assert "if u in post_send.to" in asked
+    for test in asked:
+        text = f"{test}:\n    {call}\n    return c1.ok\nelse:\n    stop(u)\n"
+        end = named(read_program(text), aliases(tools)).end
+        assert isinstance(end, Branch)
+        assert end.tool == "post.send"
+        assert critique(text, tools, task).verified
+
+
+@given(names=st.lists(st.text(max_size=6), unique=True, min_size=1, max_size=4))
+def test_every_name_a_program_writes_reads_back(names: list[str]) -> None:
+    held = Ref("c", tuple(names))
+    ends = Block((), Return(Ref("c1"))), Block((), Stop(Ref("c1")))
+    call = Call("t", tuple((name, held) for name in names), "c1")
+    for end in (
+        Branch(Ref("c1", (names[0],)), "t", names[-1], *ends),
+        Branch(held, "", "", *ends, key=names[0]),
+    ):
+        block = Block((call,), end)
+        if end.key or end.tool:
+            assert read_program(render(block)) == block
+
+
+@pytest.mark.parametrize(
+    ("source", "says"),
+    [
+        ("c1 = f(**held)\nreturn c1\n", "a call passes every argument by name"),
+        ("c1 = f(**{1: u})\nreturn c1\n", "a call passes every argument by name"),
+        ("c1 = f(**{**u})\nreturn c1\n", "a call passes every argument by name"),
+        ('c1 = f(a=u, **{"a": u})\nreturn c1\n', "the argument 'a' is passed twice"),
+        ('c1 = f(**{"a": u, "a": u})\nreturn c1\n', "the argument 'a' is passed twice"),
+        ('if "" in u:\n    return u\nelse:\n    stop(u)\n', "an empty one is none"),
+    ],
+)
+def test_an_argument_the_reader_cannot_name_is_refused_by_its_line(source: str, says: str) -> None:
+    with pytest.raises(ProgramError, match="line 1: ") as refused:
+        read_program(source)
+    assert says in str(refused.value)
+
+
+def test_a_listing_s_infinity_is_left_out_of_the_test_a_plan_writes() -> None:
+    tools = {
+        "look": read_contract(
+            {
+                "name": "look",
+                "inputSchema": {"type": "object"},
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {"v": {"enum": [1, 2, 1e400]}},
+                    "required": ["v"],
+                },
+            }
+        )
+    }
+    planned = plan(tools, read_task("t", {}, {"enum": [1, 1e400]})).program
+    assert planned is not None
+    assert isinstance(planned.end, Branch)
+    assert planned.end.values == (1,)
+    assert read_program(render(planned)) == planned
 
 
 @pytest.mark.parametrize("names", [["g1.grasp", "g1_grasp"], ["a-b", "a.b"], ["class", "class_"]])

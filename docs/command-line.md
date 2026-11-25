@@ -23,8 +23,8 @@ A tool without an `outputSchema` can be called, and nothing it returns can fill 
 argument: its result is a set no argument is proven to hold. A tool whose name Python does not
 spell, as MCP allows a dotted or hyphened one, is called in a program by its alias, each
 character outside `[A-Za-z0-9_]` written `_`: `g1.grasp` is `g1_grasp`. Two tools one alias
-spells are refused naming both. `examples/parcels` is a library
-holding every file.
+spells are refused naming both. An argument Python does not spell, as `from`, is passed by its name
+in a dictionary, `send(**{"from": sender})`. `examples/parcels` is a library holding every file.
 
 A rule means what its keys say. A key no reader reads, in a file, a task, a policy, a transition or
 a flow rule, is refused by name, as a misspelled `only` or `arguments` would leave a rule weaker
