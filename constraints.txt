@@ -95,7 +95,7 @@ typing-inspection==0.4.5
     #   pydantic
 uvicorn==0.54.0 ; sys_platform != 'emscripten'
     # via mcp
-valgebra==0.0.32
+valgebra==0.0.35
     # via
     #   valgebra-jsonschema
     #   valgebra-planning

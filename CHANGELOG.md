@@ -117,6 +117,9 @@ All notable changes to valgebra-planning are recorded here. The format follows
   same. `Gate.errored` takes `tool`, the tool whose call answered with an error, since a call a
   preempting one overtook is read from the states before it, not the last call stepped.
 
+- valgebra is required from 0.0.35, whose `validate` takes the `limit` a refusal is read through.
+  The suite passes on it, and no study's count moves from 0.0.32.
+
 ### Added
 
 - A task names the inputs its answer must be read from: `reads` in `tasks.json` and `read_task`.
