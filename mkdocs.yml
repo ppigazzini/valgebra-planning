@@ -43,6 +43,7 @@ nav:
       - How it works: how-it-works.md
       - The method: method.md
       - Results: results.md
+      - Performance: performance.md
   - Reference:
       - Python API: api.md
       - Works cited: references.md
@@ -149,6 +150,7 @@ plugins:
           - how-it-works.md: What a program of tool calls is, what proving it means, and how valgebra-planning, valgebra-jsonschema and valgebra share the work.
           - method.md: Contracts, the cells, the planner, the verifier, the rules a program is held to, the critic, and the limits.
           - results.md: The studies, each count with the command that checks it.
+          - performance.md: What verifying and planning cost, how to count it, how to spend less, how the speed is made, and what is measured and not taken.
         Reference:
           - api.md: The public modules, the names each promises, the two needing the mcp extra, and their reference read from the docstrings.
           - references.md: Every work the method and the modules cite, under its key.

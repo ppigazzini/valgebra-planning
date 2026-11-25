@@ -5,7 +5,8 @@ description: The studies, each count with the command that checks it.
 # Results
 
 Every count below is a row of a study file, and the command beside it fails when this code
-no longer produces it. Times depend on the machine and are not recorded.
+no longer produces it. Times depend on the machine and are not recorded;
+[the performance page](performance.md) says how a call is counted.
 
 ## Parcel returns
 

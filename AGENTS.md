@@ -21,6 +21,7 @@ a schema in the companion; neither is worked around here by a guess.
 | what a program, a link or a rule means | [the method](docs/method.md) |
 | a public name, or a module's `__all__` | [the Python API](docs/api.md) |
 | a published count | [the results](docs/results.md), and the study file its command checks |
+| what a call costs | [the performance page](docs/performance.md), and what it says is measured and not taken |
 | a citation | [the works cited](docs/references.md) |
 | code that implements a paper's result | [the theory page](docs/dev/theory.md), [citing a paper](docs/dev/writing.md#citing-a-paper) |
 | a release, from its first commit to its advisory, or a dependency's floor | [the releasing page](docs/dev/releasing.md) |

@@ -1,7 +1,8 @@
-"""The cases `tools/perf.py` counts run, and its figures are read off what cachegrind prints."""
+"""The cases `tools/perf.py` counts run, and the performance page names code and tests that are."""
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -10,6 +11,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
 import perf
 
+ROOT = Path(__file__).parent.parent
+PAGE = (ROOT / "docs" / "performance.md").read_text(encoding="utf-8")
+#: A private name, or a class's, as the page writes one.
+NAMED = re.compile(r"`(_[a-zA-Z_]+(?:\.[a-z_]+)?|[A-Z][A-Za-z]+\.[a-z_]+)`")
 #: What cachegrind prints of a run.
 PRINTED = "==7== Cachegrind\n==7== \n==7== I refs:        1,234,567\n"
 
@@ -82,3 +87,26 @@ def test_without_valgrind_no_count_is_taken(
     monkeypatch.setattr(perf.shutil, "which", lambda _: None)
     assert perf.main([]) == 2
     assert "valgrind is not on PATH" in capsys.readouterr().out
+
+
+def _sources(folder: str) -> str:
+    return "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted((ROOT / folder).glob("*.py"))
+    )
+
+
+def test_every_test_the_performance_page_names_is_one() -> None:
+    named = set(re.findall(r"`(test_\w+)`", PAGE))
+    assert named
+    assert named <= set(re.findall(r"^(?:async )?def (test_\w+)", _sources("tests"), re.MULTILINE))
+
+
+def test_every_name_the_performance_page_gives_is_defined() -> None:
+    source = _sources("valgebra_planning")
+    named = set(NAMED.findall(PAGE))
+    assert {"_Walk.holds", "Slot.below", "_PAIRS"} <= named
+    for name in named:
+        owner, _, last = name.rpartition(".")
+        assert not owner or re.search(rf"^class {owner}\b", source, re.MULTILINE), name
+        defined = rf"^\s*(?:(?:async )?def|class) {last}\b|^\s*{last}\b\s*(?::|=)"
+        assert re.search(defined, source, re.MULTILINE), name
