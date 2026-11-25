@@ -211,3 +211,28 @@ def test_two_policies_of_one_name_are_refused_at_load(tmp_path: Path) -> None:
     name = json.loads((PARCELS / "policies.json").read_text(encoding="utf-8"))["policies"][0]
     with pytest.raises(ValueError, match=f"two policies are named {name['name']!r}"):
         read_library(_planted(tmp_path, "policies.json", twice))
+
+
+@pytest.mark.parametrize(("to", "found"), [("violated", False), ("idle", True)])
+def test_a_state_a_lapse_reaches_is_reached(tmp_path: Path, to: str, *, found: bool) -> None:
+    # Only the lapse reaches the bad state: the policy holds something where it does.
+    def lapsing(policies: Any) -> Any:
+        policies["policies"].append(
+            {
+                "name": "answered in time",
+                "initial": "start",
+                "bad": ["violated"],
+                "transitions": [
+                    {"from": "start", "tool": "approve_freight", "to": "approved"},
+                    {"from": "approved", "after_s": 60, "to": to},
+                ],
+            }
+        )
+        return policies
+
+    empty = (
+        "policy answered in time",
+        "no transition that can fire reaches a bad or pending state",
+        "proven",
+    )
+    assert (empty in _found(_planted(tmp_path, "policies.json", lapsing))) == found

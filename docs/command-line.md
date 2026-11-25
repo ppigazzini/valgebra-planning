@@ -92,7 +92,8 @@ starting `note:` names a contract wider than its keywords suggest
 ([the method](method.md#specifications-that-hold-vacuously)), which the exit status does not
 read, among them each place in a result that may hold any string, read wherever the output
 schema puts a value, required or not, at any depth, in an item or under a key no property names,
-and named by its path, `[]` for an item and `*` for an unnamed key; with `--json` each entry carries its `kind`, `vacuous` or `wide`.
+and named by its path, `[]` for an item and `*` for an unnamed key, and each lapse that leaves a
+pending state for one that is not, an obligation ended by the time; with `--json` each entry carries its `kind`, `vacuous` or `wide`.
 
 ## Compare two privilege policies
 

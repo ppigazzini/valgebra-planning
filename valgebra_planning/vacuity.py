@@ -121,10 +121,10 @@ def _reached(policy: Policy, live: list[Transition]) -> set[str]:
         state = frontier.pop()
         if state in policy.bad:
             continue
-        for transition in live:
-            if transition.source == state and transition.target not in reached:
-                reached.add(transition.target)
-                frontier.append(transition.target)
+        for step in (*live, *policy.lapses):
+            if step.source == state and step.target not in reached:
+                reached.add(step.target)
+                frontier.append(step.target)
     return reached
 
 

@@ -162,6 +162,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
   `Plan.timing` and the `plan` command name the same. A lapse that only admits more, as a cool-down
   coming due, is no assumption.
 
+- `check` notes a lapse that leaves a pending state for one that is not: the obligation the state
+  holds ends with the time, and not with the call that meets it. A bad or a pending state a lapse
+  reaches is reached, so a policy a lapse alone can break is not reported as one nothing breaks.
+
 - A task names the inputs its answer must be read from: `reads` in `tasks.json` and `read_task`.
   A goal's set says what kind of value answers, not whose: every run's events meet "the events
   of a run", so the planner answered with `search_actions()`, reading no run. The verifier refutes

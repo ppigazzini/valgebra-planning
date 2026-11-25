@@ -321,16 +321,17 @@ inhabited; valgebra is asked only where none is, and a question it leaves undeci
 as undecided.
 
 A contract may also be wider than its keywords suggest, and `valgebra_planning/meaning.py`
-notes six such readings: an argument a `format` alone types, which takes every string where the
+notes seven such readings: an argument a `format` alone types, which takes every string where the
 library does not assert `format`; a numeric argument a side of which no bound closes, read by
 the companion's `interval`; a `const` with no `type` beside it in an input schema; and a tool
 marked destructive, or left unmarked, whose results meet only arguments taking one value or a
 boolean and no task's goal, which a plan calls only to fill a gate; and a whole result, read as
 declared, that meets an argument or a goal only through keys its output schema does not
 declare, asked of it as declared and read closed; and a result, or a field it guarantees, that
-any string fills, which a proxy answers to an agent inside the checked value. A note decides
-nothing: the
-plan, the proof and the run read the contracts as written.
+any string fills, which a proxy answers to an agent inside the checked value; and a lapse out of a
+pending state into one that is not, which ends an obligation with the time and not with the call
+that meets it. A note decides nothing: the plan, the proof and the run read the contracts as
+written.
 
 ## Running a program
 

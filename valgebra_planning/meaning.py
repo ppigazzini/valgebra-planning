@@ -19,7 +19,9 @@ which `check` reports beside the vacuous specifications:
   and a closed one none (Castagna 2023, §3.2), so a plan may pass the record where its declared
   keys never fit, as a detection whose extra keys a distance would need;
 - a result, or a field it guarantees, that any string fills: a proxy answers it to an agent
-  inside the checked value, so no contract bounds the text a model reads there.
+  inside the checked value, so no contract bounds the text a model reads there;
+- a lapse out of a pending state into one that is not: the obligation the state holds ends with
+  the time, and not with the call that meets it, as an object held that no call released.
 
 A finding decides nothing: a plan, a proof and a run read the contracts as written, and what a
 finding names is the author's to narrow or keep.
@@ -326,7 +328,26 @@ def findings(library: Library) -> list[Finding]:
                     gate,
                 )
             )
-    return found + _unlisted(library)
+    return found + _unlisted(library) + _discharged(library)
+
+
+def _discharged(library: Library) -> list[Finding]:
+    """Return each lapse that leaves a pending state for one that is not.
+
+    A pending state is an obligation a path may not end in, met by the call that leaves it; a
+    lapse leaves it with no call, so the run ends with the obligation unmet and nothing open.
+    """
+    return [
+        Finding(
+            f"policy {name}",
+            f"the lapse out of the pending {lapse.source} into {lapse.target} ends an obligation"
+            f" after {lapse.seconds:g} s, with no call that meets it",
+            "proven",
+        )
+        for name, policy in sorted(library.policies.items())
+        for lapse in policy.lapses
+        if lapse.source in policy.pending and lapse.target not in policy.pending
+    ]
 
 
 def _unlisted(library: Library) -> list[Finding]:

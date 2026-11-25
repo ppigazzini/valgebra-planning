@@ -10,6 +10,7 @@ import pytest
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.library import Library, Problem, read_library
 from valgebra_planning.meaning import findings
+from valgebra_planning.policy import read_policy
 
 OBJECT_ID = {"type": "string", "pattern": "^obj_[0-9]+$"}
 GRASP_ID = {"type": "string", "pattern": "^grs_[0-9]+$"}
@@ -268,3 +269,38 @@ def test_the_string_note_reads_every_place_a_string_may_sit(
     an ``anyOf`` branch frees it, and a reference is followed once.
     """
     assert _noted(output) == noted
+
+
+@pytest.mark.parametrize(
+    ("after", "pending", "noted"),
+    [
+        ("free", ["holding"], True),
+        ("late", ["holding", "late"], False),
+        ("free", ["late"], False),
+    ],
+)
+def test_a_lapse_that_ends_an_obligation_is_noted(
+    after: str, pending: list[str], *, noted: bool
+) -> None:
+    policy = read_policy(
+        {
+            "name": "release what you grasp",
+            "initial": "free",
+            "bad": [],
+            "pending": pending,
+            "transitions": [
+                {"from": "free", "tool": "grasp", "to": "holding"},
+                {"from": "holding", "tool": "release", "to": "free"},
+                {"from": "holding", "after_s": 30, "to": after},
+            ],
+        }
+    )
+    found = findings(Library({}, (), {policy.name: policy}))
+    said = "the lapse out of the pending holding into free ends an obligation after 30 s"
+    assert [f.finding for f in found] == [f"{said}, with no call that meets it"] * noted
+
+
+def test_the_example_libraries_hold_no_lapse_that_ends_an_obligation() -> None:
+    for name in ("parcels", "robot-skills"):
+        library = read_library(Path(__file__).parent.parent / "examples" / name)
+        assert not [f for f in findings(library) if "ends an obligation" in f.finding]
