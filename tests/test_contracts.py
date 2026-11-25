@@ -271,6 +271,44 @@ def test_a_record_holds_the_objects_carrying_each_key_as_written(
     assert record_of(fields, closed=closed).is_valid(value) == inside
 
 
+#: Field sets holding a record inside, each read otherwise were the records inside closed.
+NESTED: list[dict[str, Any]] = [
+    {"required": ["a"]},
+    {"required": ["a?"]},
+    {"not": {"required": ["a"]}},
+    {"not": {"properties": {"a": {"type": "integer"}}}},
+    {"not": {"maxProperties": 1}},
+    {"oneOf": [{"required": ["a"]}, {"required": ["b"]}]},
+    {"oneOf": [{"required": ["a"]}, {"properties": {"b": {"type": "integer"}}}]},
+    {"if": {"required": ["a"]}, "then": {"const": {"a": 1}}},
+    {"dependentRequired": {"a": ["b"]}},
+    {"dependentSchemas": {"a": {"required": ["b"]}}},
+    {"properties": {"a": {"type": "object", "not": {"required": ["b"]}}}, "required": ["a"]},
+]
+INNER = st.dictionaries(
+    KEYS, st.one_of(st.integers(-1, 1), st.text(max_size=1), st.just({"b": 1})), max_size=3
+)
+
+
+@settings(max_examples=600, deadline=None)
+@given(
+    schema=st.sampled_from(NESTED),
+    value=INNER,
+    key=st.sampled_from(["f", "f?"]),
+    beside=st.booleans(),
+    closed=st.booleans(),
+)
+def test_a_record_s_field_lies_in_the_set_it_is_given(
+    *, schema: dict[str, Any], value: dict[str, Any], key: str, beside: bool, closed: bool
+) -> None:
+    """A record says which keys it holds, and nothing of the records inside its fields' sets."""
+    values = compile_schema({"type": "object", **schema})
+    record = record_of({key: values, **({"g": INTEGER} if beside else {})}, closed=closed)
+    held = {key: value, **({"g": 1} if beside else {})}
+    assert record.is_valid(held) == values.is_valid(value)
+    assert record.is_valid({**held, "more": 1}) == (not closed and values.is_valid(value))
+
+
 def _embedded(inner: dict[str, object], *, required: bool) -> dict[str, Any]:
     """Return an output whose `a` is a resource of its own, its `T` apart from the root's."""
     key: dict[str, object] = {"required": ["k"]} if required else {}

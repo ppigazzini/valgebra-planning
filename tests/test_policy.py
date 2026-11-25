@@ -1474,3 +1474,67 @@ def test_a_plan_names_the_timing_its_policies_rest_on() -> None:
         "the run reaches book_freight_return within 600 s of entering approved",
     )
     assert untimed.timing == ()
+
+
+def _handed(meta: dict[str, Any]) -> dict[str, Any]:
+    """Return a tool reading a ``meta`` and one it is handed to."""
+    handed = {"type": "object", "properties": {"meta": {"type": "object"}}, "required": ["meta"]}
+    read: dict[str, Any] = {
+        "name": "read",
+        "inputSchema": {"type": "object"},
+        "outputSchema": {**handed, "properties": {"meta": {"type": "object", **meta}}},
+    }
+    done = {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"]}
+    send: dict[str, Any] = {"name": "send", "inputSchema": handed, "outputSchema": done}
+    return {spec["name"]: read_contract(spec) for spec in (read, send)}
+
+
+def _reading(guard: dict[str, Any], *, owed: bool) -> Any:
+    """Return a policy whose one transition reads ``meta``: an obligation's end, or a violation."""
+    arguments = {"type": "object", "properties": {"meta": guard}, "required": ["meta"]}
+    to = "done" if owed else "violated"
+    return read_policy(
+        {
+            "name": "reads the meta",
+            "initial": "start",
+            "bad": ["violated"],
+            "pending": ["start"] if owed else [],
+            "transitions": [{"from": "start", "tool": "send", "arguments": arguments, "to": to}],
+        }
+    )
+
+
+NO_ID = {"not": {"required": ["id"]}}
+EITHER = [{"required": ["id"]}, {"required": ["sku"]}]
+
+
+@pytest.mark.parametrize(
+    ("meta", "guard", "owed", "value"),
+    [
+        ({"oneOf": EITHER}, NO_ID, True, {"id": 1}),
+        ({"not": {"required": ["sku"]}}, NO_ID, True, {"id": 1}),
+        ({"required": ["id?"]}, {"required": ["more"]}, False, {"id?": 1, "more": 1}),
+        ({"anyOf": EITHER}, NO_ID, True, {"id": 1}),
+        ({"required": ["id"]}, {"required": ["more"]}, False, {"id": 1, "more": 1}),
+    ],
+    ids=["oneOf-owed", "not-owed", "key-refused", "anyOf-owed", "plain-refused"],
+)
+def test_a_policy_reads_each_argument_s_whole_set(
+    *, meta: dict[str, Any], guard: dict[str, Any], owed: bool, value: dict[str, Any]
+) -> None:
+    """A value of the argument the policy's monitor leaves in a wrong state is never proven away."""
+    tools, policy = _handed(meta), _reading(guard, owed=owed)
+    task = read_task("send", {}, {"type": "boolean"})
+    program = read_program("c1 = read()\nc2 = send(meta=c1.meta)\nreturn c2.ok\n")
+    assert tools["read"].result("meta").values.is_valid(value)
+    ended = run(
+        program,
+        tools,
+        task,
+        {},
+        {"read": lambda: {"meta": value}, "send": lambda **_: {"ok": True}},
+        policies=[policy],
+    )
+    assert ended.outcome == "refused"
+    assert not verify(program, tools, task, policies=[policy]).proven
+    assert plan(tools, task, policies=[policy]).program is None

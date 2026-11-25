@@ -685,18 +685,19 @@ def record_of(fields: Mapping[str, Validator[Any]], *, closed: bool) -> Validato
     valgebra's dict display reads a trailing ``?`` as an optional field and strips it, so a
     key ending in one is required through the companion's ``required``, which reads a key as
     written, and spelled optional with a ``?`` appended, which the display strips once. Any
-    other key keeps the display valgebra decides most often. ``closed`` admits no other key;
-    otherwise a clause admits every other key with any value. valgebra's ``open`` would admit
-    them too, but it opens every record of the schema, those inside the fields' sets as well.
+    other key keeps the display valgebra decides most often. ``closed`` admits no other key, as a
+    display does; otherwise a clause admits every other key with any value. valgebra's ``close``
+    and ``open`` say the same of every record of the schema, those inside the fields' sets as
+    well, where each field is to keep the set it is given.
     """
     if any(key.endswith("?") for key in fields):
         present = compile_schema({"type": "object", "required": sorted(fields)})
         spelled = {f"{key}?": values for key, values in fields.items()}
         if closed:
-            return intersection(present, Validator(spelled).close())
+            return intersection(present, Validator(spelled))
         return intersection(present, Validator({**spelled, str: anything}))
     if closed:
-        return Validator(dict(fields)).close()
+        return Validator(dict(fields))
     return Validator({**fields, str: anything})
 
 

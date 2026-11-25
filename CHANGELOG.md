@@ -6,17 +6,32 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- A call's argument record holds each argument's whole set. The record was built with valgebra's
+  `close`, which closes every record inside the arguments' sets as well, so an argument whose schema
+  holds an `oneOf`, a `not` or an `if` over objects, or requires a key ending in `?`, was read in
+  another set, one lacking values the argument may hold among them. Where the tool's input schema
+  relates its arguments, a program passing a value outside it was proven, as `{"id": 1, "more": 1}`
+  of `oneOf` two required keys under an input schema that admits no other key. A policy reading the
+  argument was proven over a program that breaks it: an obligation ended by a call that does not end
+  it, and a call the policy refuses. The planner read the same record, and wrote such programs; a
+  run of one is refused. A valgebra display is closed, and keeps its fields' sets as they are, so
+  the record is one. A correct program passing an argument under `dependentRequired` on, left
+  undecided, is proven.
+
 ### Changed
 
 - `verify`, `critique`, `render` and `plan` cost less than in 0.0.7, and `read_program` and `stubs`
-  what they cost there, with 0.0.8's answers. By instructions under cachegrind, on CPython 3.15 and
-  over calls repeated on one library, `verify` of nine programs counts 0.16 to 0.69 of 0.0.7's,
-  where 0.0.8 counts 1.22 to 7.47, `critique` of three 0.31 to 0.83, `plan` of six tasks 0.18 to
-  0.87, `render` 0.82, `stubs` 0.97, `read_program` 1.01, and the notes `check` makes of two
-  libraries' contracts 0.35 and 1.13. A return is shown reached by one value found, built of its
-  result's fields' members and held in the belief, and by the whole belief where none is. What a
-  test leaves in a set and out of it, an inclusion, and whether two sets share a value are asked
-  once, by the sets, and a planner's candidates refute a relation before valgebra is asked one.
+  what they cost there, with 0.0.8's answers but for the record above. By instructions under
+  cachegrind, on CPython 3.15 and over calls repeated on one library, `verify` of nine programs
+  counts 0.16 to 0.69 of 0.0.7's, where 0.0.8 counts 1.22 to 7.47, `critique` of three 0.31 to 0.83,
+  `plan` of six tasks 0.18 to 0.87, `render` 0.82, `stubs` 0.97, `read_program` 1.01, and the notes
+  `check` makes of two libraries' contracts 0.35 and 1.13. A return is shown reached by one value
+  found, built of its result's fields' members and held in the belief, and by the whole belief where
+  none is. What a test leaves in a set and out of it, an inclusion, and whether two sets share a
+  value are asked once, by the sets, and a planner's candidates refute a relation before valgebra is
+  asked one.
 
 - A link on a field is refuted by a value found that carries one outside its target, where it read
   undecided or refuted without one: a value built of the contract's fields, held in the value's own

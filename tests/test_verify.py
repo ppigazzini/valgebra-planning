@@ -532,6 +532,80 @@ def test_a_program_no_rule_reads_builds_no_record_and_draws_nothing(
     assert verify(read_program("c1 = look()\nreturn c1\n"), _looked(_LOOKED), task).proven
 
 
+def _passing(meta: dict[str, Any], **related: object) -> dict[str, Any]:
+    """Return a tool reading a ``meta`` and one taking it beside a text, as ``related`` relates."""
+    read: dict[str, Any] = {
+        "name": "read",
+        "inputSchema": {"type": "object"},
+        "outputSchema": {
+            "type": "object",
+            "properties": {"meta": {"type": "object", **meta}},
+            "required": ["meta"],
+        },
+    }
+    send: dict[str, Any] = {
+        "name": "send",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"meta": {"type": "object"}, "text": {"type": "string"}},
+            "required": ["meta", "text"],
+            **related,
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {"ok": {"type": "boolean"}},
+            "required": ["ok"],
+        },
+    }
+    return {spec["name"]: read_contract(spec) for spec in (read, send)}
+
+
+def _flat(*keys: str) -> dict[str, Any]:
+    """Return what relates the two: the text is ``go``, or ``meta`` holds no key but ``keys``."""
+    shut = {"properties": dict.fromkeys(keys, True), "additionalProperties": False}
+    return {"anyOf": [{"properties": {"text": {"const": "go"}}}, {"properties": {"meta": shut}}]}
+
+
+ONE_OF = {"oneOf": [{"required": ["id"]}, {"required": ["sku"]}]}
+
+
+@pytest.mark.parametrize(
+    ("meta", "keys", "value"),
+    [
+        (ONE_OF, ["id", "sku"], {"id": 1, "more": 1}),
+        ({"not": {"required": ["old"]}}, ["id"], {"more": 1}),
+        ({"required": ["id?"]}, ["id?"], {"id?": 1, "more": 1}),
+        ({"anyOf": ONE_OF["oneOf"]}, ["id", "sku"], {"id": 1, "more": 1}),
+        ({}, ["id"], {"more": 1}),
+    ],
+    ids=["oneOf", "not", "key", "anyOf", "plain"],
+)
+def test_a_call_s_record_holds_each_argument_s_whole_set(
+    meta: dict[str, Any], keys: list[str], value: dict[str, Any]
+) -> None:
+    """A value the argument may hold and the input schema refuses beside another is never proven."""
+    tools = _passing(meta, **_flat(*keys))
+    task = read_task("send", {"x": {"type": "string"}}, {"type": "boolean"})
+    assert tools["read"].result("meta").values.is_valid(value)
+    assert not tools["send"].accepts.is_valid({"meta": value, "text": "t"})
+    program = "c1 = read()\nc2 = send(meta=c1.meta, text={})\nreturn c2.ok\n"
+    assert not verify(read_program(program.format("x")), tools, task).proven
+    assert verify(read_program(program.format('"go"')), tools, task).proven
+
+
+@pytest.mark.parametrize(
+    "meta",
+    [ONE_OF, {"not": {"required": ["old"]}}, {"dependentRequired": {"id": ["sku"]}}],
+    ids=["oneOf", "not", "dependent"],
+)
+def test_a_call_s_record_inside_its_input_schema_is_proven(meta: dict[str, Any]) -> None:
+    """The input schema asks of the argument, beside the text, what the argument's own set holds."""
+    asked = {"anyOf": [{"properties": {"text": {"const": "go"}}}, {"properties": {"meta": meta}}]}
+    task = read_task("send", {"x": {"type": "string"}}, {"type": "boolean"})
+    program = read_program("c1 = read()\nc2 = send(meta=c1.meta, text=x)\nreturn c2.ok\n")
+    assert verify(program, _passing(meta, **asked), task).proven
+
+
 def test_a_program_verified_again_asks_no_difference_again() -> None:
     """What a test leaves in a set and out of it, and each inclusion, is asked of its sets once."""
     goal = {"enum": ["open", "shipped", "lost"]}
