@@ -99,5 +99,5 @@ valgebra==0.0.35
     # via
     #   valgebra-jsonschema
     #   valgebra-planning
-valgebra-jsonschema==0.0.6
+valgebra-jsonschema==0.0.7
     # via valgebra-planning

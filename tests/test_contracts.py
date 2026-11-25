@@ -723,3 +723,28 @@ def test_a_refusal_lists_the_first_three_failures_the_full_report_holds(rows: li
     ]
     expected = "; ".join(written[:3]) if full else "no failure valgebra names"
     assert failures(SEARCH.accepts, arguments, contract_names(SEARCH)) == expected
+
+
+@pytest.mark.parametrize("schema", [{"const": 1e400}, {"enum": [1e400]}])
+def test_a_constant_past_the_float_range_is_proven_inside_no_other(schema: dict[str, Any]) -> None:
+    # `json.loads` reads 1e400 as an infinity. Read as no value, the constant would lie inside
+    # every argument, and a link passing it on would be proven.
+    read: dict[str, Any] = {
+        "name": "read_level",
+        "inputSchema": {"type": "object"},
+        "outputSchema": {"type": "object", "properties": {"v": schema}, "required": ["v"]},
+    }
+    write: dict[str, Any] = {
+        "name": "write_level",
+        "inputSchema": {"type": "object", "properties": {"v": {"const": 0}}, "required": ["v"]},
+        "outputSchema": {
+            "type": "object",
+            "properties": {"done": {"type": "boolean"}},
+            "required": ["done"],
+        },
+    }
+    tools = {tool["name"]: read_contract(tool) for tool in (read, write)}
+    program = read_program("c0 = read_level()\nc1 = write_level(v=c0.v)\nreturn c1.done\n")
+    checked = verify(program, tools, read_task("t", {}, {"type": "boolean"}))
+    verdicts = {link.claim: link.verdict for link in checked.links}
+    assert verdicts["c0.v <= write_level.v"] == "refuted"

@@ -123,8 +123,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
   three are the same, in the same order, and no "1797 more" follows them, in `failures` and in
   each refusal of a proxy and of a run that names them.
 
-- valgebra is required from 0.0.35, whose `validate` takes the `limit` a refusal is read through.
-  The suite passes on it, and no study's count moves from 0.0.32.
+- valgebra is required from 0.0.35, whose `validate` takes the `limit` a refusal is read through,
+  and valgebra-jsonschema from 0.0.7, whose constant past the float range is its infinity. On 0.0.6
+  it was no value at all, so a result declared `{"const": 1e400}` lay inside every argument, and the
+  verifier proved a link passing it to `{"const": 0}`. The suite passes on the two, and no study's
+  count moves from 0.0.32 and 0.0.6.
 
 ### Added
 
