@@ -33,7 +33,7 @@ Every `0.0.x` release of the ecosystem may change what an earlier one answered, 
 pins the set a release was tested with: the
 [`constraints.txt`](https://github.com/ppigazzini/valgebra-planning/blob/main/constraints.txt) at
 its tag holds valgebra, valgebra-jsonschema and every other dependency at the versions the
-suite and the studies ran on, `pip install "valgebra-planning[mcp]==0.0.7" -c constraints.txt`.
+suite and the studies ran on, `pip install "valgebra-planning[mcp]==0.0.8" -c constraints.txt`.
 
 ## What it does
 

@@ -6,6 +6,19 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.0.8] - 2026-11-25
+
+A release of policies with time, of the verifier's reading of a program, and of the proxy. A
+policy's state may lapse: a run and a proxy hold it by a clock, and a proof that rests on it not
+coming due names the timing. Nine defects of 0.0.7 stand under Security: a program accepted that
+passes a tool a value outside its argument or breaks a flow rule, and a proxy that admits a call a
+policy refuses, passes an agent text no check reads, or holds a rule that reads no call. A
+program's text is read as Python runs it and reads back as it was written, a tool or an argument
+Python does not spell among it; a call whose result set is empty no longer ends `verify` with an
+error; a refusal lists its first three failures, and a witness is shrunk before it is shown. It
+requires valgebra 0.0.35, valgebra-jsonschema 0.0.7 and mcp 2.3.0. The parcels, bench and faults
+studies read every count 0.0.7 recorded, and a study of a humanoid robot's skills joins them.
+
 ### Security
 
 - `"nonTextBlocks"` names the block types a tool passes. A tool listed there had every block other
@@ -1091,7 +1104,8 @@ decides more of it; the user guide is published.
   on synthetic libraries of 8 to 256 tools the cut holds 5 predicates and 12 cells at every
   size.
 
-[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.7...HEAD
+[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.8...HEAD
+[0.0.8]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.4...v0.0.5
