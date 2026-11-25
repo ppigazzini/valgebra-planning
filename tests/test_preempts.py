@@ -18,7 +18,7 @@ from mcp.server.lowlevel import Server
 
 from valgebra_planning.contracts import read_contract
 from valgebra_planning.flows import read_flow
-from valgebra_planning.policy import read_policy
+from valgebra_planning.policy import Monitor, read_policy
 from valgebra_planning.proxy import Gate, proxy
 
 
@@ -271,3 +271,124 @@ def test_a_reading_a_stop_may_have_outdated_reaches_no_fresh_sink() -> None:
 def test_a_preempting_tool_the_proxy_lacks_is_refused() -> None:
     with pytest.raises(ValueError, match="halt"):
         Gate(CONTRACTS, [], [], preempts=frozenset({"halt"}))
+
+
+class _Clock:
+    """A clock a test sets."""
+
+    now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def _gate(clock: _Clock, *transitions: dict[str, Any]) -> tuple[Gate, Monitor]:
+    """Return a gate whose stop overtakes, under one policy read by ``clock``."""
+    policy = read_policy(
+        {"name": "p", "initial": "idle", "bad": ["violated"], "transitions": list(transitions)}
+    )
+    monitor = Monitor(policy, clock=clock)
+    return Gate(CONTRACTS, [monitor], [], preempts=frozenset({"stop"})), monitor
+
+
+WALK_MOVES = {"from": "idle", "tool": "walk_to", "to": "moving"}
+#: A policy reads the stop, and it moves no state a walk reaches.
+STOPPED = {"from": "parked", "tool": "stop", "to": "parked"}
+
+
+def test_a_walk_a_stop_overtook_enters_its_state_whenever_it_acts_until_it_answers() -> None:
+    # From the stop on, the walk may act at any time until its answer: moving cannot lapse before.
+    clock = _Clock()
+    gate, monitor = _gate(
+        clock,
+        WALK_MOVES,
+        {"from": "moving", "after_s": 10, "to": "rested"},
+        {"from": "moving", "tool": "stop", "to": "still"},
+        {"from": "moving", "tool": "grasp", "to": "violated"},
+    )
+    assert gate.before("walk_to", {}) is None
+    clock.now = 1
+    assert gate.before("stop", {}) is None
+    clock.now = 50
+    assert monitor.held() == {"still", "moving", "rested"}
+    clock.now = 60
+    gate.after("stop", {"stopped": True}, {})
+    gate.after("walk_to", {"arrived": True}, {})
+    for now, held in ((69, {"still", "moving", "rested"}), (70, {"still", "rested"})):
+        clock.now = now
+        assert monitor.held() == held
+    assert gate.before(*GRASP) is None
+
+
+def test_an_outcome_that_came_before_the_stop_is_read_at_a_time_before_it() -> None:
+    # The walk's answer, had it come first, came between the walk and the stop: arrived was
+    # entered in those four seconds, so it may have lapsed by the stop and may not.
+    clock = _Clock()
+    gate, monitor = _gate(
+        clock,
+        WALK_MOVES,
+        {
+            "from": "moving",
+            "tool": "walk_to",
+            "result": {"properties": {"arrived": {"const": True}}},
+            "to": "arrived",
+        },
+        {"from": "arrived", "after_s": 3, "to": "left"},
+        {"from": "moving", "tool": "stop", "to": "halted"},
+        {"from": "arrived", "tool": "stop", "to": "docked"},
+        {"from": "left", "tool": "stop", "to": "passed"},
+        {"from": "docked", "after_s": 20, "to": "undocked"},
+    )
+    gate.before("walk_to", {})
+    clock.now = 4
+    gate.before("stop", {})
+    clock.now = 23
+    gate.after("stop", {"stopped": True}, {})
+    gate.after("walk_to", {"arrived": True}, {})
+    assert monitor.held() == {"halted", "arrived", "docked", "passed"}
+    # Docked was entered by the stop, at four seconds, and not when the answers were read.
+    clock.now = 24
+    assert "docked" not in monitor.held()
+    assert "undocked" in monitor.held()
+
+
+def test_an_overtaken_walk_no_result_answered_may_have_answered_at_any_time() -> None:
+    clock = _Clock()
+    gate, monitor = _gate(
+        clock,
+        WALK_MOVES,
+        {
+            "from": "moving",
+            "tool": "walk_to",
+            "result": {"properties": {"arrived": {"const": True}}},
+            "to": "arrived",
+        },
+        {"from": "arrived", "after_s": 10, "to": "left"},
+        {"from": "left", "tool": "grasp", "to": "violated"},
+        STOPPED,
+    )
+    gate.before("walk_to", {})
+    clock.now = 5
+    gate.before("stop", {})
+    clock.now = 9
+    gate.unread("walk_to", {})
+    assert monitor.held() == {"idle", "moving", "arrived"}
+    clock.now = 10
+    assert monitor.held() == {"idle", "moving", "arrived", "left"}
+    clock.now = 19
+    assert monitor.held() == {"idle", "moving", "left"}
+
+
+def test_a_stop_is_not_refused_by_a_deadline_the_walk_may_yet_meet() -> None:
+    # The walk overtaken may act late, and no deadline has passed yet: the stop is admitted.
+    clock = _Clock()
+    gate, monitor = _gate(
+        clock,
+        WALK_MOVES,
+        {"from": "idle", "after_s": 30, "to": "violated"},
+        STOPPED,
+    )
+    assert gate.before("walk_to", {}) is None
+    clock.now = 1
+    assert gate.before("stop", {}) is None
+    assert "violated" not in monitor.held()

@@ -75,7 +75,8 @@ __all__ = [
 Reach = Literal["never", "possibly", "surely"]
 
 #: A time by a monitor's clock, in seconds, as the earliest and the latest it may be: one time
-#: where it was read, and two where an order of calls leaves when a state was entered open.
+#: where it was read, and two where an order of calls leaves when a state was entered open, the
+#: latest an infinity while the call that enters it may still act.
 Span: TypeAlias = "tuple[float, float]"
 
 
@@ -511,7 +512,8 @@ class Monitor:
 
     def held(self) -> frozenset[str]:
         """Return every state the run may be in, in any instance, as of now."""
-        self.elapse(self.now())
+        if self.policy.lapses:
+            self.elapse(self.now())
         return self.holding()
 
     def holding(self) -> frozenset[str]:
@@ -560,6 +562,14 @@ class Monitor:
         self.hold(first, kept)
         return frozenset(kept)
 
+    def settle(self, at: Span) -> None:
+        """Read every state held as entered by ``at``: no call that may enter one is in flight."""
+        for instance in [self, *self.instances.values()]:
+            instance.entered = {
+                state: frozenset((low, min(high, at[1])) for low, high in spans)
+                for state, spans in instance.entered.items()
+            }
+
     def hold(self, state: str, held: Mapping[str, Iterable[Span]]) -> None:
         """Hold ``state`` and beside it every other of ``held``, entered when it says."""
         self.state, self.also = state, frozenset(held) - {state}
@@ -588,8 +598,9 @@ class Monitor:
             self.before,
             self.value,
             {key: instance.snapshot() for key, instance in self.instances.items()},
-            dict(self.entered),
-            dict(self.earlier),
+            # Neither map is changed in place: each step holds a new one.
+            self.entered,
+            self.earlier,
             self.called,
         )
 
@@ -598,7 +609,7 @@ class Monitor:
         cls, policy: Policy, snapshot: Snapshot, clock: Callable[[], float] = time.monotonic
     ) -> Monitor:
         """Return a monitor of ``policy`` holding the states ``snapshot`` holds."""
-        monitor = cls(policy, snapshot.state, clock=clock, entered=dict(snapshot.entered))
+        monitor = cls(policy, snapshot.state, clock=clock, entered=snapshot.entered)
         monitor.restore(snapshot)
         return monitor
 
@@ -627,7 +638,7 @@ class Monitor:
     def restore(self, snapshot: Snapshot) -> None:
         """Return to the states `snapshot` holds, every instance's among them."""
         self.state, self.also, self.before = snapshot.state, snapshot.also, snapshot.before
-        self.entered, self.earlier = dict(snapshot.entered), dict(snapshot.earlier)
+        self.entered, self.earlier = snapshot.entered, snapshot.earlier
         self.value, self.called = snapshot.value, snapshot.called
         self.instances = {
             key: Monitor.at(self.policy, held, self.clock)
@@ -693,7 +704,7 @@ class Monitor:
                 also=self.also,
                 value=value,
                 clock=self.clock,
-                entered=dict(self.entered),
+                entered=self.entered,
             )
             self.instances[key] = instance
         return [instance]
@@ -706,9 +717,11 @@ class Monitor:
         A state a transition enters is entered at ``at``, one it was already in among them, as an
         event's clock is reset each time the event occurs (Bauer et al. 2011, Def. 4.2).
         """
+        if not self.policy.lapses:
+            return self.moved_at_once(tool, arguments, hints, result)
         held = self.beliefs()
         if result is _UNRETURNED:
-            self.before, self.earlier, self.called = frozenset(held), dict(self.entered), at
+            self.before, self.earlier, self.called = frozenset(held), self.entered, at
         moved: dict[str, set[Span]] = {}
         first = self.state
         for state, spans in held.items():
@@ -720,6 +733,18 @@ class Monitor:
         self.hold(first, moved)
         return sorted((self.also | {self.state}) & self.policy.bad - held.keys())
 
+    def moved_at_once(
+        self, tool: str, arguments: Mapping[str, Any], hints: frozenset[str], result: Any
+    ) -> list[str]:
+        """Step an instance whose states hold no time, as `moved` steps one; return the bad ones."""
+        held = self.also | {self.state}
+        if result is _UNRETURNED:
+            self.before = held
+        self.state = self.stepped(self.state, tool, arguments, hints, result)
+        self.also = frozenset(self.stepped(s, tool, arguments, hints, result) for s in self.also)
+        self.also -= {self.state}
+        return sorted(((self.also | {self.state}) & self.policy.bad) - held)
+
     def step(
         self,
         tool: str,
@@ -727,19 +752,21 @@ class Monitor:
         hints: frozenset[str],
         result: Any,
         at: Span | None = None,
+        entered: Span | None = None,
     ) -> bool:
         """Step every instance a call reaches; record the first bad state one reaches.
 
-        The states past their lapses are moved first, as of ``at``, the time now where it is None.
+        The states past their lapses are moved first, as of ``at``, the time now where it is
+        None; a state the step enters is entered at ``entered``, at ``at`` where it is None.
         """
         at = self.now() if at is None else at
-        if self.elapse(at):
+        if self.policy.lapses and self.elapse(at):
             return True
         stepped = self.stepping(arguments)
         if result is _UNRETURNED:
             self.touched = stepped
         for instance in stepped:
-            reached = instance.moved(tool, arguments, hints, result, at)
+            reached = instance.moved(tool, arguments, hints, result, entered or at)
             if reached:
                 verb = "reached" if result is _UNRETURNED else "returned into"
                 self.violations.append(f"{self.named(instance)}: {tool} {verb} {reached[0]}")
@@ -757,9 +784,10 @@ class Monitor:
         arguments: Mapping[str, Any],
         hints: frozenset[str] = frozenset(),
         at: Span | None = None,
+        entered: Span | None = None,
     ) -> bool:
         """Step on one call; return whether it may reach a bad state, which is never left."""
-        return self.step(tool, arguments, hints, _UNRETURNED, at)
+        return self.step(tool, arguments, hints, _UNRETURNED, at, entered)
 
     def returned(
         self,
@@ -853,15 +881,16 @@ class Monitor:
         tool: str,
         arguments: Mapping[str, Any],
         hints: frozenset[str],
-        at: Span | None = None,
+        within: Span | None = None,
     ) -> bool:
         """Hold every state a transition reading the call's result reaches beside those held.
 
         The call was made and stepped, and its result is not read: this is `unread` with the
-        states before the call left out, for a call known to have been made. Return whether a
+        states before the call left out, for a call known to have been made. ``within`` is when
+        the result may have arrived, between the call and now where it is None. Return whether a
         bad state may now be held, recording it.
         """
-        at = self.now() if at is None else at
+        at = self.now() if within is None else within
         lapsed = self.elapse(at)
         left = [
             (instance, instance.also | {instance.state}) for instance in self.stepping(arguments)

@@ -149,6 +149,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
   names it the caller's timing. The three take their rules as one set of keywords, `RunRules`; a
   keyword it does not name is a `TypeError`, as before.
 
+- A gate reads a clock. `proxy`, `read_proxy` and `serve` take `clock`, `time.monotonic` where none
+  is given, and the gate holds a policy's lapses by it: a yes held for 120 seconds admits a walk 119
+  seconds on and refuses one at 120, for one client or a principal, over stdio or HTTP, the refusal
+  naming the question to ask again. A forwarded call's later round and a call a stop overtakes keep
+  when each state was entered, and one that may act later enters its state at no time read yet.
+  `proxy` takes its rules as `ProxyRules`; a keyword it does not name is a `TypeError`, as before.
+
 - A task names the inputs its answer must be read from: `reads` in `tasks.json` and `read_task`.
   A goal's set says what kind of value answers, not whose: every run's events meet "the events
   of a run", so the planner answered with `search_actions()`, reading no run. The verifier refutes

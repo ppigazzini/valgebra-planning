@@ -151,6 +151,8 @@ library reads its own listing, with its `assertFormat` and `closedResults`. The 
 path and code of the value's first three failures, at most, as `run_id: string_pattern_mismatch`,
 and never the value: a key the tool's schemas do not declare is written `*`, so no part of a
 refused result reaches the agent through the error.
+A policy's lapses are read by the process's monotonic clock at each call, so a yes held for two
+minutes admits no call after them, and a proxy started again holds none of it.
 A policy's refusal names the calls that admit the refused one, a result by the test a program
 writes, `from unasked, confirm with status 'yes' leads to yes`, a call that leads back left out,
 and each call that moves the policy on where none admits it at once; a flow rule's refusal ends

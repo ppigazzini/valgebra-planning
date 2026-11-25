@@ -36,10 +36,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
+import time
 import warnings
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, TypedDict, Unpack
+from typing import TYPE_CHECKING, Any, NamedTuple, TypedDict, Unpack
 from urllib.parse import urlsplit
 
 import uvicorn
@@ -55,7 +57,7 @@ from valgebra_planning._valgebra import Unsupported, Validator, compile_schema, 
 from valgebra_planning.contracts import Contract, contract_names, failures
 from valgebra_planning.flows import Flow, check_flow
 from valgebra_planning.library import MEDIA_BLOCKS
-from valgebra_planning.policy import Monitor, Policy, Snapshot, check_policy
+from valgebra_planning.policy import Monitor, Policy, Snapshot, Span, check_policy
 from valgebra_planning.servers import refused_by_client
 
 if TYPE_CHECKING:
@@ -128,7 +130,8 @@ class ProxyRules(TypedDict, total=False):
     ``after_violation`` called after a violation, those of ``preempts`` sent at once, those of
     ``non_text_blocks`` answering their blocks other than text, the set ``error_texts`` holds
     each error's text to, and those of ``forwards_elicitation`` forwarding a request for a
-    person's answer.
+    person's answer. ``clock`` is the one a policy's lapses are read by, in seconds,
+    `time.monotonic` where none is given.
     """
 
     policies: Sequence[Policy]
@@ -138,6 +141,21 @@ class ProxyRules(TypedDict, total=False):
     non_text_blocks: Iterable[str] | Mapping[str, Iterable[str]]
     error_texts: Mapping[str, object] | None
     forwards_elicitation: Iterable[str]
+    clock: Callable[[], float]
+
+
+class _Event(NamedTuple):
+    """One step a call overtaking the call in flight took, and when."""
+
+    #: ``call``, ``result``, ``error`` or ``unread``, and the result where it is one.
+    kind: str
+    tool: str
+    arguments: dict[str, Any]
+    hints: frozenset[str]
+    value: Any
+    #: The monitors it stepped, by identity.
+    stepped: frozenset[int]
+    at: Span
 
 
 @dataclass(slots=True)
@@ -145,20 +163,17 @@ class _Window:
     """A call held in order that is in flight, and the preempting calls that overtook it.
 
     ``pre`` is each monitor's states before the call stepped it and ``made`` its states once it
-    did, taken when a preempting call first overtakes it, by the monitor's identity; ``events``
-    is each step the overtaking calls took, in order: its kind, ``call``, ``result``, ``error``
-    or ``unread``, the tool, its arguments, its hints, the result where it is one, and the
-    monitors it stepped.
+    did, taken when a preempting call first overtakes it, by the monitor's identity; ``sent`` is
+    when it was sent; ``events`` is each step the overtaking calls took, in order.
     """
 
     tool: str
     arguments: dict[str, Any]
     hints: frozenset[str]
     pre: dict[int, Snapshot]
+    sent: Span
     made: dict[int, Snapshot] | None = None
-    events: list[tuple[str, str, dict[str, Any], frozenset[str], Any, frozenset[int]]] = field(
-        default_factory=list
-    )
+    events: list[_Event] = field(default_factory=list)
 
     def replayed(
         self, monitor: Monitor, snapshot: Snapshot, step: str = "", value: Any = None
@@ -166,24 +181,28 @@ class _Window:
         """Return ``monitor``'s policy from ``snapshot``, the call's own ``step``, the events.
 
         ``step`` is the call's outcome taken first: ``result``, its result ``value``, or
-        ``any``, its result read as any; with none, the events alone.
+        ``any``, its result read as any; with none, the events alone. Each event is read at the
+        time it was, and an outcome that came before them all at one between the call and the
+        first of them.
         """
         replay = Monitor.at(monitor.policy, snapshot)
+        first = (self.sent[0], self.events[0].at[1] if self.events else self.sent[1])
         if step == "result":
-            replay.returned(self.tool, self.arguments, value, self.hints)
+            replay.returned(self.tool, self.arguments, value, self.hints, first)
         elif step == "any":
-            replay.imaged(self.tool, self.arguments, self.hints)
-        for kind, tool, arguments, hints, answer, stepped in self.events:
-            if id(monitor) not in stepped:
+            replay.imaged(self.tool, self.arguments, self.hints, first)
+        for event in self.events:
+            if id(monitor) not in event.stepped:
                 continue
-            if kind == "call":
-                replay.observe(tool, arguments, hints)
-            elif kind == "result":
-                replay.returned(tool, arguments, answer, hints)
-            elif kind == "error":
+            tool, arguments, hints = event.tool, event.arguments, event.hints
+            if event.kind == "call":
+                replay.observe(tool, arguments, hints, event.at)
+            elif event.kind == "result":
+                replay.returned(tool, arguments, event.value, hints, event.at)
+            elif event.kind == "error":
                 replay.errored()
             else:
-                replay.unread(tool, arguments, hints)
+                replay.unread(tool, arguments, hints, event.at)
         return replay
 
 
@@ -367,7 +386,7 @@ class Gate:
             for monitor in self.watching():
                 kept = earlier.get(id(monitor))
                 # A monitor no other call stepped since the round before holds the same call.
-                stepped = kept[1] if kept and monitor.snapshot() == kept[2] else monitor.snapshot()
+                stepped = kept[1] if kept and monitor.holds(kept[2]) else monitor.snapshot()
                 made.append((monitor, stepped))
             self.errored(tool)
         asked: dict[str, Any] = {}
@@ -397,7 +416,7 @@ class Gate:
         then steps it. A monitor another call stepped keeps the states it holds, every one.
         """
         for monitor, stepped, ended in self._rounds.pop(resumed, []):
-            if monitor.snapshot() == ended:
+            if monitor.holds(ended):
                 monitor.restore(stepped)
 
     def returned_for(self, flow: Flow, arguments: Mapping[str, Any], value: Any) -> str | None:
@@ -493,11 +512,15 @@ class Gate:
         principal = _principal()
         mine = self.instances.setdefault(principal, {})
         return [
-            mine.setdefault(at, Monitor(monitor.policy))
+            mine.get(at) or mine.setdefault(at, Monitor(monitor.policy, clock=monitor.clock))
             if monitor.policy.scope == "principal"
             else monitor
             for at, monitor in enumerate(self.monitors)
         ]
+
+    def now(self) -> Span:
+        """Return the time, by the clock of the monitors that read one."""
+        return next((m.now() for m in self.monitors if m.policy.lapses), (0.0, 0.0))
 
     def everyone(self) -> list[Monitor]:
         """Return every monitor stepped: each shared policy's, and every principal's instance."""
@@ -584,14 +607,16 @@ class Gate:
         kept at the first.
         """
         if tool not in self.preempts:
-            self._window = _Window(tool, arguments, hints, {id(m): s for m, s in before})
+            pre = {id(m): s for m, s in before}
+            self._window = _Window(tool, arguments, hints, pre, self.now())
             return
         if self._window is None:
             return
         if self._window.made is None:
             self._window.made = {id(m): s for m, s in before}
         stepped = frozenset(id(monitor) for monitor, _ in before)
-        self._window.events.append(("call", tool, arguments, hints, None, stepped))
+        event = _Event("call", tool, arguments, hints, None, stepped, self.now())
+        self._window.events.append(event)
 
     def overtaken(self, tool: str, kind: str, arguments: Mapping[str, Any], value: Any) -> bool:
         """Read an outcome of a call in the window; return whether the window closed on it.
@@ -607,10 +632,10 @@ class Gate:
         window = self._window
         if window is None or (tool != window.tool and tool not in self.preempts):
             return False
-        hints = self.contracts[tool].hints
+        hints, now = self.contracts[tool].hints, self.now()
         if tool != window.tool:
             stepped = frozenset(id(monitor) for monitor in self.watching())
-            window.events.append((kind, tool, dict(arguments), hints, value, stepped))
+            window.events.append(_Event(kind, tool, dict(arguments), hints, value, stepped, now))
             return False
         self._window = None
         for monitor in self.watching():
@@ -620,10 +645,13 @@ class Gate:
             if kind != "result":
                 monitor.join(window.replayed(monitor, pre).snapshot())
             if kind == "unread":
-                monitor.imaged(tool, arguments, hints)
+                # Since the last call stepped; the order replayed below reads what came before.
+                monitor.imaged(tool, arguments, hints, now)
             if made is not None and kind in ("result", "unread"):
                 step = "result" if kind == "result" else "any"
                 monitor.join(window.replayed(monitor, made, step, value).snapshot())
+            # The call in flight acted by now, if it did.
+            monitor.settle(now)
         return True
 
     def ahead(
@@ -636,17 +664,18 @@ class Gate:
         et al. 2006, §3). The states that order leaves are returned beside the verdict, None
         where ``monitor`` read no call in flight; the call reaching a bad state there is refused
         as any other step into one, and the call in flight reaching one is held, since it was
-        sent.
+        sent. It acts after the overtaking call, at no time read yet (`Monitor.settle`).
         """
         window = self._window
         pre = None if window is None else window.pre.get(id(monitor))
         if window is None or pre is None:
             return False, None
-        replay = window.replayed(monitor, pre)
-        if replay.observe(tool, arguments, hints):
+        replay, now = window.replayed(monitor, pre), monitor.now()
+        if replay.observe(tool, arguments, hints, now):
             monitor.violations.append(replay.violations[-1])
             return True, None
-        replay.observe(window.tool, window.arguments, window.hints)
+        later = (now[0], math.inf)
+        replay.observe(window.tool, window.arguments, window.hints, now, later)
         return False, replay.snapshot()
 
     def flowing(self, tool: str, arguments: dict[str, Any]) -> str | None:
@@ -998,9 +1027,7 @@ def _blocks(named: Iterable[str] | Mapping[str, Iterable[str]]) -> dict[str, fro
     return dict.fromkeys(named, MEDIA_BLOCKS)
 
 
-def proxy(
-    upstream: Client,
-    listing: Sequence[types.Tool],
+def _gate(
     contracts: Mapping[str, Contract],
     *,
     policies: Sequence[Policy] = (),
@@ -1010,6 +1037,26 @@ def proxy(
     non_text_blocks: Iterable[str] | Mapping[str, Iterable[str]] = (),
     error_texts: Mapping[str, object] | None = None,
     forwards_elicitation: Iterable[str] = (),
+    clock: Callable[[], float] = time.monotonic,
+) -> Gate:
+    """Return the gate of one proxy, held to `ProxyRules`; a rule it lacks is a `TypeError`."""
+    return Gate(
+        contracts,
+        [Monitor(policy, clock=clock) for policy in policies],
+        flows,
+        after_violation=frozenset(after_violation),
+        preempts=frozenset(preempts),
+        non_text_blocks=_blocks(non_text_blocks),
+        error_texts={tool: compile_schema(schema) for tool, schema in (error_texts or {}).items()},
+        forwards_elicitation=frozenset(forwards_elicitation),
+    )
+
+
+def proxy(
+    upstream: Client,
+    listing: Sequence[types.Tool],
+    contracts: Mapping[str, Contract],
+    **rules: Unpack[ProxyRules],
 ) -> Server[Any]:
     """Return an MCP server answering ``listing`` through ``upstream``, every call checked.
 
@@ -1037,16 +1084,7 @@ def proxy(
     the token names, its client, issuer and subject, and to an expiry of ``SEALED_SECONDS``, and
     an echo it did not seal so is answered with a protocol error before any check reads it.
     """
-    gate = Gate(
-        contracts,
-        [Monitor(policy) for policy in policies],
-        flows,
-        after_violation=frozenset(after_violation),
-        preempts=frozenset(preempts),
-        non_text_blocks=_blocks(non_text_blocks),
-        error_texts={tool: compile_schema(schema) for tool, schema in (error_texts or {}).items()},
-        forwards_elicitation=frozenset(forwards_elicitation),
-    )
+    gate = _gate(contracts, **rules)
     held = asyncio.Lock()
 
     async def listed(_: Any, __: Any) -> types.ListToolsResult:

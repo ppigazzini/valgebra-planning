@@ -1511,6 +1511,52 @@ def test_a_yes_one_principal_relays_admits_another_s_walk_only_under_a_shared_po
         assert made == ["confirm_with_user", "confirm_with_user", "walk_to"]
 
 
+#: The consent a walk follows, held for 120 seconds.
+LAPSING_CONSENT = {
+    **CONSENT_SPEC,
+    "transitions": [
+        *CONSENT_SPEC["transitions"],
+        {"from": "ok", "after_s": 120, "to": CONSENT_SPEC["initial"]},
+    ],
+}
+
+
+@pytest.mark.parametrize("scope", ["shared", "principal"])
+@pytest.mark.parametrize(("seconds", "admitted"), [(119, True), (120, False), (121, False)])
+def test_a_gate_holds_a_yes_for_its_seconds(scope: str, seconds: float, *, admitted: bool) -> None:
+    made: list[str] = []
+    consent = read_policy(LAPSING_CONSENT | {"scope": scope})
+    clock = _Clock()
+
+    async def session(*, http: bool) -> Any:
+        async with Client(_yes_robot(made)) as upstream:
+            listing = (await upstream.list_tools()).tools
+            front = proxy(upstream, listing, ROBOT_TOOLS, policies=[consent], clock=clock)
+
+            async def asked(client: Client) -> Any:
+                await client.call_tool(*QUESTION)
+                clock.now += seconds
+                return await client.call_tool(*WALK)
+
+            if not http:
+                async with Client(front) as client:
+                    return await asked(client)
+            app, connected = _authenticated(front)
+            async with app.router.lifespan_context(app), connected("agent") as client:
+                return await asked(client)
+
+    for http in (False, True):
+        made.clear()
+        walked = asyncio.run(session(http=http))
+        if admitted:
+            assert not walked.is_error
+        else:
+            refused = _refused(walked)
+            assert refused.startswith("refused: a walk follows a yes: walk_to reached violated")
+            assert "confirm_with_user" in refused
+            assert made == ["confirm_with_user"]
+
+
 @pytest.mark.parametrize(("scope", "crossed"), [("shared", True), ("principal", False)])
 def test_a_value_one_principal_was_returned_grounds_another_s_call_only_under_a_shared_rule(
     scope: str, *, crossed: bool
@@ -1671,6 +1717,15 @@ def test_two_rules_of_one_name_are_refused() -> None:
         Gate(TOOLS, [Monitor(twin), Monitor(twin)], [])
 
 
+class _Clock:
+    """A clock a test sets."""
+
+    now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
 ASKING_ROBOT = [
     _robot_tool("walk_to", {"object_id": {"type": "string"}}, {"arrived": {"type": "boolean"}}),
     _robot_tool("grasp", {"object_id": {"type": "string"}}, {"grasped": {"type": "boolean"}}),
@@ -1684,8 +1739,14 @@ WALKS = [
 ]
 
 
-def _resumed_walk(*between: str, policy: Any, asks: int = 1) -> list[Any]:
-    """Walk, the robot asking a person ``asks`` times, call each of ``between``, then grasp."""
+def _resumed_walk(
+    *between: str, policy: Any, asks: int = 1, clock: _Clock | None = None, waited: float = 0
+) -> list[Any]:
+    """Walk, the robot asking a person ``asks`` times, call each of ``between``, then grasp.
+
+    With a ``clock``, each answer is ``waited`` seconds by it.
+    """
+    clock = clock or _Clock()
     yes: types.InputResponses = {
         "yes": types.ElicitResult(action="accept", content={"confirmed": True})
     }
@@ -1712,12 +1773,14 @@ def _resumed_walk(*between: str, policy: Any, asks: int = 1) -> list[Any]:
                 ASKING_TOOLS,
                 policies=[policy],
                 forwards_elicitation=["walk_to"],
+                clock=clock,
             )
             async with Client(front) as client:
                 walked = await client.session.call_tool(*WALK, allow_input_required=True)
                 for name in between:
                     await client.call_tool(name, {})
                 while isinstance(walked, types.InputRequiredResult):
+                    clock.now += waited
                     walked = await client.session.call_tool(
                         *WALK,
                         input_responses=yes,
@@ -1742,6 +1805,26 @@ def test_a_resumed_call_steps_each_policy_once() -> None:
         walked, grasped = _resumed_walk(policy=once, asks=asks)
         assert not walked.is_error
         assert not grasped.is_error
+
+
+def test_a_resumed_call_steps_each_policy_once_however_long_its_answer_took() -> None:
+    # The walk's state lapsed while the person answered, and no other call stepped the policy: the
+    # resumed call is still the one its first round made, so no state before it is held.
+    resting = read_policy(
+        {
+            "name": "one walk",
+            "initial": "idle",
+            "bad": ["violated"],
+            "transitions": [*WALKS, {"from": "walked", "after_s": 10, "to": "rested"}],
+        }
+    )
+    for waited in (5, 20):
+        for asks in (1, 2):
+            walked, grasped = _resumed_walk(
+                policy=resting, asks=asks, clock=_Clock(), waited=waited
+            )
+            assert not walked.is_error
+            assert not grasped.is_error
 
 
 def test_a_call_stepped_between_the_rounds_keeps_every_state() -> None:

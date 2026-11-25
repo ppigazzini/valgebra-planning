@@ -240,11 +240,13 @@ the past alone: a monitor that keeps when each state it holds was entered decide
 with no clock predicting one. A state a transition enters is entered anew, one it was in among them,
 as its event's clock is reset; a target is entered when the lapse came due, so a chain of them is
 read in its order; and where a result is not read, the time it arrived is known to lie between two,
-and each state it may leave held is held. **[LOAD-BEARING: timed-policies]**
+and each state it may leave held is held. A preempting call leaves the order open too: an outcome
+that came before it came between the call and it, and a call that acts after it enters its state at
+a time with no end until the call's outcome is read. **[LOAD-BEARING: timed-policies]**
 
 IMPLEMENTED-BY: policy.py::Lapse, policy.py::Monitor.moved
 
-HELD-BY: test_a_monitor_holds_the_states_the_timed_automaton_does, test_a_yes_lapses_once_it_was_held_its_seconds, test_a_yes_given_again_is_held_from_the_last_one, test_a_chain_of_lapses_is_read_in_the_order_it_came_due, test_a_result_not_read_may_have_entered_its_state_at_any_time_since_the_call, test_a_state_a_call_may_have_left_lapses_beside_the_one_it_reached
+HELD-BY: test_a_monitor_holds_the_states_the_timed_automaton_does, test_a_yes_lapses_once_it_was_held_its_seconds, test_a_yes_given_again_is_held_from_the_last_one, test_a_chain_of_lapses_is_read_in_the_order_it_came_due, test_a_result_not_read_may_have_entered_its_state_at_any_time_since_the_call, test_a_state_a_call_may_have_left_lapses_beside_the_one_it_reached, test_a_gate_holds_a_yes_for_its_seconds, test_a_walk_a_stop_overtook_enters_its_state_whenever_it_acts_until_it_answers, test_an_outcome_that_came_before_the_stop_is_read_at_a_time_before_it
 
 **An obligation is decided over the whole program.** A property that no continuation of a
 run's prefix makes true or false for good, as a notice owed after every booking, is not
