@@ -156,8 +156,9 @@ so a failure through one origin is never taken for a state another origin reache
 bound lets a branch stop once its sibling returns, and each stop names the values it leaves
 uncovered. The tools are tried in their names' order, so a server listing them in another order
 gets the same program; a weak program is searched for each tool the start may call first, until
-`RANKING` (`valgebra_planning/planner.py`) expansions past the first found, and the one whose stops leave the fewest cells uncovered
-is returned, a tie going to the earlier name. A task may name its `goals` in the order it
+`RANKING` (`valgebra_planning/planner.py`) expansions past the first found, and of the first
+program each reaches, the one whose stops leave the fewest cells uncovered is returned, a tie
+going to the earlier name. A task may name its `goals` in the order it
 prefers them, as "grasp, else say why not": its goal is their union, which every return is
 verified in, and the planner searches a strong program for the first, else a weak one whose
 stops a program toward the next fills, so "grasp or say" grasps where the object is in reach
@@ -472,6 +473,11 @@ ones.
   in cells of sets fixed before it starts, among which no postcondition's `shows` is, so a
   program resting on one, a read after a walk that arrived, is written, by hand or by a model in
   code mode, and proven by the critic.
+- **The ranking weighs one program a first call.** From each tool the start may call first, the
+  first weak program the search finds is the one compared, so another from the same first call
+  whose stops leave fewer cells uncovered is never weighed: the order the search tries calls and
+  tests in decides it, as it decides which strong program comes first. A program stopping on
+  fewer values, written by hand or in code mode, is checked by the critic like any other.
 - **A stop is not a question.** Each weak plan of the parcel library stops on a value a tool
   returned, a parcel's state or country. Asking the user for one inside the set the next call
   takes would put a value they make up where the tool's must be: the integrity leak a flow rule
