@@ -19,6 +19,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# A job is what GitHub's concurrency limit counts, and the limit is the account's, shared by every
+# repository on it, with five macOS jobs at once: past it a job more waits, and pays its own
+# checkout, uv setup and sync when it starts. So the push runs five jobs: the gate, the suite below
+# the newest interpreter, the newest on macOS and on Windows, and the other checks. The suite and
+# the platforms wait for the gate, so a commit that fails it takes no macOS or Windows runner.
+
 jobs:
   test:
     name: lint, types, tests
@@ -47,49 +53,121 @@ jobs:
       - run: uv run --no-sync python tools/bench.py --check docs/studies/bench.json
       - run: uv run --no-sync python tools/faults.py examples/bookings --check docs/studies/faults.json
 
-  # The suite on every interpreter the classifiers name, as valgebra's push runs its own: on
-  # Linux at each one below the newest, which `test` runs, and on macOS and Windows at the
-  # newest, so a defect one platform alone reaches fails the push rather than the release smoke.
+  # The suite on every interpreter the classifiers name below the newest, which `test` runs, as
+  # valgebra's push runs its own: one Linux job, each interpreter in an environment of its own and
+  # in steps of its own, so each reports apart and one that fails leaves the others to run. A step
+  # that names its own condition takes `success()` unless it names a status function, so each
+  # names `success() || failure()`: any outcome but a canceled run.
   suite:
-    name: the suite on ${{ matrix.python }}, ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-26.04]
-        python: ["3.11", "3.12", "3.13", "3.14"]
-        include:
-          - { os: macos-26, python: "3.15" }
-          - { os: windows-2025-vs2026, python: "3.15" }
+    name: the suite below the newest interpreter, on Linux
+    needs: [test]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v10.4.0
-        with: { version: "0.13.10", python-version: "${{ matrix.python }}", enable-cache: true }
-      - run: uv sync --locked
-      - run: uv run --no-sync python -X warn_default_encoding -m pytest
+        with: { version: "0.13.10", enable-cache: true }
+      - name: sync 3.11
+        id: sync-311
+        env: { UV_PYTHON: "3.11", UV_PROJECT_ENVIRONMENT: "${{ runner.temp }}/venv-3.11" }
+        run: uv sync --locked
+      - name: the suite on 3.11
+        if: ${{ (success() || failure()) && steps.sync-311.outcome == 'success' }}
+        env: { UV_PYTHON: "3.11", UV_PROJECT_ENVIRONMENT: "${{ runner.temp }}/venv-3.11" }
+        run: uv run --no-sync python -X warn_default_encoding -m pytest
+      - name: sync 3.12
+        id: sync-312
+        if: ${{ success() || failure() }}
+        env: { UV_PYTHON: "3.12", UV_PROJECT_ENVIRONMENT: "${{ runner.temp }}/venv-3.12" }
+        run: uv sync --locked
+      - name: the suite on 3.12
+        if: ${{ (success() || failure()) && steps.sync-312.outcome == 'success' }}
+        env: { UV_PYTHON: "3.12", UV_PROJECT_ENVIRONMENT: "${{ runner.temp }}/venv-3.12" }
+        run: uv run --no-sync python -X warn_default_encoding -m pytest
+      - name: sync 3.13
+        id: sync-313
+        if: ${{ success() || failure() }}
+        env: { UV_PYTHON: "3.13", UV_PROJECT_ENVIRONMENT: "${{ runner.temp }}/venv-3.13" }
+        run: uv sync --locked
+      - name: the suite on 3.13
+        if: ${{ (success() || failure()) && steps.sync-313.outcome == 'success' }}
+        env: { UV_PYTHON: "3.13", UV_PROJECT_ENVIRONMENT: "${{ runner.temp }}/venv-3.13" }
+        run: uv run --no-sync python -X warn_default_encoding -m pytest
+      - name: sync 3.14
+        id: sync-314
+        if: ${{ success() || failure() }}
+        env: { UV_PYTHON: "3.14", UV_PROJECT_ENVIRONMENT: "${{ runner.temp }}/venv-3.14" }
+        run: uv sync --locked
+      - name: the suite on 3.14
+        if: ${{ (success() || failure()) && steps.sync-314.outcome == 'success' }}
+        env: { UV_PYTHON: "3.14", UV_PROJECT_ENVIRONMENT: "${{ runner.temp }}/venv-3.14" }
+        run: uv run --no-sync python -X warn_default_encoding -m pytest
 
-  # The wheel a user installs, built as the release builds it, installed in an environment
-  # holding nothing else, bare and with `[mcp]`, every module imported with every warning an
-  # error and the command line asked for its help, as valgebra's push installs its own: a
-  # wheel that builds and does not load fails the push rather than the release smoke. The
-  # release smokes the wheel and the sdist on every platform and at the floors.
-  wheel:
-    name: the wheel, installed and imported
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
+  # The suite at the newest interpreter on macOS and on Windows, so a defect one platform alone
+  # reaches fails the push rather than the release smoke. The release reads the older interpreters
+  # there.
+  platforms:
+    name: the suite on ${{ matrix.os }}, at the newest interpreter
+    needs: [test]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, windows-2025-vs2026]
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v10.4.0
         with: { version: "0.13.10", python-version: "3.15", enable-cache: true }
-      - run: |
+      - run: uv sync --locked
+      - run: uv run --no-sync python -X warn_default_encoding -m pytest
+
+  # Every other check, each a step that runs whatever failed before it (`success() || failure()`:
+  # any outcome but a canceled run), so each reports apart:
+  #
+  # - the wheel a user installs, built as the release builds it, installed in an environment
+  #   holding nothing else, bare and with `[mcp]`, every module imported with every warning an
+  #   error and the command line asked for its help, as valgebra's push installs its own;
+  # - the site, built strict, which the workflow `Docs` publishes from `main` alone, so a dead
+  #   link, a dead anchor or a page off the nav fails here first;
+  # - `.github/workflows/actions.lock`, which names the commit every action a workflow runs
+  #   resolves to, read against the workflows and against upstream: a `uses:` with no entry, or a
+  #   tag moved off its locked commit, fails;
+  # - zizmor's audit of the workflows: template injection, credential persistence, over-broad
+  #   permissions and unpinned actions;
+  # - each public name removed or changed since the last tag, as griffe reads it from every
+  #   module's `__all__`, held to the changelog's entries under Changed or Removed since that tag
+  #   (`tools/api_changes.py`, which prints each change as an annotation and fails on one the
+  #   changelog does not record); under 0.0.x a release may break any name, so the check holds
+  #   the record, not the name;
+  # - every locked Python dependency, of the package and of each group, against the PyPI advisory
+  #   database: pip-audit reads the lock as a PEP 751 file, installs nothing and reads every
+  #   package, one whose marker excludes this runner included, and `--strict` fails on a package
+  #   it cannot audit.
+  checks:
+    name: the wheel, the site and the audits
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          # griffe loads the last tag from git, so the history and its tags are fetched.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v10.4.0
+        with: { version: "0.13.10", python-version: "3.15", enable-cache: true }
+      - name: Build the wheel
+        id: wheel
+        run: |
           uv export --locked --only-group build --no-emit-project -o "$RUNNER_TEMP/build.txt"
           uv build --wheel --no-sources --build-constraints "$RUNNER_TEMP/build.txt" --require-hashes
-      - run: |
+      - name: Install the wheel and import it, bare and with mcp
+        if: ${{ (success() || failure()) && steps.wheel.outcome == 'success' }}
+        run: |
           set -euo pipefail
           wheel="$PWD/$(ls dist/*.whl)"
           bin="$RUNNER_TEMP/installed/bin"
@@ -101,84 +179,40 @@ jobs:
           uv pip check --python "$RUNNER_TEMP/installed"
           "$bin/python" -W error -c 'import importlib, importlib.util, pkgutil, valgebra_planning as m; assert importlib.util.find_spec("mcp") is None; assert "site-packages" in m.__file__, m.__file__; [importlib.import_module(f"valgebra_planning.{n.name}") for n in pkgutil.iter_modules(m.__path__) if n.name not in {"servers", "proxy"}]'
           "$bin/valgebra-planning" --help > /dev/null
-          uv pip install --python "$RUNNER_TEMP/installed" "$wheel[mcp]"
+          uv pip install --python "$RUNNER_TEMP/installed" "${wheel}[mcp]"
           uv pip check --python "$RUNNER_TEMP/installed"
           "$bin/python" -W error -c 'import importlib, importlib.metadata as md, pkgutil, valgebra_planning as m; [importlib.import_module(f"valgebra_planning.{n.name}") for n in pkgutil.iter_modules(m.__path__)]; print("wheel ok", md.version("valgebra-planning"), "on valgebra", md.version("valgebra"), "and valgebra-jsonschema", md.version("valgebra-jsonschema"))'
           "$bin/valgebra-planning" --help > /dev/null
-
-  docs:
-    name: the site, built strict
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    # The workflow `Docs` publishes the site from `main` only; this builds it on every push, so
-    # a dead link, a dead anchor or a page off the nav fails here before it is published.
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@v10.4.0
-        with: { version: "0.13.10", python-version: "3.15", enable-cache: true }
-      - run: uv sync --locked --group docs
-      - run: uv run --no-sync zensical build --strict
-
-  actions-lock:
-    name: the actions lockfile
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    # `.github/workflows/actions.lock` names the commit every action a workflow runs resolves
-    # to, an action another action calls included, and the runner runs that commit. This reads
-    # the file against the workflows and against upstream: a `uses:` with no entry, or a tag
-    # moved off its locked commit, fails here.
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
+      - name: Sync the docs group
+        id: docs
+        if: ${{ success() || failure() }}
+        run: uv sync --locked --group docs
+      - name: Build the site, strict
+        if: ${{ (success() || failure()) && steps.docs.outcome == 'success' }}
+        run: uv run --no-sync zensical build --strict
       - name: Install the lockfile checker
+        id: lock-checker
+        if: ${{ success() || failure() }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh extension install github/gh-actions-lock --pin v0.5.1
       - name: Verify the workflow lockfile
+        if: ${{ (success() || failure()) && steps.lock-checker.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh actions-lock --verify
-
-  zizmor:
-    name: the workflow audit
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    # Static analysis of the workflows themselves: template injection, credential persistence,
-    # over-broad permissions and unpinned actions.
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@v10.4.0
-        with: { version: "0.13.10", python-version: "3.15", enable-cache: false }
       - name: Audit the workflows
+        if: ${{ success() || failure() }}
         # The token lets zizmor resolve each action's ref, beside the static audits.
         env:
           GH_TOKEN: ${{ github.token }}
         run: uvx zizmor==1.33.1 .github/
-
-  api:
-    name: the public API against the last release
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    # Each public name removed or changed since the last tag, as griffe reads it from every
-    # module's `__all__`, stands under Changed or Removed among the changelog's entries since
-    # that tag, as the releasing page asks before a dispatch. Under 0.0.x a release may break any
-    # name, so the job holds the record, not the name: `tools/api_changes.py` prints each change
-    # as an annotation and fails on one the changelog does not record.
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-          # griffe loads the tag from git, so the history and its tags are fetched.
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@v10.4.0
-        with: { version: "0.13.10", python-version: "3.15", enable-cache: false }
-      - run: uv sync --locked
+      - name: Sync the package and its dev group
+        id: sync
+        if: ${{ success() || failure() }}
+        run: uv sync --locked
       - name: Hold the changelog to the API's changes since the last tag
+        if: ${{ (success() || failure()) && steps.sync.outcome == 'success' }}
         run: |
           set -euo pipefail
           if git describe --tags --abbrev=0 --match 'v*' > /dev/null 2>&1; then
@@ -186,22 +220,8 @@ jobs:
           else
             echo "no release tag yet: nothing to compare"
           fi
-
-  pip-audit:
-    name: the dependency audit
-    runs-on: ubuntu-26.04
-    timeout-minutes: 15
-    # Every locked Python dependency, of the package and of each group, against the PyPI
-    # advisory database. pip-audit reads the lock as a PEP 751 file: it installs nothing, and
-    # it reads every package, one whose marker excludes this runner included. `--strict` fails
-    # the job on a package it cannot audit, where a plain run would only skip it.
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@v10.4.0
-        with: { version: "0.13.10", python-version: "3.15", enable-cache: false }
       - name: Audit the locked dependencies
+        if: ${{ success() || failure() }}
         run: |
           set -euo pipefail
           mkdir "$RUNNER_TEMP/audit"

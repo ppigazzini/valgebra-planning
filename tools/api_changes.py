@@ -4,7 +4,7 @@ griffe reads every module's public names at the last tag and in the tree, and li
 removal and change a caller meets. The releasing page asks each to stand under Changed or
 Removed among the changelog's entries since that tag, before any dispatch: this prints every
 change, and exits 1 where one stands under neither. griffe is the dev group's, and the
-`api` job of `ci.yml` runs the script as
+`checks` job of `ci.yml` runs the script as
 
     uv run --no-sync python tools/api_changes.py
 """

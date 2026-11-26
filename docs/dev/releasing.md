@@ -18,8 +18,8 @@ The build job makes the files the publish job uploads, so every Python package i
 from `uv.lock`, each hash required: the backend `[build-system]` names is the group `build`, and
 the job passes that group's export to `uv build` as build constraints, with `--require-hashes`.
 A backend release reaches the artifacts only through a lock update, which pip-audit reads as it
-reads every group. twine, which resolves fresh, checks the metadata in a job of its own, on
-copies of the artifacts. hatchling fixes every timestamp, and two builds of one commit give the
+reads every group. twine, which resolves fresh, checks the metadata in the first Linux smoke
+job, on copies of the artifacts, where nothing it writes reaches the upload. hatchling fixes every timestamp, and two builds of one commit give the
 same bytes.
 
 ## Both dependencies come from PyPI
@@ -124,8 +124,8 @@ release; the commit names each one held back, and why.
 
 | What moves | By | Read after |
 |---|---|---|
-| `uv.lock`, a floor in `pyproject.toml`, `constraints.txt` | `uv lock --upgrade`, then the export `constraints.txt` names in its header | the `pip-audit` job's two commands |
-| an action | its tag in each `uses:`, then `gh actions-lock` | `gh actions-lock --verify`, and the `zizmor` job's command |
+| `uv.lock`, a floor in `pyproject.toml`, `constraints.txt` | `uv lock --upgrade`, then the export `constraints.txt` names in its header | the two commands of the `checks` job's dependency audit |
+| an action | its tag in each `uses:`, then `gh actions-lock` | `gh actions-lock --verify`, and the `checks` job's zizmor command |
 | a tool a job runs: uv, zizmor, pip-audit, griffe, twine | its pin in `.github/workflows/` | that job's own command |
 | the pre-commit hooks | `uv run --no-sync pre-commit autoupdate` | `uv run --no-sync pre-commit run --all-files` |
 
@@ -218,7 +218,7 @@ name removed or changed is one under Changed or Removed: `tools/api_changes.py` 
    its compare and tag links. The message says which checks ran, what they read, and what was not
    measured. A job a commit of the window broke is repaired by amending that commit, and the bump
    stays the tip. It lands on `main`, and the push runs `ci.yml` on the tree about to
-   be published; the dispatches wait until it passes. The run's `api` job lists each public name
+   be published; the dispatches wait until it passes. The run's `checks` job lists each public name
    removed or changed since the last tag and fails on one no entry under Changed or Removed
    names, so the bump commit records each before any dispatch:
    `uv run --no-sync python tools/api_changes.py` runs it locally.
@@ -338,8 +338,10 @@ names no person and no address.
 
 ## What this does not cover
 
-- **The push lanes past Linux, 3.11 and 3.15.** CPython 3.12 to 3.14, macOS and Windows are
-  read by the smoke alone, when a release is dispatched.
+- **The push lanes past the newest interpreter on macOS and Windows.** The push runs the suite
+  on every interpreter the classifiers name on Linux and on the newest alone on macOS and
+  Windows; the older interpreters there are read by the smoke alone, when a release is
+  dispatched.
 - **Free-threaded CPython and PyPy.** No job runs them and no classifier claims them.
 - **valgebra's other wheels.** Linux on aarch64 and musl, macOS on x86_64 and Windows on arm64
   run no leg here: valgebra's own release smoke installs each of those wheels on its platform and
