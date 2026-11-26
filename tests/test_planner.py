@@ -861,6 +861,27 @@ def test_the_planner_reads_again_after_a_call_that_may_act() -> None:
     assert all(link.verdict == "proven" for link in checked.links)
 
 
+def test_the_planner_reads_again_after_a_call_that_may_act_under_a_fresh_rule() -> None:
+    """A fresh flow rule reads staleness as a fresh argument does, so the memo keys on it."""
+    walked = read_policy(APPROACHED)
+    measured = read_flow(
+        {
+            "name": "measured",
+            "sources": ["estimate_pose"],
+            "sink": "grasp.distance",
+            "only": True,
+            "fresh": True,
+        }
+    )
+    task = read_task("pick", {"name": {"type": "string"}}, GRASPED)
+    found = plan(_walking(), task, depth=8, policies=[walked], flows=[measured])
+    assert found.program is not None
+    text = render(found.program)
+    assert text.index("walk_to(") < text.rindex("estimate_pose(")
+    checked = verify(found.program, _walking(), task, policies=[walked], flows=[measured])
+    assert all(link.verdict == "proven" for link in checked.links)
+
+
 def test_a_fresh_argument_naming_no_argument_is_refused() -> None:
     with pytest.raises(ValueError, match=r"reads grasp\.reach fresh, which is no argument"):
         plan(_walking(), read_task("pick", {}, GRASPED, fresh=["grasp.reach"]))

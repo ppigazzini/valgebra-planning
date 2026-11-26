@@ -235,8 +235,19 @@ class _State(NamedTuple):
         read = self.read | ({ref.variable} & self.reading)
         return self._replace(refs=refs, tested=self.tested | {self.origin(ref)}, read=read)
 
-    def signature(self) -> object:
-        old = frozenset(cells for ref, cells in self.refs if ref.variable in self.stale)
+    def signature(self, *, stale: bool) -> object:
+        """Return what the failure memo keys this state on: every value a reader tells apart.
+
+        The stale variables' cells are a component only where ``stale`` says the search reads
+        staleness, through a fresh argument or a fresh flow rule naming no call that withdraws
+        it (`_Search.reads_staleness`): elsewhere two states apart only in what is stale admit
+        the same calls, and a failure of one is a failure of the other.
+        """
+        old = (
+            frozenset(cells for ref, cells in self.refs if ref.variable in self.stale)
+            if stale
+            else frozenset()
+        )
         listed = tuple(
             frozenset(cells for ref, cells in self.refs if ref.variable in names)
             for _, names in self.withdrawn
@@ -306,6 +317,22 @@ class _Search:
     gives: dict[str, tuple[tuple[tuple[str, ...], frozenset[int]], ...]] = field(
         default_factory=dict
     )
+    #: Whether the search reads staleness (`reads_staleness`), once it is asked.
+    staleness: bool | None = None
+
+    def reads_staleness(self) -> bool:
+        """Return whether a value held before a call that may act is read apart.
+
+        A fresh argument refuses one (`filling`), and so does a fresh flow rule that names no
+        call withdrawing it (`current`); a rule naming its withdrawing calls reads its own list
+        (`_State.withdrawn`). Read once a search, on its first expansion, when the task's
+        fresh arguments and the flows are set.
+        """
+        if self.staleness is None:
+            self.staleness = bool(self.fresh) or any(
+                flow.fresh and not flow.withdrawn_by for flow in self.flows
+            )
+        return self.staleness
 
     def bound(self, state: _State, ref: Ref) -> Validator[Any]:
         """Return the values a binding passes: a constant's own, or its reference's cells'."""
@@ -404,7 +431,7 @@ class _Search:
         )
         if goal is not None and (not self.policies or self.settled(state)):
             return Block((), Return(goal))
-        key = (state.signature(), self.read(state), depth, weak)
+        key = (state.signature(stale=self.reads_staleness()), self.read(state), depth, weak)
         if key in self.failed:
             return None
         if depth == 0:
