@@ -30,6 +30,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A test on a key of a value keeps what the value rests on. The walk narrowed the tested value
+  and dropped the case of a policy's split it was one of and the postconditions it was narrowed
+  by, so a key test on a result a guard splits walked its `then` side in the case lacking the
+  key and refuted a call no run makes there, and a link under a key test on a read a
+  postcondition narrowed was proven naming no postcondition at all. Both hold of each side now:
+  a program testing `"spsa" in r` before `get_spsa`, under a policy guarding `get_spsa` on that
+  key, verifies, and the link names the declaration it rests on.
 - A record a program reads a field it lacks from is shrunk before it is shown, as a link's
   witness is: a key fewer, then each field shrunk in place, while it stays one the record's
   declared set holds and the call may return. The method page says every refuted link's witness

@@ -165,6 +165,25 @@ def test_a_policy_splitting_the_read_s_result_keeps_the_postcondition_named() ->
     assert all(link.verdict == "proven" and NAMED in link.assumed for link in links)
 
 
+KEY_TESTED = DIRECT.replace(
+    "    c4 = grasp(object_id=c1.object_id, distance=c3.distance)\n    return c4.grasp_id\n",
+    '    if "distance" in c3:\n'
+    "        c4 = grasp(object_id=c1.object_id, distance=c3.distance)\n"
+    "        return c4.grasp_id\n"
+    "    stop(c3)\n",
+)
+
+
+def test_a_key_test_on_a_read_keeps_the_postcondition_it_was_narrowed_by() -> None:
+    # The test narrows the read the postcondition met with what it shows, and every link over
+    # either side still names the declaration the proof rests on.
+    assert KEY_TESTED != DIRECT
+    checked = verify(read_program(KEY_TESTED), TOOLS, TASK, postconditions=[POST])
+    (link,) = (link for link in checked.links if link.claim == CLAIM)
+    assert link.verdict == "proven"
+    assert NAMED in link.assumed
+
+
 def test_a_branch_the_read_s_shown_set_misses_is_no_path() -> None:
     tested = DIRECT.replace(
         "    c4 = grasp(object_id=c1.object_id, distance=c3.distance)\n    return c4.grasp_id\n",

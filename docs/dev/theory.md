@@ -100,9 +100,9 @@ value rather than its field is asked of the value's belief, its own set met with
 it a test narrowed, so a refutation there names a value the program may hold; the verifier
 reads neither the cells nor the search. **[LOAD-BEARING: belief-execution]**
 
-IMPLEMENTED-BY: verify.py, verify.py::_Walk.sides
+IMPLEMENTED-BY: verify.py, verify.py::_Walk.sides, verify.py::_Walk.branch
 
-HELD-BY: test_a_loop_program_proven_strong_keeps_every_contract_on_every_array, test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole, test_a_record_no_call_makes_is_never_a_witness, test_a_record_a_call_makes_refutes_two_fields_of_one_value, test_a_loop_item_reads_no_field_of_a_value_its_name_held, test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads, test_a_loop_s_sides_are_the_ones_its_array_may_take, test_an_obligation_a_loop_leaves_open_is_refuted_where_its_array_holds_an_item
+HELD-BY: test_a_loop_program_proven_strong_keeps_every_contract_on_every_array, test_a_guarded_program_is_proven_link_by_link_and_its_stop_is_a_gap, test_the_naive_chain_is_refuted_at_the_one_binding_that_is_wrong, test_a_strong_program_branches_on_every_status_and_verifies, test_a_record_the_input_schema_relates_is_asked_whole, test_a_record_no_call_makes_is_never_a_witness, test_a_record_a_call_makes_refutes_two_fields_of_one_value, test_a_loop_item_reads_no_field_of_a_value_its_name_held, test_a_test_on_another_field_of_the_value_narrows_what_a_refutation_reads, test_a_loop_s_sides_are_the_ones_its_array_may_take, test_an_obligation_a_loop_leaves_open_is_refuted_where_its_array_holds_an_item, test_a_key_test_narrows_the_case_of_the_result_it_reads
 
 **A field is read where the held set proves it present.** Selection requires the selected
 field to be defined, the record's type a subtype of a record holding it (Castagna 2023,
@@ -485,7 +485,7 @@ error is narrowed by none: what it says of the call's acting is the next claim's
 
 IMPLEMENTED-BY: contracts.py::Postcondition, verify.py::_Walk.shown
 
-HELD-BY: test_a_read_after_the_call_returned_in_when_is_read_in_what_it_shows, test_a_branch_the_read_s_shown_set_misses_is_no_path, test_a_read_no_postcondition_covers_is_read_as_its_contract_says, test_a_run_refuses_a_read_outside_what_a_postcondition_says_it_shows
+HELD-BY: test_a_read_after_the_call_returned_in_when_is_read_in_what_it_shows, test_a_branch_the_read_s_shown_set_misses_is_no_path, test_a_read_no_postcondition_covers_is_read_as_its_contract_says, test_a_run_refuses_a_read_outside_what_a_postcondition_says_it_shows, test_a_key_test_on_a_read_keeps_the_postcondition_it_was_narrowed_by
 
 **A call made again where a read shows it did not act is no retry.** A system must not retry
 an action before a postcondition verifier says its effect is absent (Mansoor et al. 2026,

@@ -552,6 +552,13 @@ class _Walk:
             self.links.append(link)
 
     def branch(self, test: Branch, env: dict[Ref, _Held], where: str, path: _Path) -> None:
+        """Walk each side of a test, the tested reference narrowed to the side's set.
+
+        A test narrows the belief it reads and nothing else of it (Bertoli et al. 2006, Def.
+        3.4): the case of a split the value is one of, and the postconditions it was narrowed by,
+        hold of each side as of the whole, so a side no value of the case reaches is no path and
+        each link over a side names what the value rests on.
+        """
         held = self.held(env, test.ref, where)
         if test.key:
             tested = having(test.key)
@@ -562,16 +569,7 @@ class _Walk:
             tested = listed(test.values)
         if held is None or tested is None:
             return
-        kept, left = (
-            _Held(
-                values,
-                held.origin,
-                held.loop,
-                version=held.version,
-                returned=held.returned,
-            )
-            for values in sides(held.values, tested)
-        )
+        kept, left = (held._replace(values=values) for values in sides(held.values, tested))
         # Which branch runs carries the tested value's influence: an implicit flow.
         tested = path._replace(tested=path.tested | {held.origin.tool})
         for side, narrowed, name in (

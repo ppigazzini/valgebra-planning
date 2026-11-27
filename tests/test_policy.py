@@ -564,6 +564,61 @@ def test_a_program_moving_only_under_the_answer_its_policy_reads_is_proven() -> 
     assert held == ["case:c2:0.then", "case:c2:1.else"]
 
 
+def _run_record(name: str, inputs: dict[str, Any], output: dict[str, Any]) -> Any:
+    return read_contract(
+        {
+            "name": name,
+            "inputSchema": {"type": "object", "properties": inputs, "required": [*inputs]},
+            "outputSchema": output,
+            "annotations": {"readOnlyHint": True},
+        }
+    )
+
+
+#: A run, which holds a tune's parameters where it is a tune, and the tool that reads them.
+TUNES = {
+    "get_run": _run_record(
+        "get_run",
+        {"run_id": {"type": "string"}},
+        {"type": "object", "properties": {"spsa": {"type": "object"}}},
+    ),
+    "get_spsa": _run_record(
+        "get_spsa",
+        {"run_id": {"type": "string"}},
+        {"type": "object", "properties": {"params": {"type": "array"}}, "required": ["params"]},
+    ),
+}
+A_TUNE_FIRST = read_policy(
+    {
+        "name": "a tune's parameters only of a tune",
+        "initial": "unknown",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "unknown", "tool": "get_run", "result": {"required": ["spsa"]}, "to": "tune"},
+            {"from": "unknown", "tool": "get_spsa", "to": "violated"},
+        ],
+    }
+)
+KEY_TESTED = (
+    "r = get_run(run_id=run_id)\n"
+    'if "spsa" in r:\n'
+    "    t = get_spsa(run_id=run_id)\n"
+    "    return t.params\n"
+    "stop(r)\n"
+)
+
+
+def test_a_key_test_narrows_the_case_of_the_result_it_reads() -> None:
+    # The split holds the result with the key in one case and without it in the other, and the
+    # test on the key reaches its then side in the first case alone.
+    task = read_task("parameters", {"run_id": {"type": "string"}}, {"type": "array"})
+    checked = verify(read_program(KEY_TESTED), TUNES, task, policies=[A_TUNE_FIRST])
+    assert checked.verified
+    held = sorted(link.where for link in checked.links if link.claim.startswith("policy a tune's"))
+    assert held == ["case:r:0.then", "case:r:1.else"]
+    assert [gap.where for gap in checked.gaps] == ["case:r:1.else"]
+
+
 EACH_CONFIRMED = read_policy(
     {
         "name": "each object is confirmed before it is grasped",
