@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from valgebra_planning.contracts import Contract, read_contract, read_task
 from valgebra_planning.critic import critique, read_program
 from valgebra_planning.mining import mine
@@ -51,6 +53,28 @@ def test_a_boolean_or_a_null_links_nothing() -> None:
         {"tool": "verify_contact", "arguments": {"email": True}, "result": {"email": None}},
     ]
     assert mine(calls, TOOLS).of == {}
+
+
+@pytest.mark.parametrize(
+    ("shared", "linked"), [(1, False), (1000, False), (1000.0, False), (1001, True)]
+)
+def test_an_integer_of_a_thousand_or_less_links_nothing(shared: float, *, linked: bool) -> None:
+    """A small integer is shared by chance, so its slots stay apart, each typed alone.
+
+    Value-based merging works for strings and fails for small integers, so APIphany merges
+    strings and large integers alone (Guo et al. 2022, §7.4).
+    """
+    weights = [
+        {"tool": "book_return", "arguments": {"weight_g": shared}, "result": {}},
+        {"tool": "find_parcel", "arguments": {}, "result": {"parcel": {"weight_g": shared}}},
+    ]
+    types = mine(weights, TOOLS)
+    weighed, booked = (
+        ("result", "find_parcel.parcel.weight_g"),
+        ("argument", "book_return.weight_g"),
+    )
+    assert types.typed(weighed, booked)
+    assert types.agree(weighed, booked) is linked
 
 
 def test_mined_types_route_the_notice_through_the_sanitizer_as_observed() -> None:

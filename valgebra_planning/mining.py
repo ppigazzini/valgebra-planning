@@ -8,7 +8,10 @@ refused, which narrows the planner's choices to what the observations show.
 
 A witness is a call a server answered, its arguments chosen elsewhere: APIphany collects them
 ahead of time, in a sandbox or from production traffic (Guo et al. 2022, §1), and a value two
-locations share by chance merges them spuriously (Guo et al. 2022, §7.2). A call a planned
+locations share by chance merges them spuriously (Guo et al. 2022, §7.2). A value from a small
+domain is shared by chance most: an integer of 1000 or less links nothing, and a slot seen with
+one keeps a type of its own, as APIphany merges strings and large integers alone (Guo et al.
+2022, §7.4). A call a planned
 program made, marked ``"planned": true``, shares a value with the result it was bound from by
 construction, so its arguments link nothing; its result is the server's and links as any.
 
@@ -77,6 +80,28 @@ def _seen(value: Any) -> bool:
     return value is not None and not isinstance(value, bool)
 
 
+#: The integer past which a value is taken to name something rather than count it.
+_LARGE = 1000
+
+
+def _linking(value: Any, key: SlotKey) -> object:
+    """Return what two slots share to be one type: the value, or the slot's own for a small integer.
+
+    A page and a limit both hold 1, a total and a core count 8: value-based merging works for
+    strings and fails for small integers, so APIphany merges "only for strings and large
+    integers (> 1000)" (Guo et al. 2022, §7.4). An integral number of 1000 or less links
+    nothing; the slot it was seen in is typed, alone.
+    """
+    if (
+        isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and float(value).is_integer()
+        and value <= _LARGE
+    ):
+        return ("alone", key)
+    return json_key(value)
+
+
 def _inputs(value: Any, path: tuple[str, ...]) -> list[tuple[SlotKey, tuple[bool, Any]]]:
     """Return a task input's slots: the whole value, and each field of a record, as held."""
     found = [(("input", ".".join(path)), (True, value))]
@@ -96,7 +121,7 @@ def _holders(
             for name, value in call["inputs"].items():
                 for key, (_, held) in _inputs(value, (name,)):
                     if _seen(held):
-                        holders.setdefault(json_key(held), []).append(key)
+                        holders.setdefault(_linking(held, key), []).append(key)
             continue
         contract = contracts.get(call["tool"])
         if contract is None:
@@ -112,7 +137,7 @@ def _holders(
         ]
         for key, (found, value) in seen:
             if found and _seen(value):
-                holders.setdefault(json_key(value), []).append(key)
+                holders.setdefault(_linking(value, key), []).append(key)
     return holders
 
 
