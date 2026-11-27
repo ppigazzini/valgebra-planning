@@ -21,11 +21,11 @@ from hypothesis import strategies as st
 
 from valgebra_planning import verify as verifier
 from valgebra_planning.contracts import read_contract, read_task
-from valgebra_planning.critic import read_program
+from valgebra_planning.critic import ProgramError, read_program
 from valgebra_planning.flows import read_flow
 from valgebra_planning.library import read_library
 from valgebra_planning.planner import plan
-from valgebra_planning.program import Ref, render
+from valgebra_planning.program import Block, Ref, render
 from valgebra_planning.run import ToolError, run
 from valgebra_planning.verify import verify
 
@@ -164,13 +164,27 @@ def _answering(data: st.DataObject) -> dict[str, Any]:
     return {name: (lambda name=name, **given: answer(name, given)) for name in ROBOT.tools}
 
 
+def _drawn(source: str) -> Block | None:
+    """Read a drawn program, or return None where it runs past the paths the reader bounds.
+
+    Nested blocks that each run on multiply the paths, so a draw can pass `MAX_PATHS`, which the
+    reader refuses as written; any other refusal is a failure.
+    """
+    try:
+        return read_program(source)
+    except ProgramError as refused:
+        if "paths, past" not in str(refused):
+            raise
+        return None
+
+
 @settings(max_examples=400, deadline=None)
 @given(st.data())
 def test_a_program_proven_under_a_rule_never_breaks_it_when_run(data: st.DataObject) -> None:
     flow = data.draw(st.sampled_from(FLOWS))
     source = "\n".join([*data.draw(_block({}, 0)), "return o"]) + "\n"
-    program = read_program(source)
-    if not verify(program, ROBOT.tools, TASK, flows=[flow]).proven:
+    program = _drawn(source)
+    if program is None or not verify(program, ROBOT.tools, TASK, flows=[flow]).proven:
         return
     ran = run(program, ROBOT.tools, TASK, GIVEN, _answering(data), flows=[flow], enforce=False)
     assert not [broken for broken in ran.broken if broken.startswith("flow ")], source
@@ -188,8 +202,11 @@ def test_a_name_is_held_at_its_root_wherever_a_field_of_it_is(data: st.DataObjec
         seen.append(any(ref.variable == name for ref in env) == (verifier._ref(name) in env))
         return original(env, name)
 
+    program = _drawn(source)
+    if program is None:
+        return
     with mock.patch.object(verifier, "_unbound", side_effect=checked):
-        verify(read_program(source), ROBOT.tools, TASK)
+        verify(program, ROBOT.tools, TASK)
     assert all(seen), source
 
 
