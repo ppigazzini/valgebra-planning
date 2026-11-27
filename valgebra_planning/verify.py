@@ -31,6 +31,7 @@ from typing import Any, Literal, NamedTuple
 
 from valgebra_planning._valgebra import (
     ARRAY,
+    OBJECT,
     Sampler,
     Unsupported,
     Validator,
@@ -413,6 +414,11 @@ class _Walk:
         held = self.held(env, end.ref, where)
         if held is None:
             return
+        if inside(held.values, ARRAY) != "subset":
+            # Python walks a string's characters and an object's keys, and a run walks an
+            # array's items alone: the two agree on an array.
+            claim = f"{end.ref} is an array, whose items `for` reads"
+            self.inclusion(where, claim, end.ref, held, ARRAY, env)
         item = self.element(held)
         inner = _unbound(env, end.item)
         # The item is a value of its own, returned by the call that returned its array.
@@ -425,7 +431,7 @@ class _Walk:
             returned=held.returned if array is None else array.returned,
         )
         self.items[inner[_ref(end.item)].version] = inner[_ref(end.item)].returned
-        inside, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
+        body_at, tested = _join(where, f"for:{end.item}"), path.tested | {held.origin.tool}
         if _acts(end.body, self.contracts):
             stale = path.stale | {held.returned for ref, held in inner.items() if not ref.path}
             path = path._replace(stale=stale, last=None, observed=frozenset())
@@ -442,7 +448,7 @@ class _Walk:
             ran = states
             while True:
                 ends, _ = self.iterate(
-                    end.body, inner, inside, path._replace(states=ran, tested=tested), silent=True
+                    end.body, inner, body_at, path._replace(states=ran, tested=tested), silent=True
                 )
                 grown = tuple(s.union(*(e[i] for e in ends)) for i, s in enumerate(holding))
                 if grown == holding:
@@ -450,7 +456,7 @@ class _Walk:
                 holding = ran = grown
         reach = tuple(before | then for before, then in zip(states, holding, strict=True))
         _, exits = self.iterate(
-            end.body, inner, inside, path._replace(states=reach, tested=tested), silent=False
+            end.body, inner, body_at, path._replace(states=reach, tested=tested), silent=False
         )
         after = path.tested.union(*exits)
         path = path._replace(awaited=path.awaited.union(self.awaits[read:]))
@@ -570,6 +576,11 @@ class _Walk:
             tested = listed(test.values)
         if held is None or tested is None:
             return
+        if test.key and inside(held.values, OBJECT) != "subset":
+            # Python reads `in` on an array as membership and on a string as a substring test,
+            # and a run reads a key: the two agree on an object alone.
+            claim = f"{test.ref} is an object, whose keys `in` reads"
+            self.inclusion(where, claim, test.ref, held, OBJECT, env)
         kept, left = (held._replace(values=values) for values in sides(held.values, tested))
         # Which branch runs carries the tested value's influence: an implicit flow.
         tested = path._replace(tested=path.tested | {held.origin.tool})
