@@ -6,7 +6,27 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.0.10] - 2026-11-27
+
+A release of speed and of its floors. `plan` remembers a failed state by what a call that may
+act left stale only where a fresh argument or a fresh flow rule reads it, so a search reading
+neither expands fewer states and writes the programs 0.0.9 wrote. It requires valgebra 0.0.36
+and valgebra-jsonschema 0.0.8. The method page says the ranking weighs the first program each
+first call reaches. The suite runs on the free-threaded 3.14t and 3.15t on Linux at every push
+and the release smoke installs the wheel there; no classifier claims free threading. The
+parcels, robot-skills, bench and faults studies read every count 0.0.9 recorded.
+
 ### Changed
+
+- `plan` remembers a failed state by the cells of the variables a call that may act left stale
+  only where a reader of staleness is present: a fresh argument the task names, or a fresh flow
+  rule. Elsewhere two states apart only in what is stale admit the same calls, and the memo
+  holds them as one; a search with a reader keys on staleness as it did. Each of the examples'
+  eighteen tasks is planned to the program 0.0.9 wrote. Counted by `tools/perf.py` under
+  cachegrind, on CPython 3.15 with valgebra 0.0.36 in both, `plan` of the bookings task takes
+  0.95 of 0.0.9's instructions over calls repeated on one library and 0.96 on contracts just
+  read, and every other case 0.99 to 1.00; timed in the releasing page's loop on a quiet box, it
+  takes 1.71 ms where 0.0.9 took 1.79.
 
 - valgebra is required from 0.0.36 and valgebra-jsonschema from 0.0.8, where 0.0.9 requires
   0.0.35 and 0.0.7: the releases the studies are read on. valgebra 0.0.36 bounds what an
@@ -1187,7 +1207,8 @@ decides more of it; the user guide is published.
   on synthetic libraries of 8 to 256 tools the cut holds 5 predicates and 12 cells at every
   size.
 
-[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.9...HEAD
+[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.10...HEAD
+[0.0.10]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.6...v0.0.7
