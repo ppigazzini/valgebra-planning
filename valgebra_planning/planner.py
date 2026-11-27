@@ -518,7 +518,9 @@ class _Search:
         """Return the optional arguments a call writes an input the task requires into.
 
         An input no call has read yet is written into the first optional argument it fills: the
-        value the program returns must be read from it, and this call can read it.
+        value the program returns must be read from it, and this call can read it. It fills an
+        argument whose cells its own meet, where the mined types agree; one its set misses would
+        leave the argument to no binding, and the call unmade.
         """
         reading: set[str] = set()
         for var in sorted(unread):
@@ -528,7 +530,12 @@ class _Search:
                     for slot in contract.arguments
                     if not slot.required
                     and slot.path[0] not in reading
-                    and any(r.variable == var and self.agree(state, r, slot) for r, _ in state.refs)
+                    and any(
+                        r.variable == var
+                        and cells & self.taken(contract, slot)
+                        and self.agree(state, r, slot)
+                        for r, cells in state.refs
+                    )
                 ),
                 None,
             )

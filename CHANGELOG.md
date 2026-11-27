@@ -41,6 +41,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A task's required input is written into the first optional argument its set fills, as the
+  planner's own rule says, where it was written into the first the mined types agreed with:
+  with no types mined that is the first optional argument listed, so a tool listing an integer
+  `page` before a string `username` was given the name where the page goes, no binding filled
+  it, and no program was found. Over fishtest's contracts "a user's active runs" planned nothing
+  in 379 states and now plans `list_active_runs(username=username)` in one. Counted by
+  `tools/perf.py` against the change before, the planner cases take 0.98 to 1.00 of their
+  instructions.
 - A stop under a test that left a value the program holds no member is no gap. `if "a" in r:`
   on a result requiring `a`, and `if r.k == "x":` or `if r.k in ("x",):` on a field listing `"x"`
   alone, left their `else` uncovered, so a program correct on every run was refused as weak:
