@@ -41,6 +41,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A stop under a test that left a value the program holds no member is no gap. `if "a" in r:`
+  on a result requiring `a`, and `if r.k == "x":` or `if r.k in ("x",):` on a field listing `"x"`
+  alone, left their `else` uncovered, so a program correct on every run was refused as weak:
+  the runner refuses a result outside its output set before any test reads it, so no run takes
+  that `else`. Such a stop now leaves nothing uncovered and the three programs are accepted. Each
+  narrowed reference's own set is asked, an answer kept by its validators, so a side only two
+  tests on two fields empty together keeps its stop. Counted by `tools/perf.py` against the
+  change before it, verifying and critiquing the parcel and booking programs takes 1.00 to 1.04
+  of their instructions over repeated calls, and up to 1.09 on contracts just read
+  (`verify:parcels:3`).
 - A test on a key of a value keeps what the value rests on. The walk narrowed the tested value
   and dropped the case of a policy's split it was one of and the postconditions it was narrowed
   by, so a key test on a result a guard splits walked its `then` side in the case lacking the
