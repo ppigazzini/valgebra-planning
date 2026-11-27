@@ -423,6 +423,13 @@ ones.
 
 ## Limits
 
+- **No record or list is built from held values.** `search_actions(filter={'username':
+  r.username})` is refused where it is read: an argument is a held value whole or a JSON
+  constant (`_argument` in `valgebra_planning/critic.py`). A flow rule reads one origin a
+  binding (`flowed` in `valgebra_planning/verify.py`), so a record holding several values
+  would need each held to the argument's rules, or a `sources` rule on the argument would be
+  proven while an untrusted value passes inside it. Where the tool takes the field as an
+  argument of its own, the held value is passed there: `search_actions(username=r.username)`.
 - **A program runs at most 4096 paths** (`MAX_PATHS`). Each `if` whose sides run on into what
   follows doubles the paths, and the verifier walks each, so twelve in a row are the most a
   program holds and a thirteenth is refused, naming the count; the planner's programs over the

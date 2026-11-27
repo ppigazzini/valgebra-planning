@@ -170,6 +170,13 @@ answer from a tool its library names under `"forwardsElicitation"` ([limits](met
 - **The language computes nothing.** A program calls, tests, loops and returns; it has no
   arithmetic and no aggregation, so "the mean of the values the calls returned" is not a
   program here. A computation over the returned values, after every call is made, is not
-  proposed until a consumer needs one.
+  proposed until a consumer needs one. An argument is a value the program holds or a JSON
+  constant (`_argument` in `valgebra_planning/critic.py`), and a held value is one set valgebra
+  decides with the one origin a flow rule reads: `a.page + 1` has no set valgebra computes, so
+  it would take an approximation the verifier writes for itself and an origin of its own.
+  Paging until a page comes back empty is out on another ground, a loop running over an array
+  the program holds ([the verifier](method.md#the-verifier)); a fixed number of pages, each a
+  constant, plans, and a listing that returns its next page as a field gives a program a held
+  value to pass.
 - **The runner is the only interpreter.** A program proven here and run anywhere else, a
   sandbox included, carries none of the checks above.
