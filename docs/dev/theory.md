@@ -346,9 +346,9 @@ it was bound from by construction, so its arguments link nothing. A task input i
 tools: one a log shows is typed as any slot, and one it never shows fills no argument whose
 type a tool's result was seen in. **[LOAD-BEARING: type-mining]**
 
-IMPLEMENTED-BY: mining.py, mining.py::_linking
+IMPLEMENTED-BY: mining.py, mining.py::_linking, planner.py::_resting
 
-HELD-BY: test_slots_holding_one_observed_value_are_one_type, test_a_boolean_or_a_null_links_nothing, test_mined_types_route_the_notice_through_the_sanitizer_as_observed, test_the_verifier_reads_no_mined_type, test_a_planned_call_s_arguments_link_nothing, test_a_task_input_no_log_shows_fills_no_argument_a_tool_s_result_was_seen_in, test_a_task_input_a_log_shows_is_typed_as_any_slot, test_an_integer_of_a_thousand_or_less_links_nothing
+HELD-BY: test_slots_holding_one_observed_value_are_one_type, test_a_boolean_or_a_null_links_nothing, test_mined_types_route_the_notice_through_the_sanitizer_as_observed, test_the_verifier_reads_no_mined_type, test_a_planned_call_s_arguments_link_nothing, test_a_task_input_no_log_shows_fills_no_argument_a_tool_s_result_was_seen_in, test_a_task_input_a_log_shows_is_typed_as_any_slot, test_an_integer_of_a_thousand_or_less_links_nothing, test_a_binding_no_observation_types_is_named_as_resting_on_none
 
 ## Results read closed
 

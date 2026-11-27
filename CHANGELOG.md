@@ -37,6 +37,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- Under mined types a plan names each binding into or out of a slot no observation typed, as
+  `run_id -> search_actions.username, resting on no observation`, beside those resting on a
+  type. Such a slot agrees with every argument, so a plan filling a search's username from a
+  run's id named no assumption at all. The parcels study's mined-types plan names three.
 - A failed plan's reason says the bound cut paths short of the goal without counting them, and
   `Plan.cut` holds the count, as `--json` writes it as `cut`. The count follows what the search's
   memo keys on, so it moved with a release's speed, 160 to 110 on one toy library, while the

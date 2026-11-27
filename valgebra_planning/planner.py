@@ -1330,12 +1330,17 @@ def _resting(
 ) -> list[str]:
     """Return what a binding of ``ref`` into ``argument`` rests on: a mined type, an output seen.
 
-    ``source`` is the tool whose result ``ref`` reads, None for a task input.
+    ``source`` is the tool whose result ``ref`` reads, None for a task input. Under mined types
+    a slot no observation typed agrees with every argument (`valgebra_planning.mining.Types`),
+    so a binding into or out of one rests on the absence of an observation, and is named so: a
+    location no call shows keeps no type a merge could refute (Guo et al. 2022, §7.4).
     """
     key = _input_key(ref) if source is None else _result_key(source, ref)
     found = []
     if types is not None and types.typed(key, ("argument", argument)):
         found.append(f"{ref} -> {argument}")
+    elif types is not None:
+        found.append(f"{ref} -> {argument}, resting on no observation")
     if source is not None and contracts[source].inferred:
         found.append(f"{ref} -> {argument}, from the output of {source} as observed")
     if source is not None and contracts[source].declared is not None:
