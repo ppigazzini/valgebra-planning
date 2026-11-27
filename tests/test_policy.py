@@ -1583,6 +1583,47 @@ def test_a_result_read_past_its_call_s_lapse_is_named() -> None:
     ]
 
 
+#: The walk's result spends the yes, back to unasked, where the lapse leads too.
+SPENT = {"from": "yes", "tool": "walk", "result": {}, "to": "unasked"}
+RESULT_WITHIN = "the run reaches the result of walk within 120 s of entering yes"
+
+
+@pytest.mark.parametrize(
+    ("moves", "named"),
+    [
+        ([SPENT], (WITHIN,)),
+        (
+            [
+                {"from": "yes", "after_s": 120, "to": "stale"},
+                SPENT,
+                {"from": "stale", "tool": "walk", "result": {}, "to": "violated"},
+            ],
+            (RESULT_WITHIN, WITHIN),
+        ),
+        (
+            [
+                {"from": "yes", "after_s": 120, "to": "fading"},
+                {"from": "fading", "after_s": 60, "to": "unasked"},
+                SPENT,
+                {"from": "fading", "tool": "walk", "result": {}, "to": "unasked"},
+            ],
+            (RESULT_WITHIN, WITHIN),
+        ),
+    ],
+    ids=["spent-either-way", "lapsed-into-a-violation", "target-lapses-again"],
+)
+def test_a_wait_on_a_result_is_named_only_where_the_proof_rests_on_it(
+    moves: list[dict[str, Any]], named: tuple[str, ...]
+) -> None:
+    # Where the lapse and the result lead to one state, the result arriving late leaves the
+    # verdict standing: an assumption held vacuously is no assumption (Kupferman and Vardi
+    # 1999, Def. 2, Thm. 1). A late result into a violation, or a target lapsing again, is one.
+    base = STATUS_CONSENT["transitions"][:2]
+    lapse = [] if any("after_s" in move for move in moves) else STATUS_CONSENT["transitions"][2:]
+    spec = {**STATUS_CONSENT, "transitions": [*base, *lapse, *moves]}
+    assert _timed_links(spec, "c1 = confirm()\nc2 = walk()\nreturn c2\n") == [("proven", named)]
+
+
 def test_a_chain_of_lapses_is_read_to_its_end() -> None:
     chain = {
         **STATUS_CONSENT,

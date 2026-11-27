@@ -88,6 +88,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A policy's link names a wait on a call's result only where the proof rests on it. With a
+  grasp's result spending a yes back to `unasked`, where the yes's lapse leads too, the link named
+  "the run reaches the result of grasp within 120 s of entering yes" beside the wait on the grasp
+  itself, though a result arriving after the lapse leaves the run in the same state. The wait is
+  named still where the lapse's target leads the result elsewhere, to a bad or pending state, or
+  lapses again.
 - The reader refuses what Python would run otherwise than it is read: a decorated function, whose
   decorator was dropped with it; a call to a name the program binds, as `f = h()` then `f(...)`,
   read as a call to the tool `f` where Python calls the value `h` returned; and, under

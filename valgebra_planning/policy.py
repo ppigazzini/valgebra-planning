@@ -225,6 +225,19 @@ class Policy:
         """Return the states the automaton may be in once a call is made and not yet answered."""
         return self._stepped(states, tool, record, hints, returned=False)
 
+    def answered(
+        self,
+        states: frozenset[str],
+        tool: str,
+        record: Validator[Any],
+        hints: frozenset[str] = frozenset(),
+    ) -> frozenset[str]:
+        """Return the states the automaton may be in once a call sent in ``states`` is answered.
+
+        No result is known, so a transition reading one is taken possibly at most.
+        """
+        return self._stepped(states, tool, record, hints, returned=True)
+
     def _stepped(
         self,
         states: frozenset[str],
