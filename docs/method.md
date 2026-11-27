@@ -506,7 +506,9 @@ ones.
   constant but those its task fixes, tests no key but an acted postcondition's, loops over no
   array, and writes an optional argument only where its task fixes it or an input the task
   requires read fills it. A program written elsewhere may do all four, and each is checked like
-  any value. A task fixes the constants its
+  any value. Where the search finds no program and a result field meets the goal where present,
+  no record guaranteeing it, the reason names the field and says the search writes no key test,
+  since a program reading it under one exists past what the search writes. A task fixes the constants its
   intent gives in `constants`, as the action a confirmation asks about: the planner writes each
   where its argument is, required or not, the verifier holds every call to the tool to it and
   refutes one leaving it out, since the tool then reads its own default, and a flow rule judges

@@ -37,6 +37,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- A failed plan's reason names each result field that meets the goal where present and that no
+  record guarantees, as `get_run.sprt`, and says a program reads it under a key test, which the
+  search does not write; where no path reached the bound it reads "no program the search writes".
+  The reason said "no deeper search finds one" of a goal a key test reaches, and named the fields
+  of other tools. The four studies read every reason they recorded.
 - `read_server` reads each tool of a listing apart: a tool valgebra refuses to read, as one whose
   schema names a document the listing does not hold or a dialect it does not read, is left out of
   the contracts with a `UserWarning` naming it and the reason, and the others are read. One such

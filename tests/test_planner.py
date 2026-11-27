@@ -293,6 +293,47 @@ def test_a_plan_with_no_program_says_whether_the_bound_cut_a_path() -> None:
     assert plan(tools, ACTED).reason is None
 
 
+def _reading(name: str, output: dict[str, Any]) -> Contract:
+    """Return a tool of no argument returning ``output`` as written."""
+    return read_contract(
+        {"name": name, "inputSchema": {"type": "object", "properties": {}}, "outputSchema": output}
+    )
+
+
+def test_a_reason_names_a_field_meeting_the_goal_that_no_record_guarantees() -> None:
+    # `f.a` meets an integer goal where present, and `{a?: integer}` does not guarantee it: a
+    # key test reads it, which the search does not write, so a program exists past the search.
+    count = {"type": "integer"}
+    optional = _reading(
+        "f", {"type": "object", "properties": {"a": count, "s": {"type": "string"}}}
+    )
+    found = plan({"f": optional}, read_task("an a", {}, count))
+    assert found.program is None
+    assert found.reason == (
+        "no program the search writes: no path reached the bound of 6, so no deeper search "
+        "finds one from the first 16 bindings of each call the search tries; f.a meets the goal "
+        "where present, and no record guarantees it: a program reads it under a key test, which "
+        "the search does not write"
+    )
+    required = _reading("f", {"type": "object", "properties": {"a": count}, "required": ["a"]})
+    assert plan({"f": required}, read_task("an a", {}, count)).reason is None
+    # A field outside the goal's set, or one no program can call the tool to read, is not named.
+    flag = read_task("a flag", {}, {"type": "boolean"})
+    assert "where present" not in (plan({"f": optional}, flag).reason or "")
+    locked = read_contract(
+        {
+            "name": "g",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"key": {"type": "string"}},
+                "required": ["key"],
+            },
+            "outputSchema": {"type": "object", "properties": {"a": count}},
+        }
+    )
+    assert "where present" not in (plan({"g": locked}, read_task("an a", {}, count)).reason or "")
+
+
 def test_render_takes_a_program_and_refuses_none() -> None:
     with pytest.raises(TypeError, match="render takes a program, a Block, not NoneType"):
         render(None)  # ty: ignore[invalid-argument-type]

@@ -1054,8 +1054,12 @@ def _reason(
     Beside the bound, it names each required argument of a tool of ``listed`` the goal needs
     (`_needed`), callable or not, that only a tested input fills, then those of a tool only a
     policy names, and each result field that meets the goal and lies outside it and lists no
-    members, which the search tests into the goal on none (`_Search.observed`).
+    members, which the search tests into the goal on none (`_Search.observed`). A field that
+    meets the goal where present and that no record guarantees is read only under a key test,
+    which the search does not write (`_unguaranteed`): a program reaching the goal through it
+    exists past what the search writes, so the reason names it and says so.
     """
+    unguaranteed = _unguaranteed(listed, task)
     if cut:
         reason = (
             f"no program within the bound of {depth} calls and tests, which cut {cut} paths "
@@ -1063,8 +1067,9 @@ def _reason(
         )
     else:
         reason = (
-            f"no program: no path reached the bound of {depth}, so no deeper search finds one "
-            f"from the first {MAX_BINDINGS} bindings of each call the search tries"
+            f"no program{' the search writes' if unguaranteed else ''}: no path reached the "
+            f"bound of {depth}, so no deeper search finds one from the first {MAX_BINDINGS} "
+            "bindings of each call the search tries"
         )
     needed = _needed(listed, task)
     if sourceless := _sourceless(listed, task, needed):
@@ -1084,7 +1089,34 @@ def _reason(
             f"; {meets} meets the goal and lies outside it, and lists no members a test into "
             "the goal could name"
         )
+    if unguaranteed:
+        meets = unguaranteed[0] if len(unguaranteed) == 1 else f"each of {', '.join(unguaranteed)}"
+        reason += (
+            f"; {meets} meets the goal where present, and no record guarantees it: a program "
+            "reads it under a key test, which the search does not write"
+        )
     return reason
+
+
+def _unguaranteed(listed: Mapping[str, Contract], task: Task) -> list[str]:
+    """Return each declared result field of a callable tool that meets the goal, unguaranteed.
+
+    A result slot holds the fields its record guarantees (`valgebra_planning.contracts`); a
+    field the record declares and does not require is held only on the side of a key test
+    showing it, an observation splitting the belief (Bertoli et al. 2006, Def. 3.6), which the
+    search writes for an acted postcondition alone.
+    """
+    found = []
+    for contract in _reachable(listed, task, frozenset(listed)).values():
+        guaranteed = {slot.path for slot in contract.results}
+        found += [
+            field.name
+            for slot in contract.results
+            for key in slot.declared()
+            if (*slot.path, key) not in guaranteed
+            and _meets((field := slot.below(key)).values, task.goal)
+        ]
+    return sorted(found)
 
 
 def _needed(contracts: Mapping[str, Contract], task: Task) -> frozenset[str]:
