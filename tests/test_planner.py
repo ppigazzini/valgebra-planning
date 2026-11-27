@@ -1141,6 +1141,32 @@ def test_a_value_is_returned_only_where_it_was_read_from_each_input_required() -
     assert render(found.program) == "c1 = search_actions(run_id=run_id)\nreturn c1.events"
 
 
+def _listing(name: str, inputs: dict[str, Any], output: dict[str, Any]) -> Contract:
+    """Return a tool every argument of which is optional."""
+    spec = {
+        "name": name,
+        "inputSchema": {"type": "object", "properties": inputs},
+        "outputSchema": {"type": "object", "properties": output, "required": [*output]},
+    }
+    return read_contract(spec)
+
+
+@pytest.mark.parametrize("first", ["user", "page"])
+def test_an_input_is_written_into_the_first_optional_argument_its_set_fills(first: str) -> None:
+    # A page and a limit are integers, listed before the user or after it: the user's name is
+    # written where a string goes, whatever the order the server lists the arguments in.
+    arguments = {"page": {"type": "integer", "minimum": 1}, "user": {"type": "string"}}
+    ordered = {first: arguments[first], **arguments}
+    runs = _listing("list_runs", ordered, {"runs": {"type": "array"}})
+    task = read_task(
+        "a user's runs", {"user": {"type": "string"}}, {"type": "array"}, reads=["user"]
+    )
+    found = plan({"list_runs": runs}, task)
+    assert found.program is not None
+    assert render(found.program) == "c1 = list_runs(user=user)\nreturn c1.runs"
+    assert verify(found.program, {"list_runs": runs}, task).proven
+
+
 def test_the_reason_names_what_keeps_the_goal_out() -> None:
     """The reason names an argument of a tool the goal needs that nothing fills, callable or not,
     and no argument of a tool the goal does not need.
