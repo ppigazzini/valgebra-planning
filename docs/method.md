@@ -64,7 +64,12 @@ The verifier (`valgebra_planning/verify.py`) walks a program with the set each v
 narrowed by intersection or complement at every branch, and asks valgebra each inclusion the
 program rests on: a value inside the argument it fills, the record where the arguments are
 related, the returned value inside the goal, and the value a return or a stop names one the
-program holds there, a field the result may lack refuted at either. Each link reads proven, refuted or undecided, and a
+program holds there, a field the result may lack refuted at either. A stop under a test that left a
+value the program holds no member, valgebra proving its narrowed set empty, is reached on no
+execution and leaves nothing uncovered: a key test on a key the result requires, or a test of the
+one member a field lists, has no `else` a run takes, since the runner refuses a result outside its
+output set before any test reads it. A side only two tests empty together, each on its own
+field, keeps its stop. Each link reads proven, refuted or undecided, and a
 refuted or undecided one carries a value outside the inclusion where the examples given or the
 values drawn from the value's own schema hold one, shrunk before it is shown, shorter and then
 nearer zero, while it stays a value the program may hold and outside the inclusion. A concrete

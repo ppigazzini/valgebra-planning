@@ -214,6 +214,95 @@ def test_a_weak_program_reaches_the_return_it_counts() -> None:
     assert not met.accepted
 
 
+def _reading(output: dict[str, Any]) -> dict[str, Any]:
+    """Return a library of one tool, `g`, taking nothing and returning ``output``."""
+    spec = {"name": "g", "inputSchema": {"type": "object"}, "outputSchema": output}
+    return {"g": read_contract(spec)}
+
+
+#: A result holding `a`, and one holding `k`, whose one member is `"x"`, beside `v`.
+HOLDING_A = {"type": "object", "properties": {"a": {"type": "integer"}}, "required": ["a"]}
+ONE_MEMBER = {
+    "type": "object",
+    "properties": {"k": {"enum": ["x"]}, "v": {"type": "integer"}},
+    "required": ["k", "v"],
+}
+
+
+@pytest.mark.parametrize(
+    ("output", "program"),
+    [
+        (HOLDING_A, 'r = g()\nif "a" in r:\n    return r.a\nstop(r)\n'),
+        (ONE_MEMBER, 'r = g()\nif r.k == "x":\n    return r.v\nstop(r)\n'),
+        (ONE_MEMBER, 'r = g()\nif r.k in ("x",):\n    return r.v\nstop(r)\n'),
+    ],
+)
+def test_a_stop_a_test_left_no_value_is_no_gap(output: dict[str, Any], program: str) -> None:
+    """A stop no value reaches is no terminal state, so a program ending there is strong.
+
+    Its belief is empty and adds nothing to the final beliefs (Bertoli et al. 2006, Thm. 3.5):
+    the runner refuses a result outside its output set before any test reads it.
+    """
+    checked = verify(
+        read_program(program), _reading(output), read_task("n", {}, {"type": "integer"})
+    )
+    assert (checked.proven, checked.gaps) == (True, ())
+
+
+def test_a_stop_some_value_reaches_is_a_gap() -> None:
+    lacking = {"type": "object", "properties": {"a": {"type": "integer"}}}
+    program = 'r = g()\nif "a" in r:\n    return r.a\nstop(r)\n'
+    checked = verify(
+        read_program(program), _reading(lacking), read_task("n", {}, {"type": "integer"})
+    )
+    assert checked.verified
+    assert [gap.where for gap in checked.gaps] == ["else"]
+
+
+def test_a_stop_a_member_reaches_asks_no_emptiness(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A known member the test left in its set shows the stop is reached, so valgebra is asked
+    # no emptiness of it; a set no member lies in is asked once, and its answer kept.
+    asked: list[object] = []
+
+    def counted(values: Validator[Any], target: Validator[Any]) -> str:
+        if target is verifier.nothing:
+            asked.append(values)
+        return inside(values, target)
+
+    monkeypatch.setattr(verifier, "inside", counted)
+    monkeypatch.setattr(verifier, "_EMPTIED", {})
+    lacking = {"type": "object", "properties": {"a": {"type": "integer"}}}
+    program = read_program('r = g()\nif "a" in r:\n    return r.a\nstop(r)\n')
+    task = read_task("n", {}, {"type": "integer"})
+    checked = verify(program, _reading(lacking), task)
+    assert [gap.where for gap in checked.gaps] == ["else"]
+    assert asked == []
+    for _ in range(2):
+        checked = verify(program, _reading(HOLDING_A), task)
+        assert (checked.proven, checked.gaps) == (True, ())
+    assert len(asked) == 1
+
+
+def test_a_stop_two_tests_leave_no_value_only_together_is_a_gap() -> None:
+    # Each test narrows its own field, `k` to `"y"` and `v` to 1, and each set alone is held:
+    # the record relating them is not asked, so the stop stays a gap, never a wrong proof.
+    related = {
+        "type": "object",
+        "oneOf": [
+            {"properties": {"k": {"const": "x"}, "v": {"const": 2}}, "required": ["k", "v"]},
+            {"properties": {"k": {"const": "y"}, "v": {"const": 1}}, "required": ["k", "v"]},
+        ],
+        "properties": {"k": {"enum": ["x", "y"]}, "v": {"enum": [1, 2]}},
+        "required": ["k", "v"],
+    }
+    program = 'r = g()\nif r.k == "x":\n    return r.v\nif r.v == 1:\n    return r.v\nstop(r)\n'
+    checked = verify(
+        read_program(program), _reading(related), read_task("n", {}, {"type": "integer"})
+    )
+    assert checked.verified
+    assert [gap.where for gap in checked.gaps] == ["else.else"]
+
+
 def test_a_record_the_input_schema_relates_is_asked_whole() -> None:
     card = read_task("pay", {"card": {"type": "string"}, "iban": {"type": "string"}}, True)
     both = Block(

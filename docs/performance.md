@@ -114,6 +114,11 @@ unasked, and is named with the code that owns it.
 - **One value shows a witness.** A value drawn for a field refutes its link only where the program
   may hold it there, the same question with the value given. A value the field's own set refuses
   needs none (`test_a_member_is_shown_by_a_value_found_and_refused_by_its_field`).
+- **A member shows a set holds one.** A stop is no gap where a test on the way left a value the
+  program holds no member, and a known member the test left in its set shows the set holds one,
+  so valgebra is asked the emptiness only where none lies there, and the answer is kept by the
+  set (`_proven_empty` in `valgebra_planning/verify.py`,
+  `test_a_stop_a_member_reaches_asks_no_emptiness`).
 - **The first draws are kept.** Every verification of a contract draws the same first values from
   its seed, so a slot keeps them with the state they leave the stream in, and a walk's later draws
   go on from that state (`test_a_witness_is_the_one_a_walk_s_stream_draws`). A link's witness is

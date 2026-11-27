@@ -343,7 +343,8 @@ class _Walk:
         elif isinstance(end, Stop):
             # A stop hands back the value it names, which the run reads as it reads a return's.
             self.held(env, end.ref, where)
-            self.gaps.append(Gap(where, str(end.ref), self.tolerated(env, end.ref)))
+            if not self.emptied(env):
+                self.gaps.append(Gap(where, str(end.ref), self.tolerated(env, end.ref)))
             self.obeyed(where, path)
             self.ended(path)
         elif isinstance(end, Next):
@@ -580,6 +581,21 @@ class _Walk:
             if not self.reached(branched, test.ref.variable):
                 continue
             self.block(side, branched, _join(where, name), tested)
+
+    @staticmethod
+    def emptied(env: dict[Ref, _Held]) -> bool:
+        """Return whether a test on the way left a value the program holds no member.
+
+        A path no value reaches is no execution, and its stop no terminal state: its belief is
+        empty and adds nothing to the final beliefs a strong solution is read from (Bertoli et
+        al. 2006, Thm. 3.5), as a key test on a required key leaves its `else`. Each narrowed
+        reference's own set is asked, an answer `inside` keeps by its validators, and not the
+        whole belief, which `reaches` asks of a return: a side only two tests empty together
+        keeps its stop.
+        """
+        return any(
+            held.values is not held.origin.values and _proven_empty(held) for held in env.values()
+        )
 
     def reaches(self, env: dict[Ref, _Held]) -> bool:
         """Return whether a path here is an execution: no value a test narrowed is proven none.
@@ -1757,6 +1773,27 @@ def _at(value: Any, path: tuple[str, ...]) -> Any:
     for key in path:
         value = value.get(key, _NONE) if isinstance(value, dict) else _NONE
     return value
+
+
+#: Whether valgebra proves the set a test left empty, by the set (`_proven_empty`).
+_EMPTIED: dict[Validator[Any], bool] = {}
+
+
+def _proven_empty(held: _Held) -> bool:
+    """Return whether valgebra proves the set a test left ``held`` empty, kept by the set.
+
+    A known member the test left in the set shows it holds one, so valgebra is asked only where
+    none lies in it, and the answer is the set's either way, kept as `inside` keeps its own, up
+    to `_REFS` sets.
+    """
+    found = _EMPTIED.get(held.values)
+    if found is None:
+        found = not any(map(held.values.is_valid, held.origin.members())) and (
+            inside(held.values, nothing) == "subset"
+        )
+        if len(_EMPTIED) < _REFS:
+            _EMPTIED[held.values] = found
+    return found
 
 
 def _meeting(value: Any, path: tuple[str, ...], held: _Held) -> Any:
