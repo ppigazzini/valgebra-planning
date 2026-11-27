@@ -83,6 +83,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- The reader refuses what Python would run otherwise than it is read: a decorated function, whose
+  decorator was dropped with it; a call to a name the program binds, as `f = h()` then `f(...)`,
+  read as a call to the tool `f` where Python calls the value `h` returned; and, under
+  `critique`, a function taking a parameter no task input names, `*args` or `**kwargs`, or reading
+  an input it takes no parameter of. `read_program` takes the task's inputs as `inputs`. Each is a
+  `ProgramError` at its line; the names are read off the program, so a program costs the reader
+  4% more instructions, and the text is walked only to place a refusal.
 - A program's constant nested past what valgebra compiles, as an array 64 levels deep in an
   argument or an object 126 deep in a test, or a program whose constants held 40,000 values,
   escaped `critique` as the compiler's `Unsupported` or `ValueError`, and `repair` ended on it. The

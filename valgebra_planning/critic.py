@@ -15,7 +15,9 @@ or against listed constants (``==``, ``!=``, ``in``, ``not in``), or a key of a 
 (``"field" in ref``); ``retry(tool(...))``; and
 ``try:`` around one call with ``except ToolError:``; ``for item in ref:`` over an array, whose
 body ends each iteration where its statements run out and never returns; and ``pass``. Anything
-else is refused by line, never skipped.
+else is refused by line, never skipped, and so is what Python would run otherwise than it is
+read: a decorated function, a call to a name the program binds, and a function whose parameters
+are not the task's inputs.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ import ast
 import json
 import math
 import re
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
@@ -417,12 +419,19 @@ def _statements(statements: Sequence[ast.stmt], parent: ast.AST | None, *, loopi
     )
 
 
-def read_program(source: str) -> Block:
+def read_program(source: str, inputs: Collection[str] | None = None) -> Block:
     """Read a program from Python source: one function, or a block of statements.
+
+    A program is read as Python runs it, so the reader refuses what Python would run otherwise:
+    a decorated function, which Python replaces by what the decorator returns, and a call to a
+    name the program binds, which Python makes the bound value's call. With ``inputs``, the
+    task's, a function's parameters are some of them, and it reads no other: Python passes a
+    function nothing beside its parameters, and a name it reads and binds nowhere is none.
 
     Raises `ProgramError` naming the line of a construct it does not read, and the line of
     text Python cannot parse, as Python names it.
     """
+    wrapped = False
     try:
         module = ast.parse(source)
     except SyntaxError as unparsed:
@@ -436,6 +445,7 @@ def read_program(source: str) -> Block:
             line = unparsed.lineno if unparsed.lineno is not None else "?"
             what = f"line {line}: {unparsed.msg}"
             raise ProgramError(what) from unparsed
+        wrapped = True
     # A value or a key is a character at least, so a shorter text writes fewer than the bound.
     values = _values(module) if len(source) > MAX_VALUES else 0
     if values > MAX_VALUES:
@@ -445,7 +455,9 @@ def read_program(source: str) -> Block:
         )
         raise ProgramError(what)
     body = module.body
+    function = None
     if len(body) == 1 and isinstance(body[0], (ast.FunctionDef, ast.AsyncFunctionDef)):
+        function = None if wrapped else body[0]
         body = body[0].body
     body = [s for s in body if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant))]
     try:
@@ -469,7 +481,92 @@ def read_program(source: str) -> Block:
             "returned at each call it walks, so its walk grows with the square of a path's calls"
         )
         raise ProgramError(what)
+    _as_python(module, program, function, inputs)
     return program
+
+
+def _names(block: Block, seen: set[int], names: tuple[set[str], set[str], set[str]]) -> None:
+    """Add what ``block`` binds, calls as a tool or the language's name, and reads, to ``names``.
+
+    A block the reader shares between sides is read once.
+    """
+    if id(block) in seen:
+        return
+    seen.add(id(block))
+    bound, called, read = names
+    for call in block.calls:
+        bound.add(call.result)
+        called.update((call.tool, "retry") if call.retry else (call.tool,))
+        read.update(ref.variable for _, ref in call.bindings if isinstance(ref, Ref))
+        if call.on_error is not None:
+            _names(call.on_error, seen, names)
+    end = block.end
+    if not isinstance(end, Next):
+        read.add(end.ref.variable)
+    if isinstance(end, Stop):
+        called.add("stop")
+    elif isinstance(end, Branch):
+        if end.tool:
+            called.add(end.tool)
+        _names(end.then, seen, names)
+        _names(end.otherwise, seen, names)
+    elif isinstance(end, For):
+        bound.add(end.item)
+        _names(end.body, seen, names)
+        _names(end.after, seen, names)
+
+
+def _named_at(module: ast.Module, name: str) -> ast.AST:
+    """Return the first place the program's text reads ``name``, as a name or an attribute."""
+    for node in ast.walk(module):
+        if isinstance(node, ast.Name) and node.id == name and isinstance(node.ctx, ast.Load):
+            return node
+        if isinstance(node, ast.Attribute) and node.attr == name:
+            return node
+    return module
+
+
+def _as_python(
+    module: ast.Module,
+    program: Block,
+    function: ast.FunctionDef | ast.AsyncFunctionDef | None,
+    inputs: Collection[str] | None,
+) -> None:
+    """Raise `ProgramError` where Python would run the program otherwise than it is read.
+
+    A decorated function is replaced by what the decorator returns. A name bound anywhere in a
+    function is the function's own throughout it, and a block's after its binding: either way
+    Python calls what the name holds, where the reader calls the tool or the language's name it
+    spells. Python passes a function nothing beside its parameters, so with the task's
+    ``inputs`` each parameter is one of them and each input the function reads is a parameter.
+    The names are read off the program, and the text is walked only to place a refusal.
+    """
+    bound: set[str] = set()
+    called: set[str] = set()
+    read: set[str] = set()
+    _names(program, set(), (bound, called, read))
+    parameters: list[ast.arg] = []
+    if function is not None:
+        if function.decorator_list:
+            what = "a program's function has no decorator: Python runs what it returns"
+            raise _fail(function.decorator_list[0], what)
+        signature = function.args
+        if signature.vararg is not None or signature.kwarg is not None:
+            what = "a program's function takes the task's inputs by name, and no other"
+            raise _fail(function, what)
+        parameters = [*signature.posonlyargs, *signature.args, *signature.kwonlyargs]
+        bound.update(parameter.arg for parameter in parameters)
+    for name in sorted(called & bound):
+        what = f"{name} is a name the program binds, so Python calls the value it holds"
+        raise _fail(_named_at(module, name), what)
+    if function is None or inputs is None:
+        return
+    for parameter in parameters:
+        if parameter.arg not in inputs:
+            raise _fail(parameter, f"{parameter.arg} is a parameter no input of the task names")
+    for name in sorted((read - bound) & set(inputs)):
+        what = f"{name} is an input the function reads and takes no parameter of"
+        raise _fail(_named_at(module, name), what)
 
 
 #: The paths a program may take: each `if` whose sides run on into what follows doubles them,
@@ -743,7 +840,7 @@ def critique(
     its links alone. Raises `ProgramError` for a program the reader does not read. A tool
     whose name Python does not spell is called by its alias (`valgebra_planning.program.alias`).
     """
-    program = read_program(source)
+    program = read_program(source, task.held)
     if any(alias(name) != name for name in contracts):
         program = named(program, aliases(contracts))
     checked = verify(

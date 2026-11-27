@@ -474,6 +474,84 @@ def test_repair_hands_a_constant_past_the_bound_back_and_goes_on() -> None:
     assert second.accepted
 
 
+#: A tool of an input `x` and one of none, and a task starting from `x`.
+NAMED = {
+    "f": read_contract(
+        {
+            "name": "f",
+            "inputSchema": {"type": "object", "properties": {"x": {}}, "required": ["x"]},
+            "outputSchema": {
+                "type": "object",
+                "properties": {"n": {"type": "integer"}},
+                "required": ["n"],
+            },
+        }
+    ),
+    "h": read_contract(
+        {
+            "name": "h",
+            "inputSchema": {"type": "object", "properties": {}},
+            "outputSchema": {
+                "type": "object",
+                "properties": {"n": {"type": "integer"}},
+                "required": ["n"],
+            },
+        }
+    ),
+}
+FROM_X = read_task("an n", {"x": {"type": "integer"}}, {"type": "integer"})
+
+
+@pytest.mark.parametrize(
+    ("source", "refused"),
+    [
+        (
+            "@cache\ndef plan(x):\n    c1 = f(x=x)\n    return c1.n\n",
+            "line 1: a program's function has no decorator: Python runs what it returns",
+        ),
+        (
+            "f = h()\nc2 = f(x=1)\nreturn c2.n\n",
+            "line 2: f is a name the program binds, so Python calls the value it holds",
+        ),
+        (
+            "def plan(x):\n    stop = f(x=x)\n    stop(stop)\n",
+            "line 3: stop is a name the program binds, so Python calls the value it holds",
+        ),
+        (
+            "def plan(x, y):\n    c1 = f(x=x)\n    return c1.n\n",
+            "line 1: y is a parameter no input of the task names",
+        ),
+        (
+            "def plan():\n    c1 = f(x=x)\n    return c1.n\n",
+            "line 2: x is an input the function reads and takes no parameter of",
+        ),
+        (
+            "def plan(x, **named):\n    c1 = f(x=x)\n    return c1.n\n",
+            "line 1: a program's function takes the task's inputs by name, and no other",
+        ),
+    ],
+)
+def test_the_reader_refuses_what_python_would_run_otherwise(source: str, refused: str) -> None:
+    # Python runs what `@cache` returns, calls the value `h` returned as `f`, passes a
+    # function nothing beside its parameters, and finds no `x` a function does not take.
+    with pytest.raises(ProgramError, match=f"^{re.escape(refused)}$"):
+        critique(source, NAMED, FROM_X)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "def plan(x):\n    c1 = f(x=x)\n    return c1.n\n",
+        "async def plan(*, x):\n    c1 = await f(x=x)\n    return c1.n\n",
+        "c1 = f(x=x)\nreturn c1.n\n",
+        "    c1 = f(x=x)\n    return c1.n\n",
+        "c1 = h()\nc1 = f(x=c1.n)\nreturn c1.n\n",
+    ],
+)
+def test_a_function_taking_the_task_s_inputs_and_a_block_read_as_before(source: str) -> None:
+    assert critique(source, NAMED, FROM_X).accepted
+
+
 @pytest.mark.parametrize(("tests", "read"), [(12, True), (13, False)])
 def test_a_program_past_the_path_bound_is_refused_with_its_count(tests: int, *, read: bool) -> None:
     # Each `if` whose sides run on doubles the paths: twelve in a row are MAX_PATHS.
