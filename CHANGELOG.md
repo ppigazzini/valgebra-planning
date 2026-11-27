@@ -6,6 +6,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- valgebra is required from 0.0.36 and valgebra-jsonschema from 0.0.8, where 0.0.9 requires
+  0.0.35 and 0.0.7: the releases the studies are read on. valgebra 0.0.36 bounds what an
+  emptiness no reading decides costs, where 0.0.33 to 0.0.35 ran each of its askings to its
+  whole budget, and valgebra-jsonschema 0.0.8 requires it. On them the suite passes and the
+  parcels, robot-skills, bench and faults studies read every count 0.0.9 recorded.
+
 ## [0.0.9] - 2026-11-25
 
 A release of one fix and of speed. A call's argument record holds each argument's whole set, the
