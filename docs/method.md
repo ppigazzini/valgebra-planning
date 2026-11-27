@@ -329,7 +329,10 @@ block a call needs. A language model proposes, a sound critic checks (Kambhampat
 The text reads as Python runs it: what follows an `if` runs after each side that runs out, an
 absent `else` among them, and what follows a `try` after a handler that runs out, in a loop's body
 as outside one, each side carrying the rest, which is read once and shared. A test of `in` against
-a string, a substring test in Python, is refused, naming the tuple to write. A key test
+a string, a substring test in Python, is refused, naming the tuple to write, and so is what Python
+would run otherwise: a decorated function, which Python replaces by what the decorator returns; a
+call to a name the program binds, as `f = h()` then `f(...)`, where Python calls the value; and a
+function whose parameters are not the task's inputs, since Python passes it nothing else. A key test
 `"key" in value` is a link that the value is an object and a loop `for item in value` one that it
 is an array: Python reads `in` on an array as membership and on a string as a substring test, and
 walks a string's characters and an object's keys, where a run reads a key and an array's items, so
