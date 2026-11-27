@@ -552,6 +552,17 @@ _UNHANDLED = (
 
 #: The claim of a link reading a reference the program may not hold there.
 _HELD = " is a value the program holds"
+#: What a claim ending so takes: a retry, and the kind a key test or a loop reads as Python
+#: does, the value of a key test an object and a loop's an array.
+_ENDINGS = {
+    " may be retried": _RETRY,
+    " is an object, whose keys `in` reads": (
+        "test a key on an object alone: `in` an array is membership, and a loop reads one"
+    ),
+    " is an array, whose items `for` reads": (
+        "loop over an array alone: Python walks a string's characters and an object's keys"
+    ),
+}
 
 
 def _keyed(link: Link) -> str | None:
@@ -615,9 +626,8 @@ def _remedy(link: Link, written: Mapping[str, str]) -> str | None:
         return reading
     if claim.startswith("flow "):
         return _EXPLICIT
-    if claim.endswith(" may be retried"):
-        return _RETRY
-    return _guard(claim, written)
+    ended = next((done for end, done in _ENDINGS.items() if claim.endswith(end)), None)
+    return ended or _guard(claim, written)
 
 
 def _crossing(

@@ -41,9 +41,10 @@ PREAMBLE = '''"""Tools to write a program against.
 
 A program binds each call's result to a name and passes every argument by name: a value it
 holds, a field of one, or a JSON constant. It tests a value with `if value in tool.argument:`,
-`==`, `in (...)` or `"key" in value`, and loops with `for item in value:`. It wraps a call to a
-read-only or idempotent tool in `retry(...)`, any call in `try:`/`except ToolError:`, and ends
-each path in `return value` or `stop(value)`. A program for another task reads:
+`==`, `in (...)` or `"key" in value` on an object, and loops with `for item in value:` on an
+array. It wraps a call to a read-only or idempotent tool in `retry(...)`, any call in
+`try:`/`except ToolError:`, and ends each path in `return value` or `stop(value)`.
+A program for another task reads:
 
     c1 = find_order(order_id=order_id)
     if c1.status in send_notice.status:

@@ -72,6 +72,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A key test is proven only on an object and a loop only on an array. `"p" in r.xs` on an array
+  and `"a" in r.s` on a string were read as key tests, always false, where Python reads membership
+  and a substring test, and `for ch in r.s` ran no iteration where Python walks the characters:
+  the critic accepted a program that means otherwise in its own language. Each is now a link,
+  refuted with the value and a remedy where valgebra finds one outside, and the preamble says a
+  key test reads an object and a loop an array. The four studies read every count they recorded.
 - A tool named as the program language or the stubs bind a name, `stop`, `retry`, `ToolError`,
   `Any`, `Literal`, or a builtin a stub's hint reads, is called by its alias, the name with a
   trailing `_`. A tool named `Literal` beside one whose argument lists its values made stubs that

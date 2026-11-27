@@ -340,6 +340,67 @@ def test_in_a_string_is_refused_as_the_substring_test_it_is() -> None:
         )
 
 
+#: A tool returning an array of strings, a string and an object, each declared.
+LISTING = {
+    "g": read_contract(
+        {
+            "name": "g",
+            "inputSchema": {"type": "object", "properties": {}},
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "xs": {"type": "array", "items": {"type": "string"}},
+                    "s": {"type": "string"},
+                    "o": {"type": "object", "properties": {"p": {"type": "string"}}},
+                },
+                "required": ["xs", "s", "o"],
+            },
+        }
+    )
+}
+_KEYED = "test a key on an object alone: `in` an array is membership, and a loop reads one"
+_LOOPED = "loop over an array alone: Python walks a string's characters and an object's keys"
+
+
+@pytest.mark.parametrize(
+    ("source", "refuted"),
+    [
+        (
+            'r = g()\nif "p" in r.xs:\n    return r.s\nstop(r)\n',
+            f"refuted: r.xs is an object, whose keys `in` reads; [] lies outside; {_KEYED}",
+        ),
+        (
+            'r = g()\nif "a" in r.s:\n    return r.s\nstop(r)\n',
+            f"refuted: r.s is an object, whose keys `in` reads; '' lies outside; {_KEYED}",
+        ),
+        (
+            "r = g()\nfor ch in r.s:\n    return ch\nstop(r)\n",
+            f"refuted: r.s is an array, whose items `for` reads; '' lies outside; {_LOOPED}",
+        ),
+    ],
+)
+def test_a_test_python_reads_otherwise_is_refuted(source: str, refuted: str) -> None:
+    # Python reads `"p" in ["p"]` and `"a" in "pa"` true and walks "pa"'s characters, where a
+    # run reads a key and an array's items: the program means otherwise in its own language.
+    task = read_task("a string", {}, {"type": "string"}, stops={"g": {}})
+    checked = critique(source, LISTING, task)
+    assert not checked.verification.verified
+    assert refuted in checked.notes
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'r = g()\nif "p" in r.o:\n    return r.o.p\nstop(r)\n',
+        "r = g()\nfor x in r.xs:\n    return x\nstop(r)\n",
+    ],
+)
+def test_a_key_test_on_an_object_and_a_loop_on_an_array_are_proven(source: str) -> None:
+    task = read_task("a string", {}, {"type": "string"}, stops={"g": {}})
+    checked = critique(source, LISTING, task)
+    assert checked.verification.verified, checked.notes
+
+
 @pytest.mark.parametrize(("tests", "read"), [(12, True), (13, False)])
 def test_a_program_past_the_path_bound_is_refused_with_its_count(tests: int, *, read: bool) -> None:
     # Each `if` whose sides run on doubles the paths: twelve in a row are MAX_PATHS.
