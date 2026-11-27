@@ -462,6 +462,9 @@ ones.
   follows doubles the paths, and the verifier walks each, so twelve in a row are the most a
   program holds and a thirteenth is refused, naming the count; the planner's programs over the
   examples take at most five.
+- **A program writes at most 1024 calls** (`MAX_CALLS`), counted in its text.
+  The verifier holds what a path returned at each call it walks and copies it there, so its walk
+  grows with the square of a path's calls; a program past the bound is refused, naming the count.
 - **A proxy reads no text a tool declaring no output schema answers.** Such a tool's result is
   answered as the server wrote it, so its text reaches an agent held to no contract, and a
   result field any string fills reaches it inside the checked value: patterns and enums on the

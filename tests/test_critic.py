@@ -9,7 +9,7 @@ import pytest
 
 from valgebra_planning import critic
 from valgebra_planning.contracts import read_contract, read_task
-from valgebra_planning.critic import MAX_PATHS, ProgramError, critique, read_program
+from valgebra_planning.critic import MAX_CALLS, MAX_PATHS, ProgramError, critique, read_program
 from valgebra_planning.flows import read_flow
 from valgebra_planning.library import read_library
 from valgebra_planning.mining import mine
@@ -352,6 +352,20 @@ def test_a_program_past_the_path_bound_is_refused_with_its_count(tests: int, *, 
         read_program(source)
     else:
         with pytest.raises(ProgramError, match=f"runs {2**tests} paths, past {MAX_PATHS}"):
+            read_program(source)
+
+
+@pytest.mark.parametrize(("calls", "read"), [(MAX_CALLS, True), (MAX_CALLS + 1, False)])
+def test_a_program_past_the_call_bound_is_refused_with_its_count(calls: int, *, read: bool) -> None:
+    # A straight line, and a test whose sides share what follows it, which counts once.
+    source = "c1 = find_parcel(parcel_id=parcel_id)\nif c1.parcel.weight_g in (1,):\n"
+    source += "    c2 = notify(parcel_id=parcel_id)\n"
+    source += "".join(f"c{i} = notify(parcel_id=parcel_id)\n" for i in range(3, calls + 1))
+    source += "return c1\n"
+    if read:
+        read_program(source)
+    else:
+        with pytest.raises(ProgramError, match=f"writes {calls} calls, past {MAX_CALLS}"):
             read_program(source)
 
 
