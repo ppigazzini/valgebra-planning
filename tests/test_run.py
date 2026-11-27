@@ -424,6 +424,99 @@ def test_a_run_waits_as_its_pause_says_and_arun_alike() -> None:
     assert (awaited.outcome, asked) == ("returned", [1, 2])
 
 
+def _robot_call(name: str, inputs: dict[str, Any], outputs: dict[str, Any], *, acts: bool) -> Any:
+    return read_contract(
+        {
+            "name": name,
+            "inputSchema": {
+                "type": "object",
+                "properties": inputs,
+                "required": [key for key in inputs if key != "object_id"],
+            },
+            "outputSchema": {"type": "object", "properties": outputs, "required": [*outputs]},
+            "annotations": {"readOnlyHint": not acts},
+        }
+    )
+
+
+#: A pose that reads the distance to an object, a walk that may change it, and a grasp.
+PICKING = {
+    "pose": _robot_call(
+        "pose", {"object_id": {"type": "string"}}, {"distance": {"type": "number"}}, acts=False
+    ),
+    "walk_to": _robot_call("walk_to", {}, {"arrived": {"type": "boolean"}}, acts=True),
+    "grasp": _robot_call(
+        "grasp",
+        {"distance": {"type": "number"}, "hand": {"enum": ["left", "right"]}},
+        {"status": {"const": "grasped"}},
+        acts=True,
+    ),
+}
+PICKED = {"const": "grasped"}
+OBJECT = {"object_id": {"type": "string"}}
+
+
+def _picking(made: list[str]) -> dict[str, Callable[..., Any]]:
+    answers = {
+        "pose": {"distance": 0.4},
+        "walk_to": {"arrived": True},
+        "grasp": {"status": "grasped"},
+    }
+    return {name: (lambda name=name, **_: made.append(name) or answers[name]) for name in answers}
+
+
+@pytest.mark.parametrize(
+    ("task", "source", "refused", "made"),
+    [
+        (
+            read_task("pick", OBJECT, PICKED, fresh=["grasp.distance"]),
+            (
+                "c1 = pose(object_id=object_id)\nc2 = walk_to()\n"
+                'c3 = grasp(distance=c1.distance, hand="left")\nreturn c3.status\n'
+            ),
+            "grasp.distance reads c1.distance, returned before walk_to",
+            ["pose", "walk_to"],
+        ),
+        (
+            read_task("pick", OBJECT, PICKED, fresh=["grasp.distance"]),
+            'c3 = grasp(distance=0.4, hand="left")\nreturn c3.status\n',
+            "grasp.distance is a constant, no reading",
+            [],
+        ),
+        (
+            read_task("pick", OBJECT, PICKED, constants={"grasp.hand": "left"}),
+            (
+                "c1 = pose(object_id=object_id)\n"
+                'c3 = grasp(distance=c1.distance, hand="right")\nreturn c3.status\n'
+            ),
+            "grasp.hand is not the task's 'left'",
+            ["pose"],
+        ),
+        (
+            read_task("pick", OBJECT, PICKED, reads=["object_id"]),
+            'c1 = pose()\nc3 = grasp(distance=c1.distance, hand="left")\nreturn c3.status\n',
+            "return c3.status is not read from object_id",
+            ["pose", "grasp"],
+        ),
+    ],
+)
+def test_a_run_holds_the_rules_its_task_names(
+    task: Task, source: str, refused: str, made: list[str]
+) -> None:
+    # The critic refutes each program on the same rule, and a run holds it on the values.
+    program = read_program(source)
+    assert not verify(program, PICKING, task).verified
+    calls: list[str] = []
+    ended = run(program, PICKING, task, {"object_id": "mug"}, _picking(calls))
+    assert ended.refused == refused
+    assert ended.why is not None
+    assert ended.why.check == "task"
+    assert calls == made
+    calls.clear()
+    awaited = asyncio.run(arun(program, PICKING, task, {"object_id": "mug"}, _picking(calls)))
+    assert (awaited.refused, calls) == (refused, made)
+
+
 def test_an_interrupt_a_tool_raises_propagates() -> None:
     def find_parcel(**_: Any) -> Any:
         raise KeyboardInterrupt

@@ -128,8 +128,9 @@ class RefusedResultError(Exception):
 class Refusal:
     """Which check ended a run.
 
-    One of `inputs`, `arguments`, `flow`, `policy`, `given`, `result`, `closed`,
-    `postcondition`, `goal`, `error`, `raised`, `read`, `ended` or `canceled`: `closed` is a
+    One of `inputs`, `arguments`, `flow`, `task`, `policy`, `given`, `result`, `closed`,
+    `postcondition`, `goal`, `error`, `raised`, `read`, `ended` or `canceled`: `task` is a rule
+    the task names, a constant, a fresh reading or an input the return is read from; `closed` is a
     result inside the
     output schema its server declares and outside its closed reading, and `postcondition` a
     read outside what a postcondition of the library says it shows.
@@ -170,12 +171,15 @@ class _Origin:
 
     ``name`` is a task input's, or the tool of the call that returned it; ``made`` is that
     call's place among the calls made, ``-1`` for an input, and ``arguments`` what it was given.
-    A loop's item came from the call that returned the array.
+    ``read`` is the task inputs it was read from: an input its own, a call's result every input
+    its arguments were, as the verifier reads a value's lineage. A loop's item came from the call
+    that returned the array.
     """
 
     name: str
     made: int = -1
     arguments: Mapping[str, Any] | None = None
+    read: frozenset[str] = frozenset()
 
 
 #: The values a run holds by name, each beside where it came from. A name holds the value its
@@ -314,13 +318,7 @@ class _Runner:
             env = outcome
         end = block.end
         if isinstance(end, Return):
-            value = _read(env, end.ref)
-            if not self.task.goal.is_valid(value):
-                detail = failures(self.task.goal, value, declared(self.task.goal_schema))
-                refused = self.breaks(f"returned a value outside the goal ({detail})", "goal")
-                if refused is not None:
-                    return refused
-            return self.settled() or Run(value, None, tuple(self.broken))
+            return self.returning(end, env)
         if isinstance(end, Stop):
             return self.settled() or Run(_read(env, end.ref), str(end.ref), tuple(self.broken))
         if isinstance(end, Next):
@@ -329,6 +327,20 @@ class _Runner:
         if isinstance(end, For):
             return (yield from self.loop(end, env))
         return (yield from self.branch(end, env))
+
+    def returning(self, end: Return, env: _Env) -> Run:
+        """Check a return: its value inside the goal, read from each input the task requires."""
+        value = _read(env, end.ref)
+        if not self.task.goal.is_valid(value):
+            detail = failures(self.task.goal, value, declared(self.task.goal_schema))
+            refused = self.breaks(f"returned a value outside the goal ({detail})", "goal")
+            if refused is not None:
+                return refused
+        for var in sorted(self.task.reads - env[end.ref.variable][1].read):
+            refused = self.breaks(f"return {end.ref} is not read from {var}", "task")
+            if refused is not None:
+                return refused
+        return self.settled() or Run(value, None, tuple(self.broken))
 
     def loop(self, end: For, env: _Env) -> _Steps[Run | None]:
         """Run a loop's body for each item, then what follows; a body ending the run ends it.
@@ -367,7 +379,8 @@ class _Runner:
             return made
         result = made[0]
         # The call that answered is the last one made: an error block's calls end no result.
-        origin = _Origin(call.tool, self.made - 1, arguments)
+        read = [env[ref.variable][1].read for _, ref in call.bindings if isinstance(ref, Ref)]
+        origin = _Origin(call.tool, self.made - 1, arguments, frozenset().union(*read))
         refused = self.returned(call, contract, arguments, result) or self.shows(
             call, arguments, result
         )
@@ -455,7 +468,38 @@ class _Runner:
             refused = self.breaks(message, "flow", tool)
             if refused is not None:
                 return refused
+        for message in self.tasked(call, arguments, env):
+            refused = self.breaks(message, "task", tool)
+            if refused is not None:
+                return refused
         return self.policed(lambda monitor: monitor.observe(tool, arguments, contract.hints), tool)
+
+    def tasked(self, call: Call, arguments: dict[str, Any], env: _Env) -> list[str]:
+        """Return each rule of the task the call breaks, as its message.
+
+        The verifier holds each call to a tool to the constant its task fixes for an argument,
+        and each argument the task reads fresh to a value returned after every call before it
+        that may act; a run holds the same on the values: the constant as a JSON value, and the
+        value's own call made after the last one that may act, a constant being no reading.
+        """
+        broken = []
+        for tool, argument, value in self.task.constants:
+            if tool == call.tool and (
+                argument not in arguments or json_key(arguments[argument]) != json_key(value)
+            ):
+                broken.append(f"{tool}.{argument} is not the task's {Const.of(value)}")
+        bound = dict(call.bindings)
+        for tool, argument in self.task.fresh:
+            ref = bound.get(argument)
+            if tool != call.tool or ref is None:
+                continue
+            if isinstance(ref, Const):
+                broken.append(f"{tool}.{argument} is a constant, no reading")
+                continue
+            at, acting = self.acted
+            if at > env[ref.variable][1].made:
+                broken.append(f"{tool}.{argument} reads {ref}, returned before {acting}")
+        return broken
 
     def flowing(self, call: Call, arguments: dict[str, Any], env: _Env) -> list[str]:
         """Return each flow rule whose sink the call fills that it breaks, as its message.
@@ -650,7 +694,9 @@ def _program(runner: _Runner, program: Block, inputs: Mapping[str, Any]) -> _Ste
     if refused is not None:
         return refused
     try:
-        held = {name: (value, _Origin(name)) for name, value in inputs.items()}
+        held = {
+            name: (value, _Origin(name, read=frozenset({name}))) for name, value in inputs.items()
+        }
         ended = yield from runner.block(program, held)
     except _AbsentError as absent:
         message = f"{absent.ref} is no value the run holds"
