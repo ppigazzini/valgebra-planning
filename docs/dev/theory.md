@@ -326,14 +326,16 @@ to what the observations show. A boolean or a null links nothing, and a mined ty
 assumption: the verifier reads none, and a plan names each binding resting on one. A witness
 is a call a server answered, collected ahead of time in a sandbox or from production traffic
 (Guo et al. 2022, §1), and two locations sharing a value by chance are merged spuriously (Guo et
-al. 2022, §7.2); a call a planned program made shares a value with the result it was bound
-from by construction, so its arguments link nothing. A task input is a value from outside the
+al. 2022, §7.2). A small domain is shared by chance most, so APIphany merges strings and large
+integers alone (Guo et al. 2022, §7.4): an integer of 1000 or less links nothing here, and the
+slot seen with one is typed alone. A call a planned program made shares a value with the result
+it was bound from by construction, so its arguments link nothing. A task input is a value from outside the
 tools: one a log shows is typed as any slot, and one it never shows fills no argument whose
 type a tool's result was seen in. **[LOAD-BEARING: type-mining]**
 
-IMPLEMENTED-BY: mining.py
+IMPLEMENTED-BY: mining.py, mining.py::_linking
 
-HELD-BY: test_slots_holding_one_observed_value_are_one_type, test_a_boolean_or_a_null_links_nothing, test_mined_types_route_the_notice_through_the_sanitizer_as_observed, test_the_verifier_reads_no_mined_type, test_a_planned_call_s_arguments_link_nothing, test_a_task_input_no_log_shows_fills_no_argument_a_tool_s_result_was_seen_in, test_a_task_input_a_log_shows_is_typed_as_any_slot
+HELD-BY: test_slots_holding_one_observed_value_are_one_type, test_a_boolean_or_a_null_links_nothing, test_mined_types_route_the_notice_through_the_sanitizer_as_observed, test_the_verifier_reads_no_mined_type, test_a_planned_call_s_arguments_link_nothing, test_a_task_input_no_log_shows_fills_no_argument_a_tool_s_result_was_seen_in, test_a_task_input_a_log_shows_is_typed_as_any_slot, test_an_integer_of_a_thousand_or_less_links_nothing
 
 ## Results read closed
 

@@ -299,7 +299,9 @@ verifier, which adds a link for it.
   retry, no retry before a read says the effect is absent.
 - **Mined types** (`valgebra_planning/mining.py`). Slots holding one observed value are one
   semantic type (APIphany, Guo et al. 2022), and a value fills an argument only where their
-  types agree. A call a planned program made, marked `"planned": true` in the log, shares a
+  types agree. An integer of 1000 or less links nothing, as APIphany merges strings and large
+  integers alone: a page and a limit both holding 1 are no evidence of one meaning, and the slot
+  seen with such a value is typed alone. A call a planned program made, marked `"planned": true` in the log, shares a
   value with the result it was bound from by construction, so its arguments link nothing and a
   wrong binding a plan made is never read back as observed. A task input a log records,
   `{"inputs": {...}}`, is typed as any slot; one it never records fills no argument whose type

@@ -34,6 +34,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- `mine` links no two slots by an integer of 1000 or less, as APIphany merges strings and large
+  integers alone (Guo et al. 2022, §7.4): the slot seen with one is typed alone. Slots sharing
+  only a small integer were one type, so a page, a limit, a total and a core count observed at 1
+  were one semantic type and filled one another. Over `examples/parcels/observed.json` the eleven
+  types mined are unchanged, and the four studies read every count they recorded.
 - `verify` asks whether a name is bound by its root alone, where it scanned every reference
   held at each call: a name is bound at its root before a field of it is held, which a property
   test holds over drawn programs at every call. A straight line of calls costs less, timed on
