@@ -22,8 +22,11 @@ A library is a directory (`valgebra_planning/library.py` reads it):
 A tool without an `outputSchema` can be called, and nothing it returns can fill another call's
 argument: its result is a set no argument is proven to hold. A tool whose name Python does not
 spell, as MCP allows a dotted or hyphened one, is called in a program by its alias, each
-character outside `[A-Za-z0-9_]` written `_`: `g1.grasp` is `g1_grasp`. Two tools one alias
-spells are refused naming both. An argument Python does not spell, as `from`, is passed by its name
+character outside `[A-Za-z0-9_]` written `_`: `g1.grasp` is `g1_grasp`. A name the program
+language or the stubs bind beside the tools, `stop`, `retry`, `ToolError`, `Any`, `Literal`, and
+the builtins a stub's hints read, `str`, `int`, `float`, `bool`, `list` and `dict`, takes a trailing
+`_`, as a keyword does: a tool named `stop` is called `stop_`. Two tools one alias spells are
+refused naming both, by the library, the stubs, the planner and the critic alike. An argument Python does not spell, as `from`, is passed by its name
 in a dictionary, `send(**{"from": sender})`. `examples/parcels` is a library holding every file.
 
 A rule means what its keys say. A key no reader reads, in a file, a task, a policy, a transition or

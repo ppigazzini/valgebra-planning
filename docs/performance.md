@@ -156,7 +156,10 @@ unasked, and is named with the code that owns it.
   are kept by the name, and an ASCII name is in NFKC as it stands (`spelled`, `_member` and
   `alias` in `valgebra_planning/program.py`).
 - **A program naming every tool as Python spells it is kept as it is**
-  (`test_a_program_of_tools_each_called_by_its_name_is_kept_as_it_is`).
+  (`test_a_program_of_tools_each_called_by_its_name_is_kept_as_it_is`), and its stubs ask no
+  two tools whether one alias spells both: two collide only where an alias differs from its
+  tool's name (`stubs` in `valgebra_planning/codemode.py`,
+  `test_a_library_one_alias_spells_twice_is_refused_by_stubs_and_by_plan`).
 - **A place is compiled once.** The notes `check` makes read a place below a result in the set its
   slot compiled (`_Read.set_of` in `valgebra_planning/meaning.py`,
   `test_a_place_s_set_is_the_one_its_slot_compiled`).

@@ -16,7 +16,8 @@ hold and one worked program for a task unlike any library's. An argument is type
 and one whose schema lists its values, an `enum` or a `const`, by the `Literal` of the values the
 schema admits: `view: Literal['brief', 'full']`, as the MCP SDK writes that `Literal` to the
 `enum` a server publishes. A fraction has no `Literal`, so a list holding one keeps the kind. A tool whose name Python does not
-spell, as `g1.grasp`, is written by its alias, `g1_grasp`, its docstring naming the tool, and a
+spell, as `g1.grasp`, or whose name the stubs bind, as `Literal`, is written by its alias,
+`g1_grasp` or `Literal_`, its docstring naming the tool, and a
 program calls it so; `tools.g1_grasp(...)` reads the same, and any other attribute call is
 refused, as `g1.grasp(...)` would call a tool named `grasp`. An argument Python does not spell, as
 `from` or `reply-to`, is passed by its name in a dictionary, `send(to=to, **{"from": sender})`, as

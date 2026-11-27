@@ -20,7 +20,7 @@ from typing import Any, Literal
 
 from valgebra_planning.contracts import Contract, Slot, Task
 from valgebra_planning.critic import Critique, ProgramError, critique
-from valgebra_planning.program import alias, quoted, spelled
+from valgebra_planning.program import alias, aliases, quoted, spelled
 
 __all__ = ["Repair", "feedback", "repair", "stub", "stubs"]
 
@@ -132,7 +132,14 @@ def stub(contract: Contract) -> str:
 
 
 def stubs(contracts: Mapping[str, Contract]) -> str:
-    """Return the stubs of every tool, after the preamble stating the language a program uses."""
+    """Return the stubs of every tool, after the preamble stating the language a program uses.
+
+    Raises `ValueError` for two tools one alias spells, as `valgebra_planning.program.aliases`
+    refuses them: the stubs would define one function twice.
+    """
+    # Two aliases collide only where one differs from its tool's name.
+    if any(alias(name) != name for name in contracts):
+        aliases(contracts)
     return "\n\n".join([PREAMBLE, *(stub(contracts[name]) for name in sorted(contracts))])
 
 
