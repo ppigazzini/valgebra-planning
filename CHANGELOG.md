@@ -37,6 +37,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- A run holds its task's rules on the values: each argument the task fixes to its constant, each
+  it reads fresh to a value returned after every call before it that may act, and the returned
+  value to being read from each input `reads` names. A run held the task's inputs and its goal
+  alone, so a program the critic refuted for a stale reading, the other hand or another object's
+  grasp ran to its end with `Run.ok` true. A broken rule ends the run as `Run.why`'s check `task`,
+  before the call where it is on an argument: the stale grasp and the wrong hand are never made.
+  The four studies read every count they recorded.
 - A run waits before each call it makes again, 0.1 s doubling to a cap of 5 s, slept by `run`
   and awaited by `arun`, where it made the attempts at once: eight calls to a rate-limited
   server in a quarter second keep true the refusal a retry assumes clears. The clients of

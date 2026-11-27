@@ -367,9 +367,14 @@ written.
 ## Running a program
 
 `valgebra_planning/run.py` calls the tools a program names and checks each step as it is made: the
-argument record against the tool's input set, each flow rule, each policy's step, the result
-against the output set, or against the JSON values where the tool declares none, and the returned
-value against the goal. A run binds each name to the call that returned its value, on the path it
+argument record against the tool's input set, each flow rule, the task's rules, each policy's step,
+the result against the output set, or against the JSON values where the tool declares none, and the
+returned value against the goal. A task's rules are the verifier's, held on the values: each
+argument a task fixes holds its constant, as JSON values; each argument it reads fresh holds a value
+returned after every call before it that may act, a constant being no reading; and the returned
+value was read from each input it names in `reads`, a call's result from every input its arguments
+were, a loop's item from its array's. A run of a program the critic refuted on one of them refuses
+it at that call or at the return, as `Run.why`'s check `task`. A run binds each name to the call that returned its value, on the path it
 runs, a loop's item to the call that returned the array, so it holds a flow rule on values where
 the verifier holds it on the sets a program's references may bind: a value from an origin the
 rule holds reaches the sink only inside the endorsed set; under `fresh` a source's value is one no
