@@ -49,11 +49,29 @@ __all__ = [
     "UnansweredError",
     "arun",
     "blame",
+    "paced",
     "run",
 ]
 
 #: How many times a retried call is made before the run gives up on it.
 ATTEMPTS = 8
+#: What a run asks its driver in a tool's place where it waits before making a call again: no
+#: MCP tool name holds a null character.
+_WAIT = "\0wait"
+#: The seconds before a call is first made again, the factor each later wait takes, and the cap.
+_FIRST_WAIT, _WAIT_FACTOR, _LONGEST_WAIT = 0.1, 2.0, 5.0
+
+
+def paced(attempt: int) -> float:
+    """Return the seconds a run waits before making a call again the ``attempt``-th time.
+
+    A retry assumes its tool's error clears within the attempts the runner makes (Cimatti et al.
+    2003, §2.3), and a server rate limits its tools' calls (MCP 2026-07-28, server tools,
+    Security Considerations), so calls made again at once keep true the refusal they answer.
+    Each wait doubles the last, 0.1 s first and 5 s at most, as the clients of remote services
+    pace theirs by default.
+    """
+    return min(_FIRST_WAIT * _WAIT_FACTOR ** (attempt - 1), _LONGEST_WAIT)
 
 
 def retry_assumptions(contract: Contract) -> tuple[str, ...]:
@@ -231,6 +249,8 @@ class _Runner:
     flows: tuple[Flow, ...] = ()
     #: The set each tool's error text lies in to be kept, compiled from ``"errorTexts"``.
     error_texts: Mapping[str, Validator[Any]] = field(default_factory=dict)
+    #: The seconds waited before a call is made again, by the attempt (`paced`).
+    pause: Callable[[int], float] = paced
     #: The last call made that may act, where it returned: its tool, arguments and result.
     last: tuple[str, dict[str, Any], Any] | None = None
     #: How many calls were made, each attempt of a retried one counted.
@@ -510,7 +530,9 @@ class _Runner:
             self.broken.append(message)
             return Run(None, None, tuple(self.broken), message, Refusal("given", call.tool))
         unanswered, error = False, None
-        for _ in range(ATTEMPTS if call.retry else 1):
+        for attempt in range(ATTEMPTS if call.retry else 1):
+            if attempt and (seconds := self.pause(attempt)) > 0:
+                yield (_WAIT, {"seconds": seconds})
             self.sent(call.tool)
             answer = yield (call.tool, arguments)
             if not isinstance(answer, _Raised):
@@ -654,6 +676,8 @@ class RunRules(TypedDict, total=False):
     error_texts: Mapping[str, object] | None
     #: The clock a policy's lapses are read by, in seconds, `time.monotonic` where none is given.
     clock: Callable[[], float]
+    #: The seconds a run waits before making a call again, by the attempt: `paced` where none.
+    pause: Callable[[int], float]
 
 
 def run(
@@ -687,6 +711,10 @@ def run(
     try:
         tool, arguments = next(steps)
         while True:
+            if tool == _WAIT:
+                time.sleep(arguments["seconds"])
+                tool, arguments = steps.send(None)
+                continue
             tool, arguments = steps.send(_made(tools[tool], arguments))
     except StopIteration as ended:
         return ended.value
@@ -703,6 +731,7 @@ def _runner(
     flows: Sequence[Flow] = (),
     error_texts: Mapping[str, object] | None = None,
     clock: Callable[[], float] = time.monotonic,
+    pause: Callable[[int], float] = paced,
 ) -> _Runner:
     """Return the interpreter of one run, held to `RunRules`; a rule it lacks is a `TypeError`.
 
@@ -718,6 +747,7 @@ def _runner(
         postconditions=tuple(postconditions),
         flows=tuple(flows),
         error_texts=_compiled(error_texts),
+        pause=pause,
     )
 
 
@@ -784,6 +814,10 @@ async def arun(
     try:
         tool, arguments = next(steps)
         while True:
+            if tool == _WAIT:
+                await asyncio.sleep(arguments["seconds"])
+                tool, arguments = steps.send(None)
+                continue
             answer = _made(tools[tool], arguments)
             if inspect.isawaitable(answer):
                 try:

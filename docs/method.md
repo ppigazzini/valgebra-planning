@@ -380,7 +380,11 @@ follows a loop counted under the test on its array as the verifier counts it. A
 coroutine an async tool hands back unawaited is no JSON value: it is refused and closed, never run.
 `arun` awaits it instead: one interpreter walks the program and asks for each call, doing no I/O
 of its own, `run` making each call and `arun` awaiting it, so the two make the same checks in the
-same order. A cancel while `arun` awaits a call ends the run: the call may have acted and
+same order. A retried call is made again at most `ATTEMPTS` times, and the run waits before each,
+0.1 s doubling to a cap of 5 s (`paced`), slept by `run` and awaited by `arun`: a server rate limits
+its tools' calls, and calls made again at once keep true the refusal they answer. `pause`, a rule
+of the run, replaces the schedule, a function from the attempt to its seconds, zero for none. A
+cancel while `arun` awaits a call ends the run: the call may have acted and
 returned anything, its outcome unread, so each policy holds every state the call may have
 reached, a transition reading its result taken possibly, as a proxy holds a call it canceled,
 and the `CanceledRunError` it raises, an

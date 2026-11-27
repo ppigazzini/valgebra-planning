@@ -181,11 +181,14 @@ HELD-BY: test_a_retry_is_accepted_only_for_an_idempotent_tool, test_a_call_made_
 finitely many failures, with no bound on how many (Cimatti et al. 2003, §2.3); the runner
 makes a retried call at most `ATTEMPTS` times. So a retry rests on the assumption that an error is transient within that many
 attempts, the plan names it, and a run whose error outlasts the attempts is charged to the
-assumption rather than to the program. **[DEVIATION: fairness-within-attempts]**
+assumption rather than to the program. Fairness says an outcome recurs, not when, and a server
+rate limits its tools' calls, so calls made again at once keep true the refusal they answer: the
+runner waits before each call made again, 0.1 s doubling to 5 s, so the assumption is one about
+the server and not about the runner's speed. **[DEVIATION: fairness-within-attempts]**
 
-IMPLEMENTED-BY: run.py::retry_assumptions
+IMPLEMENTED-BY: run.py::retry_assumptions, run.py::paced
 
-HELD-BY: test_an_error_a_retry_cannot_outlast_is_the_fairness_it_assumes
+HELD-BY: test_an_error_a_retry_cannot_outlast_is_the_fairness_it_assumes, test_a_call_made_again_waits_first_doubling_each_wait
 
 **A tool no program can use is never cut into cells.** Component synthesis prunes the places
 that are not backward reachable from the goal in the graph of its components, an

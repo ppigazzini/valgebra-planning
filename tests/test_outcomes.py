@@ -154,7 +154,8 @@ def test_a_run_against_failing_tools_breaks_no_contract() -> None:
     outcomes = set()
     for _ in range(60):
         inputs = {"tracking": rng.choice(Sampler(tracking.root, rng).draw(tracking.schema, 4))}
-        result = run(found.program, TOOLS, SETTLE, inputs, tools)
+        # The waits between attempts are the runner's, and no check reads them.
+        result = run(found.program, TOOLS, SETTLE, inputs, tools, pause=lambda _: 0.0)
         assert result.broken == ()
         outcomes.add("stopped" if result.stopped else "returned")
     assert outcomes == {"stopped", "returned"}

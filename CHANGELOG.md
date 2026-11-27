@@ -8,6 +8,9 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- `run.paced` and the run rule `pause`: the seconds a run waits before making a call again, by
+  the attempt. `paced`, the default, waits 0.1 s doubling to 5 s; `pause` replaces it, zero for
+  no wait.
 - `critic.MAX_CALLS`: a program whose text writes more than 1024 calls is a `ProgramError`
   naming the count, as one past `MAX_PATHS` paths is. The verifier copies what a path holds at
   each call it walks, so a path's walk grows with the square of its calls, and a program a model
@@ -34,6 +37,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- A run waits before each call it makes again, 0.1 s doubling to a cap of 5 s, slept by `run`
+  and awaited by `arun`, where it made the attempts at once: eight calls to a rate-limited
+  server in a quarter second keep true the refusal a retry assumes clears. The clients of
+  remote services pace theirs by default; `pause` replaces the schedule.
 - `mine` links no two slots by an integer of 1000 or less, as APIphany merges strings and large
   integers alone (Guo et al. 2022, §7.4): the slot seen with one is typed alone. Slots sharing
   only a small integer were one type, so a page, a limit, a total and a core count observed at 1

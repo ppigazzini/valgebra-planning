@@ -29,6 +29,7 @@ from valgebra_planning.run import (
     UnansweredError,
     arun,
     blame,
+    paced,
     run,
 )
 from valgebra_planning.verify import verify
@@ -372,6 +373,55 @@ def test_a_retried_call_raising_an_exception_is_attempted_once() -> None:
     ended = run(retried, TOOLS, TASKS["return a parcel"], INPUTS, {"find_parcel": find_parcel})
     assert ended.refused == "find_parcel raised ValueError"
     assert made == ["find_parcel"]
+
+
+def _busy_twice() -> Callable[..., Any]:
+    """Return a `find_parcel` that answers with an error twice, then with a parcel."""
+    calls: list[int] = []
+
+    def find_parcel(**_: Any) -> Any:
+        calls.append(1)
+        if len(calls) < 3:
+            busy = "busy"
+            raise ToolError(busy)
+        parcel = {"parcel_id": "pcl_123", "state": "delivered", "weight_g": 900}
+        return {"parcel": {**parcel, "country": "IT", "contact": "a@b.it"}}
+
+    return find_parcel
+
+
+RETRIED = read_program("c1 = retry(find_parcel(tracking=tracking))\nreturn c1.parcel.parcel_id\n")
+#: A parcel's id, read from its tracking number.
+AN_ID = read_task(
+    "a parcel's id", {"tracking": {"type": "string"}}, {"type": "string", "pattern": "^pcl_[0-9]+$"}
+)
+
+
+def test_a_call_made_again_waits_first_doubling_each_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A server rate limits its tools' calls, so a call made again at once keeps its refusal true.
+    assert [paced(attempt) for attempt in range(1, 9)] == [0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 5.0, 5.0]
+    waited: list[float] = []
+    monkeypatch.setattr("valgebra_planning.run.time.sleep", waited.append)
+    ended = run(RETRIED, TOOLS, AN_ID, INPUTS, {"find_parcel": _busy_twice()})
+    assert ended.outcome == "returned"
+    assert waited == [0.1, 0.2]
+
+
+def test_a_run_waits_as_its_pause_says_and_arun_alike() -> None:
+    asked: list[int] = []
+
+    def pause(attempt: int) -> float:
+        asked.append(attempt)
+        return 0.0
+
+    ended = run(RETRIED, TOOLS, AN_ID, INPUTS, {"find_parcel": _busy_twice()}, pause=pause)
+    assert (ended.outcome, asked) == ("returned", [1, 2])
+    asked.clear()
+    tools = {"find_parcel": _busy_twice()}
+    awaited = asyncio.run(
+        arun(RETRIED, TOOLS, AN_ID, INPUTS, tools, pause=lambda a: asked.append(a) or 0.001)
+    )
+    assert (awaited.outcome, asked) == ("returned", [1, 2])
 
 
 def test_an_interrupt_a_tool_raises_propagates() -> None:
