@@ -23,11 +23,13 @@ import asyncio
 import concurrent.futures
 import shlex
 import threading
+import warnings
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Unpack
 
 from mcp import Client, InputRequiredRoundsExceededError, MCPError, StdioServerParameters, types
 
+from valgebra_planning._valgebra import Unsupported
 from valgebra_planning.contracts import Contract, Task, read_contract
 from valgebra_planning.program import Block
 from valgebra_planning.run import (
@@ -106,22 +108,29 @@ async def read_server(
     closed_results: bool = False,
     listing: Sequence[types.Tool] | None = None,
 ) -> dict[str, Contract]:
-    """Return the contract of every tool the server lists, by name.
+    """Return the contract of every tool the server lists that valgebra reads, by name.
 
     The tools are `read_listing`'s, or ``listing`` where a caller has read it, so a proxy holds
     the contracts of the tools it lists. With ``assert_format``, ``format`` is read as an
     assertion, and with ``closed_results`` each whole result is read closed, as
-    `read_contract` reads them.
+    `read_contract` reads them. Each tool is read apart: one `read_contract` refuses as
+    `Unsupported` is left out, with a `UserWarning` naming it and the reason, and the others
+    are read. A program cannot call a tool it holds no contract of, and a proxy neither lists
+    nor sends one, so leaving it out admits nothing.
     """
     tools = await read_listing(client) if listing is None else listing
-    return {
-        tool.name: read_contract(
-            tool.model_dump(by_alias=True, exclude_none=True, mode="json"),
-            assert_format=assert_format,
-            closed_results=closed_results,
-        )
-        for tool in tools
-    }
+    contracts = {}
+    for tool in tools:
+        try:
+            contracts[tool.name] = read_contract(
+                tool.model_dump(by_alias=True, exclude_none=True, mode="json"),
+                assert_format=assert_format,
+                closed_results=closed_results,
+            )
+        except Unsupported as error:
+            # The frame awaiting this coroutine is on the stack: the warning names that reader.
+            warnings.warn(f"{tool.name} is left out: {error}", stacklevel=2)
+    return contracts
 
 
 def refused_by_client(error: RuntimeError, tool: str) -> bool:
