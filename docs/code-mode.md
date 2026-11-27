@@ -147,7 +147,8 @@ value any of them was returned as returned. A call a policy reads holds the gate
 its result, so a second one waits for the first's result before it is checked; a call no policy
 reads waits on none, and a call to a tool `tools.json` names under `"preempts"` or
 `"afterViolation"`, as a robot's stop, is sent at once, past that order, each policy holding
-every order it may take beside the call it overtook. A policy or a flow rule naming `"scope": "principal"` is held apart for each
+every order it may take beside the call it overtook, and a call that may act and waited in that
+order while it was made is refused: the stop is the later word on what was sent before it. A policy or a flow rule naming `"scope": "principal"` is held apart for each
 principal a token names, its client, issuer and subject. Three deployments in front of one robot
 differ there.
 

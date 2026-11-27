@@ -100,13 +100,18 @@ WALKED_FIRST = read_policy(
 GRASP = ("grasp", {"distance": 0.4})
 
 
-def _robot(answers: dict[str, Any]) -> Server[Any]:
-    """Serve the robot's tools, each answering from ``answers`` after the delay it names."""
+def _robot(answers: dict[str, Any], made: list[str] | None = None) -> Server[Any]:
+    """Serve the robot's tools, each answering from ``answers`` after the delay it names.
+
+    Each call the robot receives is appended to ``made``, where one is given.
+    """
 
     async def listed(_: Any, __: Any) -> types.ListToolsResult:
         return types.ListToolsResult(tools=[types.Tool.model_validate(t) for t in LISTING])
 
     async def called(_: Any, params: types.CallToolRequestParams) -> types.CallToolResult:
+        if made is not None:
+            made.append(params.name)
         value, seconds = answers[params.name]
         await asyncio.sleep(seconds)
         if value is FAILED:
@@ -146,6 +151,70 @@ def _overtaken(
                 return [stopped, *[await client.call_tool(n, given) for n, given in later]]
 
     return answered, asyncio.run(session())
+
+
+#: Reads the walk, the grasp and the pose in order and refuses none of them in any state: each
+#: holds the gate's order, so a call sent while the walk is in flight waits for its result.
+IN_ORDER = read_policy(
+    {
+        "name": "calls are read in order",
+        "initial": "idle",
+        "bad": ["violated"],
+        "transitions": [
+            {"from": "idle", "tool": tool, "to": "idle"} for tool in ("walk_to", "grasp", "pose")
+        ],
+    }
+)
+
+
+def _queued(waiting: tuple[str, dict[str, Any]], *, stop: bool = True) -> tuple[list[str], Any]:
+    """Send a slow walk, ``waiting`` 0.03 s into it, then a stop 0.03 s later, where ``stop``.
+
+    Return the calls the robot received in order, and the answer ``waiting`` got.
+    """
+    made: list[str] = []
+    answers = {name: (value, 0.0) for name, value in ANSWERS.items()}
+    answers["walk_to"] = (ANSWERS["walk_to"], 0.3)
+
+    async def session() -> Any:
+        async with Client(_robot(answers, made)) as upstream:
+            listing = (await upstream.list_tools()).tools
+            front = proxy(upstream, listing, CONTRACTS, policies=[IN_ORDER], preempts=["stop"])
+            async with Client(front) as client:
+                walk = asyncio.create_task(client.call_tool("walk_to", {}))
+                await asyncio.sleep(0.03)
+                queued = asyncio.create_task(client.call_tool(*waiting))
+                await asyncio.sleep(0.03)
+                if stop:
+                    await client.call_tool("stop", {})
+                await walk
+                return await queued
+
+    answered = asyncio.run(session())
+    return made, answered
+
+
+def test_a_call_sent_before_a_stop_is_refused_once_the_stop_is_made() -> None:
+    # A robot's action server cancels every goal accepted before a cancel's stamp: the grasp
+    # waiting behind the walk was sent before the stop, so the stop is the later word on it.
+    made, grasped = _queued(GRASP)
+    assert made == ["walk_to", "stop"]
+    assert _refused(grasped) == (
+        "refused: grasp was sent before stop, which was made while it waited: "
+        "send it again if it is still wanted"
+    )
+
+
+def test_a_read_only_call_sent_before_a_stop_is_made() -> None:
+    made, posed = _queued(("pose", {}))
+    assert made == ["walk_to", "stop", "pose"]
+    assert not posed.is_error
+
+
+def test_a_call_waiting_for_no_stop_is_made() -> None:
+    made, grasped = _queued(GRASP, stop=False)
+    assert made == ["walk_to", "grasp"]
+    assert not grasped.is_error
 
 
 def _refused(result: Any) -> str:

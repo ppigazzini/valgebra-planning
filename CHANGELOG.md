@@ -28,6 +28,17 @@ All notable changes to valgebra-planning are recorded here. The format follows
   refusal's block, its stop naming the run. A name the list holds that is no tool is a
   `ValueError` where the library is read.
 
+### Changed
+
+- A proxy refuses a call that may act and waited in order while a preempting call was made,
+  where it made it after the stop: the stop is the later word on what was sent before it, as a
+  robot's action server cancels every goal accepted at or before a cancel's stamp. A step back
+  sent while a walk was in flight, before a stop ended the walk, was made on a robot the agent
+  had been told stopped, and no policy could refuse it, since a policy reads calls in the order
+  they act and not the order they were sent in. The refusal names the preempting call and says
+  to send the call again if it is still wanted; a read-only call is made, and a call sent after
+  the stop is checked as before.
+
 ### Fixed
 
 - A test on a key of a value keeps what the value rests on. The walk narrowed the tested value

@@ -243,6 +243,10 @@ class Gate:
     #: value a source returned while one may have acted is no reading after it.
     _acts: int = field(default=0, init=False, repr=False)
     _preempting: int = field(default=0, init=False, repr=False)
+    #: How many preempting calls that may act were made, and the last one's tool: a call that
+    #: waited in order while one was made was sent before it (`Gate.superseded`).
+    _preempted: int = field(default=0, init=False, repr=False)
+    _preempter: str = field(default="", init=False, repr=False)
     #: Each round a forwarded call ended with, by the state it was forwarded with: each
     #: monitor reading it, its states once the call stepped it and once its error reading did.
     _rounds: dict[str, list[tuple[Monitor, Snapshot, Snapshot]]] = field(
@@ -460,11 +464,36 @@ class Gate:
         if "readOnlyHint" not in hints:
             self._acts += 1
             self._preempting += tool in self.preempts
+            if tool in self.preempts:
+                self._preempted, self._preempter = self._preempted + 1, tool
         # A rule naming the calls that withdraw it is withdrawn by those alone.
         fresh = {flow.name for flow in self.flows if flow.withdraws(tool, hints)}
         for held in [held for held in self.returned if held[0] in fresh]:
             del self.returned[held]
         return self._acts, self._preempting > 0
+
+    def arrived(self) -> int:
+        """Return the stamp a call held in order arrives with: the preempting calls made so far."""
+        return self._preempted
+
+    def superseded(self, tool: str, arrived: int) -> str | None:
+        """Return why a call that waited in order is not made, or None where it is made.
+
+        A preempting call, as a robot's stop, is the later word on every call sent before it, as
+        a robot's action server cancels every goal accepted at or before a cancel's stamp. A
+        policy reads calls in the order they act, never the order they were sent in, so the
+        rule is the gate's: a call that may act and arrived before a preempting call that was
+        made while it waited is refused, naming that call; a read-only call is made.
+        """
+        if arrived == self._preempted:
+            return None
+        contract = self.contracts.get(tool)
+        if contract is not None and "readOnlyHint" in contract.hints:
+            return None
+        return (
+            f"{tool} was sent before {self._preempter}, which was made while it waited: "
+            "send it again if it is still wanted"
+        )
 
     def landed(self, tool: str) -> None:
         """Read that a preempting call that may act is in flight no more."""
@@ -1071,9 +1100,11 @@ def proxy(
     Once a result takes a policy to a bad state every later call is refused but one to a tool
     of ``after_violation``, as a robot's stop; `Gate` refuses such a tool a policy reads. A
     call to a tool of ``preempts`` or ``after_violation`` is sent at once, past that order, and
-    a policy reading one holds every order it may take beside a call it overtook. A
-    result's text is the checked value alone, and a block that is not text is kept only for a
-    tool of ``non_text_blocks`` (`Gate.answered`). An error's text is passed on where it lies
+    a policy reading one holds every order it may take beside a call it overtook. A call that
+    may act and waited in that order while a preempting call was made is refused, not made: it
+    was sent before the stop that is the later word (`Gate.superseded`). A result's text is the
+    checked value alone, and a block that is not text is kept only for a tool of
+    ``non_text_blocks`` (`Gate.answered`). An error's text is passed on where it lies
     in the JSON Schema ``error_texts`` gives its tool, and is otherwise a fixed text naming the
     tool (`Gate.erred`). A call to a tool of ``forwards_elicitation`` that the upstream answers
     by asking a person, a form or a URL, is answered with that request, and the answers that
@@ -1097,7 +1128,11 @@ def proxy(
         # call held in order is in flight, and the gate reads it in either order (`Gate.ahead`).
         if params.name in gate.preempts or not gate.ordered(params.name):
             return await _checked(gate, upstream, params)
+        arrived = gate.arrived()
         async with held:
+            superseded = gate.superseded(params.name, arrived)
+            if superseded is not None:
+                return _refusal(superseded)
             return await _checked(gate, upstream, params)
 
     server = Server("valgebra-planning proxy", on_list_tools=listed, on_call_tool=called)

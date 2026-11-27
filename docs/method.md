@@ -414,7 +414,12 @@ none. A call to a tool of `"preempts"` or `"afterViolation"`, as a robot's stop,
 past that order, since it must act while the call it ends is in flight, and each policy holds
 every order the two may take: the stop acting before the call's effect, from the states before
 the call, the order the gate took, and the call answering before the stop acts. A refusal in any
-of them refuses the stop, and a bad state only one reaches refuses the call's result. A fresh rule
+of them refuses the stop, and a bad state only one reaches refuses the call's result. A call that
+may act and waited in that order while a preempting call was made is refused, not made: it was
+sent before the stop, which is the later word on it, as a robot's action server cancels every goal
+accepted at or before a cancel's stamp
+([ROS 2, `action_msgs/srv/CancelGoal`](https://github.com/ros2/rcl_interfaces/blob/rolling/action_msgs/srv/CancelGoal.srv)),
+and the refusal says to send it again if it is still wanted; a read-only call is made. A fresh rule
 keeps no value its source returned while a preempting call that may act was in flight. A refused call steps no policy, a call the server answers with
 an error leaves each policy in the states before and after it, and a call made whose outcome the
 gate does not read, any way a sent call ends but a result read, its result refused, the call
