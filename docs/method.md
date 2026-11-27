@@ -142,7 +142,13 @@ argument and no goal can hold is left out, with its reference.
 ## The planner
 
 A state maps each value the agent holds to its cells (`valgebra_planning/planner.py`). A call is
-enabled when each required argument has a value whose cells lie inside the argument's. A guarded
+enabled when each required argument has a value whose cells lie inside the argument's. An
+optional argument is written where the task fixes it, its constant alone filling it, and where an
+input the task requires read, and no call has read yet, fills it, the first such argument whose
+set the input's meets; that argument then takes any value the program holds that fills it, as a
+required one does. Any other optional argument is left to the tool's default, so a call whose
+optional argument must take a value a result holds, a search by the user a run names, is a
+program written elsewhere and checked like any other. A guarded
 call branches on a value that only overlaps an argument, calls the tool on the narrowed value in
 one branch and goes on in the other; a second overlapping argument is guarded inside it. A
 field of a call's result whose declared set lists its members, an `enum` or a `const`, and meets
@@ -469,8 +475,10 @@ ones.
   which the walk resolves from the document's root and so reads as any value, a gap the
   companion's reader of the whole schema closes; a field whose record's `properties` do not declare it, which takes any JSON
   value, as one an `anyOf` alone declares; and a program the planner writes holds no
-  constant but those its task fixes, tests no key but an acted postcondition's, and loops over
-  no array. A program written elsewhere may do all three, and each is checked like any value. A task fixes the constants its
+  constant but those its task fixes, tests no key but an acted postcondition's, loops over no
+  array, and writes an optional argument only where its task fixes it or an input the task
+  requires read fills it. A program written elsewhere may do all four, and each is checked like
+  any value. A task fixes the constants its
   intent gives in `constants`, as the action a confirmation asks about: the planner writes each
   where its argument is, required or not, the verifier holds every call to the tool to it and
   refutes one leaving it out, since the tool then reads its own default, and a flow rule judges
