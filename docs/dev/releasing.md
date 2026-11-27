@@ -318,9 +318,13 @@ the checkout in place of the installed package, which the paragraph above alread
 every check of an artifact. It would move every path of the tree for no check left open, and set
 this package's layout apart from the companion released beside it.
 
-**The simple index lags the JSON API, and the simple index is what an installer reads.** A
-same-day check passes `--refresh-package valgebra-planning`, since uv caches an index's answers,
-and "no such version" is read against the index itself before it is believed:
+**An index's answers lag the upload, and the simple index is what an installer reads.** The
+simple index and the JSON API are each served from a cache of their own, and either can lag
+the other: a version the simple index lists can still read 404 from the JSON API, and a first
+install can read a simple page from before the upload. A same-day check passes
+`--refresh-package valgebra-planning`, since uv caches an index's answers too, and "no such
+version" is read against the index itself, and asked again a minute later, before it is
+believed:
 
 ```bash
 curl -sS https://test.pypi.org/simple/valgebra-planning/ \
