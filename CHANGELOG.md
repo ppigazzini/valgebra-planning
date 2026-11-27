@@ -6,6 +6,20 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `Plan.ties`: for a strong program, each other tool a strong program within the same bound
+  calls first, in their names' order. The program returned is the first the names' order
+  reaches, and two tools whose results both meet the goal were told apart by nothing a caller
+  could read; the plan now says which tools the order broke the tie among. Over fishtest's
+  contracts, a count asked of a run's id plans `get_run` and names `get_spsa`,
+  `list_active_runs`, `list_active_workers` and `list_finished_runs`. The other tools are tried
+  until `RANKING` expansions are spent, and `Plan.expanded` counts the search alone. Counted by
+  `tools/perf.py` against 0.0.10, a strong plan with no tie takes 1.00 of its instructions
+  (`plan:parcels:6`), and one with ties 1.04 (`plan:robot-skills:8`, two) to 1.16
+  (`plan:robot-skills:7`, one) over repeated calls and 1.03 to 1.11 on contracts just read; the
+  four weak cases `tools/perf.py` counts by default take 1.00.
+
 ### Fixed
 
 - A record a program reads a field it lacks from is shrunk before it is shown, as a link's

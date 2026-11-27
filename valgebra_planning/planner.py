@@ -190,6 +190,9 @@ class Plan:
     #: first lies: the rest return in a goal the task accepts after it.
     preferred: tuple[str, ...] = ()
     timing: tuple[str, ...] = ()
+    #: For a strong program, each other tool a strong program within the same bound calls
+    #: first, in their names' order: the program returned is the earliest by name of them all.
+    ties: tuple[str, ...] = ()
 
 
 class _State(NamedTuple):
@@ -1650,6 +1653,30 @@ def _ranked(
     return min(ranked, key=lambda row: row[:2])[2] if ranked else None
 
 
+def _ties(search: _Search, start: _State, bound: int, program: Block) -> tuple[str, ...]:
+    """Return each other tool a strong program within ``bound`` calls first, by name.
+
+    The search returns the first strong program it finds, which the tools' order decides, so
+    each other tool the start may call first is tried for its own at the bound the program was
+    found within (Cimatti et al. 2003, Def. 2.10), until `RANKING` expansions are spent. A
+    program calling nothing, a return of what the task holds, has no tie.
+    """
+    if not program.calls:
+        return ()
+    chosen = program.calls[0].tool
+    budget = search.expanded + RANKING
+    tied: list[str] = []
+    for name, contract in search.contracts.items():
+        if search.expanded >= budget:
+            break
+        if name == chosen:
+            continue
+        search.cut = 0
+        if search.call(start, contract, bound, weak=False) is not None:
+            tied.append(name)
+    return tuple(tied)
+
+
 def _uncovered(block: Block, search: _Search, where: str = "") -> list[Uncovered]:
     """Return every stop of a program with the values it leaves uncovered."""
     found = [
@@ -1822,15 +1849,17 @@ def plan(
         program = search.solve(start, bound, weak=False)
         if program is not None:
             program = tidied(program)
+            expanded = search.expanded
             return Plan(
                 program,
                 strong=True,
                 uncovered=(),
                 abstraction=abstraction,
-                expanded=search.expanded,
+                expanded=expanded,
                 assumed=tuple(_assumed(program, types, contracts)),
                 preferred=_preferred(program, contracts, task),
                 timing=_timing(program, policies, checked),
+                ties=_ties(search, start, bound, program),
             )
     if weak:
         # One search at the full bound: a branch stops only where no continuation exists

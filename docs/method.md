@@ -158,7 +158,10 @@ uncovered. The tools are tried in their names' order, so a server listing them i
 gets the same program; a weak program is searched for each tool the start may call first, until
 `RANKING` (`valgebra_planning/planner.py`) expansions past the first found, and of the first
 program each reaches, the one whose stops leave the fewest cells uncovered is returned, a tie
-going to the earlier name. A task may name its `goals` in the order it
+going to the earlier name. A strong program is the first the names' order reaches, and the plan
+names in `ties` each other tool a strong program within the same bound calls first, tried until
+`RANKING` expansions are spent, so a caller sees the choice the order made. A task may name its
+`goals` in the order it
 prefers them, as "grasp, else say why not": its goal is their union, which every return is
 verified in, and the planner searches a strong program for the first, else a weak one whose
 stops a program toward the next fills, so "grasp or say" grasps where the object is in reach

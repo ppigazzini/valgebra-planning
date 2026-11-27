@@ -346,6 +346,40 @@ def test_the_program_is_the_same_whatever_order_the_tools_are_listed_in() -> Non
     assert len(programs) == 1
 
 
+def _tagging(name: str) -> Contract:
+    return read_contract(
+        {
+            "name": name,
+            "inputSchema": {
+                "type": "object",
+                "properties": {"id": {"type": "string"}},
+                "required": ["id"],
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {"v": {"type": "string", "pattern": "^v_[0-9]+$"}},
+                "required": ["v"],
+            },
+        }
+    )
+
+
+def test_a_strong_program_names_the_other_tools_one_could_start_with() -> None:
+    # Two tools whose results both meet the goal: the earlier by name is called, and the plan
+    # names the other, the tie the names' order broke. A library of one has none.
+    task = read_task("t", {"id": {"type": "string"}}, {"type": "string", "pattern": "^v_[0-9]+$"})
+    for names, called, tied in (
+        (("alpha", "beta"), "alpha", ("beta",)),
+        (("gamma", "beta"), "beta", ("gamma",)),
+        (("alpha",), "alpha", ()),
+    ):
+        found = plan({name: _tagging(name) for name in names}, task)
+        assert found.strong
+        assert found.program is not None
+        assert found.program.calls[0].tool == called
+        assert found.ties == tied
+
+
 def test_the_weak_program_leaving_the_fewest_cells_uncovered_is_returned(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
