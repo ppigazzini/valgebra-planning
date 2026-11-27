@@ -278,9 +278,23 @@ VIRTUAL_ENV=/tmp/vp uv pip install --no-deps --index-url https://test.pypi.org/s
 VIRTUAL_ENV=/tmp/vp uv pip check
 ```
 
+The sdist is built where it installs, and an install from TestPyPI's index resolves the build
+backend there too: TestPyPI holds no `hatchling`, so it fails before the build. The sdist step 2
+downloaded and hashed, the index's own bytes, installs in an environment of its own beside the
+same dependencies, built by the lock's backend from PyPI, as the release builds it:
+
+```bash
+uv venv /tmp/vp-sdist
+VIRTUAL_ENV=/tmp/vp-sdist uv pip install -r /tmp/vp-deps.txt
+uv export --locked --only-group build --no-emit-project -o /tmp/vp-build.txt
+VIRTUAL_ENV=/tmp/vp-sdist uv pip install --no-deps --build-constraints /tmp/vp-build.txt valgebra_planning-X.Y.Z.tar.gz
+VIRTUAL_ENV=/tmp/vp-sdist uv pip check
+```
+
 `uv pip check` holds what was installed to the uploaded metadata's requirements. From PyPI the
 install is the user's, `VIRTUAL_ENV=/tmp/vp uv pip install "valgebra-planning[mcp]==X.Y.Z"`, in a
-fresh environment. Then the import, the command line and the suite, with the test group at the
+fresh environment, and the sdist's adds `--no-binary valgebra-planning`, its backend resolved
+from PyPI as a user's is. Then the import, the command line and the suite, with the test group at the
 lock's versions, all from outside the tree:
 
 ```bash
