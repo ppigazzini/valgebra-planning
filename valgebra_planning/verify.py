@@ -1334,10 +1334,39 @@ class _Walk:
                 continue
             seen.append(_text(bare))
             if self.member(env, ref.variable, [(path, bare)]):
-                return (bare,)
+                return (self.lacking_shrunk(env, ref.variable, path, read.record.values, bare),)
             if building and len(seen) == _BUILT:
                 break
         return ()
+
+    def lacking_shrunk(
+        self,
+        env: dict[Ref, _Held],
+        variable: str,
+        path: tuple[str, ...],
+        values: Validator[Any],
+        record: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Return ``record`` shrunk while it stays one of ``values`` the root's belief holds.
+
+        A drawn record is as long as the draw, so it is made smaller as `shrunk` makes a link's
+        witness, a step at a time: a key fewer, then each field shrunk in place, never a key
+        more, so the record still lacks the key the reference reads.
+        """
+        for _ in range(_SHRINKS):
+            smaller = next(
+                (
+                    candidate
+                    for candidate in _smaller(record)
+                    if values.is_valid(candidate)
+                    and self.member(env, variable, [(path, candidate)])
+                ),
+                _UNSHRUNK,
+            )
+            if smaller is _UNSHRUNK:
+                break
+            record = smaller
+        return record
 
     def realized(self, env: dict[Ref, _Held], ref: Ref, values: Sequence[Any]) -> tuple[Any, ...]:
         """Return one of ``values`` valgebra proves a value of the root's belief holds there."""

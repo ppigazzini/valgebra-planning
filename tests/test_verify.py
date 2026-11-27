@@ -355,6 +355,29 @@ def test_a_witness_is_shrunk_before_it_is_shown(
         assert found == witness
 
 
+def test_a_record_lacking_a_field_is_shrunk_before_it_is_shown() -> None:
+    """A record a program reads a field it lacks from is shrunk as a link's witness is: while
+    it stays one the output's declared set holds and the call may return, and lacks the field,
+    so the reader sees the smallest record that refutes the reference."""
+    reader = read_contract(
+        {
+            "name": "read",
+            "inputSchema": {"type": "object", "properties": {}},
+            "outputSchema": {
+                "type": "object",
+                "properties": {"name": {"type": "string", "maxLength": 4000}},
+                "required": ["name"],
+                "additionalProperties": False,
+            },
+        }
+    )
+    program = read_program("c1 = read()\nreturn c1.other\n")
+    links = verify(program, {"read": reader}, read_task("t", {}, True)).links
+    (refuted,) = [link for link in links if link.claim == "c1.other is a value the program holds"]
+    assert refuted.verdict == "refuted"
+    assert refuted.counterexample == ({"name": ""},)
+
+
 @given(
     st.recursive(
         st.none() | st.booleans() | st.integers() | st.floats(allow_nan=False) | st.text(),

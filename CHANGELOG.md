@@ -6,6 +6,16 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A record a program reads a field it lacks from is shrunk before it is shown, as a link's
+  witness is: a key fewer, then each field shrunk in place, while it stays one the record's
+  declared set holds and the call may return. The method page says every refuted link's witness
+  is shrunk, and the record was shown as drawn: a worker read for a field its item does not
+  declare was a record of three strings drawn to their 5,120-character bound. Over fishtest's
+  contracts the feedback on `for m in w.workers: return m.worker` reads 445 characters where it
+  read 11,270, and on `return g.worker` after `get_run` 493 where it read 16,524.
+
 ## [0.0.10] - 2026-11-27
 
 A release of speed and of its floors. `plan` remembers a failed state by what a call that may
