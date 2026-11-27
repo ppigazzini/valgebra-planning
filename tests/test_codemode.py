@@ -328,6 +328,27 @@ def test_repair_accepts_a_weak_program_where_asked_and_stays_strict_by_default()
     assert note == ("uncovered: c2.distance (at else); the task tolerates it",)
 
 
+@pytest.mark.parametrize(
+    "written",
+    [
+        "try:\n    c1 = a()\n    c2 = b()\nexcept ToolError:\n    stop(c0)\nreturn c2\n",
+        "try:\n    c1 = a()\nexcept ToolError:\n    stop(c0)\nelse:\n    pass\nreturn c1\n",
+        "try:\n    c1 = a()\nexcept ToolError:\n    stop(c0)\nfinally:\n    pass\nreturn c1\n",
+        (
+            "try:\n    c1 = a()\nexcept ToolError:\n    stop(c0)\nexcept ValueError:\n"
+            "    stop(c0)\nreturn c1\n"
+        ),
+    ],
+    ids=["two-calls", "else", "finally", "two-handlers"],
+)
+def test_the_preamble_says_what_a_try_holds_and_the_reader_refuses_the_rest(written: str) -> None:
+    # The preamble a model reads names the one shape the reader takes, so a model is told the
+    # language before it writes a `try` the reader refuses at its line.
+    assert "one call in\n`try:`/`except ToolError:`, the call alone in the `try`" in PREAMBLE
+    with pytest.raises(ProgramError, match=r"^line 1: a try holds one call and one"):
+        read_program(written)
+
+
 def test_the_preamble_s_program_is_one_the_critic_reads_and_proves() -> None:
     written = PREAMBLE.split("A program for another task reads:\n\n", 1)[1].split('"""', 1)[0]
     source = "\n".join(line.removeprefix("    ") for line in written.strip("\n").splitlines())

@@ -21,7 +21,10 @@ spell, as `g1.grasp`, or whose name the stubs bind, as `Literal`, is written by 
 program calls it so; `tools.g1_grasp(...)` reads the same, and any other attribute call is
 refused, as `g1.grasp(...)` would call a tool named `grasp`. An argument Python does not spell, as
 `from` or `reply-to`, is passed by its name in a dictionary, `send(to=to, **{"from": sender})`, as
-its stub says, and tested as `send["from"]`. A program the reader does not read
+its stub says, and tested as `send["from"]`. A `try` holds one call and one
+`except ToolError:`, as the preamble says: two calls in one, an `else` or a `finally` is refused at
+the `try`'s line, and two calls are written as two blocks, or with the `return` after the `try`
+where its handler ends the path. A program the reader does not read
 is refused naming the line and the form it reads there: a call left unbound is answered with the
 assignment to write, `c2 = notify(...)`, and the stubs handed back as a program with the line to
 leave out. Text Python cannot parse is refused the same way, by its own line and Python's message,
