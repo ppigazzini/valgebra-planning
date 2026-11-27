@@ -336,7 +336,7 @@ def test_an_argument_whose_name_ends_in_a_question_mark_is_read_as_written() -> 
     assert record.verdict == "refuted"
     assert set(record.counterexample[0]) == {"x?"}
     broken = run(alone, {"act": act}, task, {"n": 1}, {"act": lambda **_: {}})
-    assert broken.broken == ("act refuses its arguments (y: missing_key)",)
+    assert broken.broken == ("act refuses its arguments (y: dependentRequired)",)
 
 
 def test_a_program_reads_as_python() -> None:

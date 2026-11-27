@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import re
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -733,13 +734,54 @@ SEARCH = read_contract(
 
 def test_a_refusal_of_a_value_failing_everywhere_lists_three_failures() -> None:
     rows = [{"name": f"t{n}", "elo": 5000} for n in range(1800)]
-    assert failures(SEARCH.accepts, {"rows": rows}, contract_names(SEARCH)) == (
-        "rows[0].elo: union_error; rows[1].elo: union_error; rows[2].elo: union_error"
+    named = contract_names(SEARCH)
+    assert failures(SEARCH.accepts, {"rows": rows}, named, SEARCH.schemas[0]) == (
+        "rows[0].elo: maximum; rows[1].elo: maximum; rows[2].elo: maximum"
     )
     two = [*rows[:2], {"name": "t", "elo": 0}]
-    assert failures(SEARCH.accepts, {"rows": two}, contract_names(SEARCH)) == (
+    assert failures(SEARCH.accepts, {"rows": two}, named) == (
         "rows[0].elo: union_error; rows[1].elo: union_error"
     )
+
+
+#: The porter's listing: an integer bounded below and a string one of two values.
+RUNS = {
+    "type": "object",
+    "properties": {"limit": {"type": "integer", "minimum": 1}, "kind": {"enum": ["elo", "spsa"]}},
+    "additionalProperties": False,
+}
+
+
+@pytest.mark.parametrize(
+    ("schema", "arguments", "named"),
+    [
+        (RUNS, {"limit": 0}, "limit: minimum"),
+        (RUNS, {"kind": "sprt"}, "kind: enum"),
+        (RUNS, {"limit": 0, "kind": "sprt"}, "kind: enum; limit: minimum"),
+        (RUNS, {"limit": 2, "secret": "s3cr3t"}, "*: additionalProperties"),
+        (
+            {**RUNS, "$schema": "http://json-schema.org/draft-07/schema#"},
+            {"limit": 0},
+            "limit: minimum",
+        ),
+    ],
+)
+def test_a_refusal_names_the_keyword_a_failure_breaks_and_no_value(
+    schema: dict[str, Any], arguments: dict[str, Any], named: str
+) -> None:
+    # An integer's bound fails in valgebra as a union of two kinds, so its code names no bound.
+    contract = read_contract(
+        {"name": "list_runs", "inputSchema": schema, "outputSchema": {"type": "object"}}
+    )
+    written = failures(
+        contract.accepts,
+        arguments,
+        contract_names(contract),
+        contract.schemas[0],
+        asserted=contract.asserted,
+    )
+    assert written == named
+    assert not {"sprt", "s3cr3t", "secret"} & set(re.split(r"[^a-z0-9]+", written))
 
 
 @given(
