@@ -62,8 +62,9 @@ Six conditions stand between a dispatch and an upload, each a job, a step or a j
 - **The metadata reads as the index reads it.** `twine check --strict` passes on both artifacts.
 - **The smoke passes.** Each artifact is installed in a fresh environment, its dependencies
   resolved from PyPI. The wheel installs on every CPython the classifiers name, 3.11 through
-  3.15, on x86_64 Linux, Apple silicon macOS and x64 Windows: an install pulls the valgebra
-  wheel of its interpreter and platform, and each of those is a build of its own. The sdist
+  3.15, on x86_64 Linux, Apple silicon macOS and x64 Windows, and on the free-threaded 3.14t and
+  3.15t on Linux: an install pulls the valgebra wheel of its interpreter and platform, and each
+  of those is a build of its own. The sdist
   installs on 3.11 and 3.15 on Linux, and the wheel installs on 3.11 and 3.15 once more with
   each dependency at the floor `pyproject.toml` names (`--resolution lowest-direct`), where
   every other leg installs the newest release each admits. Without the `mcp` extra, every module
@@ -339,10 +340,14 @@ names no person and no address.
 ## What this does not cover
 
 - **The push lanes past the newest interpreter on macOS and Windows.** The push runs the suite
-  on every interpreter the classifiers name on Linux and on the newest alone on macOS and
-  Windows; the older interpreters there are read by the smoke alone, when a release is
-  dispatched.
-- **Free-threaded CPython and PyPy.** No job runs them and no classifier claims them.
+  on every interpreter the classifiers name on Linux, with the free-threaded 3.14t and 3.15t,
+  and on the newest alone on macOS and Windows; the older interpreters there are read by the
+  smoke alone, when a release is dispatched.
+- **Free-threaded CPython off Linux, and the package across threads.** The push and the smoke
+  run 3.14t and 3.15t on Linux alone, and the suite runs in one thread there: they hold that the
+  package imports, plans and verifies with the GIL off, not that one planner or one server
+  answers two threads at once. No classifier claims free threading.
+- **PyPy.** No job runs it and no classifier claims it.
 - **valgebra's other wheels.** Linux on aarch64 and musl, macOS on x86_64 and Windows on arm64
   run no leg here: valgebra's own release smoke installs each of those wheels on its platform and
   runs valgebra's suite on it.
