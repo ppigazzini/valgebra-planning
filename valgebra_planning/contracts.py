@@ -237,6 +237,10 @@ class Contract:
     #: then holds the narrower set, an assumption every link and binding resting on a result
     #: names. None where the result is read as declared.
     declared: Validator[Any] | None = None
+    #: Whether the tool refuses some arguments its contract admits, as a library names it under
+    #: ``"refuses"``: an outcome the schemas do not state, so an error of it is read as one
+    #: whatever ``errors`` says, and it is never retried, the same arguments refused again.
+    refuses: bool = False
     #: What `shown` found, in a tuple of one, kept from its first call: a contract never changes.
     _shown: tuple[Any, ...] = field(default=(), init=False, repr=False, compare=False)
 

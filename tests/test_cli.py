@@ -70,6 +70,41 @@ def test_a_library_holding_a_key_no_reader_reads_exits_2(
     assert "task 't': 'dept' is no key it reads" in capsys.readouterr().err
 
 
+def test_a_library_s_refusing_tools_are_planned_with_their_error_block(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tool = {
+        "name": "get_params",
+        "annotations": {"readOnlyHint": True},
+        "inputSchema": {
+            "type": "object",
+            "properties": {"run_id": {"type": "string"}},
+            "required": ["run_id"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {"params": {"type": "array", "items": {"type": "number"}}},
+            "required": ["params"],
+        },
+    }
+    task = {
+        "name": "params",
+        "inputs": {"run_id": {"type": "string"}},
+        "goal": {"type": "array", "items": {"type": "number"}},
+    }
+    (tmp_path / "tasks.json").write_text(json.dumps({"tasks": [task]}), encoding="utf-8")
+    listed = {"tools": [tool], "refuses": ["get_params"]}
+    (tmp_path / "tools.json").write_text(json.dumps(listed), encoding="utf-8")
+    assert main(["plan", str(tmp_path), "--json"]) in (0, 1)
+    [row] = json.loads(capsys.readouterr().out)
+    assert row["strong"] is False
+    assert "except ToolError:" in row["program"]
+    listed["refuses"] = ["get_parms"]
+    (tmp_path / "tools.json").write_text(json.dumps(listed), encoding="utf-8")
+    assert main(["plan", str(tmp_path)]) == 2
+    assert "'refuses' names no tool: 'get_parms'" in capsys.readouterr().err
+
+
 def test_plan_takes_a_depth_and_says_why_no_program_was_found(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

@@ -1079,13 +1079,15 @@ class _Walk:
     ) -> None:
         """Check what a call does when its tool answers with an error."""
         if call.retry:
-            verdict: Verdict = "proven" if contract.idempotent else "refuted"
-            assumed = retry_assumptions(contract) if contract.idempotent else ()
+            # A refusal is no transient error: the same arguments are refused again.
+            retried = contract.idempotent and not contract.refuses
+            verdict: Verdict = "proven" if retried else "refuted"
+            assumed = retry_assumptions(contract) if retried else ()
             self.links.append(Link(where, f"{call.tool} may be retried", verdict, (), assumed))
         if call.on_error is not None:
             # The result is never bound on this path, so the block reads what the call read.
             self.block(call.on_error, env, _join(where, f"error:{call.tool}"), path)
-        elif not call.retry and self.errors:
+        elif not call.retry and (self.errors or contract.refuses):
             self.gaps.append(Gap(where, f"an error of {call.tool}"))
 
     def record(
@@ -1996,7 +1998,9 @@ def verify(
     error, and a call neither retried nor given an error block leaves that path uncovered.
     A retry is accepted only for a tool that is read-only or idempotent, since calling twice
     must act as calling once; it ends under fairness, the strong cyclic reading (Cimatti et al.
-    2003, §2.3). Each policy
+    2003, §2.3). A tool whose contract `refuses` refuses some arguments it admits, an outcome
+    the schemas do not state: an error of it is read as one whatever ``errors`` says, and a
+    retry of it is refuted, since the same arguments are refused again. Each policy
     adds a link at the end of every path: proven where no bad state can be reached there,
     refuted where one surely is, undecided where one possibly is. Each flow rule adds a link
     for every value from one of its sources bound to its sink, and, where implicit flows are

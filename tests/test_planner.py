@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import random
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -378,6 +379,39 @@ def test_a_strong_program_names_the_other_tools_one_could_start_with() -> None:
         assert found.program is not None
         assert found.program.calls[0].tool == called
         assert found.ties == tied
+
+
+_TUNE = {
+    "name": "get_params",
+    "annotations": {"readOnlyHint": True},
+    "inputSchema": {
+        "type": "object",
+        "properties": {"run_id": {"type": "string"}},
+        "required": ["run_id"],
+    },
+    "outputSchema": {
+        "type": "object",
+        "properties": {"params": {"type": "array", "items": {"type": "number"}}},
+        "required": ["params"],
+    },
+}
+_PARAMS = read_task(
+    "params", {"run_id": {"type": "string"}}, {"type": "array", "items": {"type": "number"}}
+)
+
+
+def test_a_tool_that_refuses_arguments_it_admits_is_planned_with_its_error_block() -> None:
+    # Reading a tune's parameters refuses a run that is no tune, an argument the contract
+    # admits. Its contract `refuses`, its error is an outcome whatever `errors` says, so no
+    # strong program rests on it, and it is never retried: the same run is refused again.
+    assert plan({"get_params": read_contract(_TUNE)}, _PARAMS).strong
+    tools = {"get_params": replace(read_contract(_TUNE), refuses=True)}
+    for errors in (False, True):
+        found = plan(tools, _PARAMS, errors=errors)
+        assert not found.strong
+        assert found.program is not None
+        assert not any(call.retry for call in found.program.calls)
+        assert [gap.where for gap in found.uncovered] == ["error:get_params"]
 
 
 def test_the_weak_program_leaving_the_fewest_cells_uncovered_is_returned(

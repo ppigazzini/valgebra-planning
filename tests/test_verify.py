@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import math
 import random
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -353,6 +354,51 @@ def test_a_witness_is_shrunk_before_it_is_shown(
         assert len(found) == len(witness)
     else:
         assert found == witness
+
+
+def test_a_tool_that_refuses_arguments_it_admits_is_never_retried() -> None:
+    """A retry of a tool whose contract `refuses` is refuted, its refusal being no transient
+    error, and a call to it with no error block leaves that error uncovered."""
+    plain = {
+        "get_params": read_contract(
+            {
+                "name": "get_params",
+                "annotations": {"readOnlyHint": True},
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"run_id": {"type": "string"}},
+                    "required": ["run_id"],
+                },
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {"params": {"type": "array", "items": {"type": "number"}}},
+                    "required": ["params"],
+                },
+            }
+        )
+    }
+    tools = {"get_params": replace(plain["get_params"], refuses=True)}
+    task = read_task(
+        "params", {"run_id": {"type": "string"}}, {"type": "array", "items": {"type": "number"}}
+    )
+    retried = verify(
+        read_program("c1 = retry(get_params(run_id=run_id))\nreturn c1.params\n"),
+        tools,
+        task,
+    )
+    assert [(link.claim, link.verdict) for link in retried.links if "retried" in link.claim] == [
+        ("get_params may be retried", "refuted")
+    ]
+    bare = verify(
+        read_program("c1 = get_params(run_id=run_id)\nreturn c1.params\n"),
+        tools,
+        task,
+    )
+    assert not bare.proven
+    assert [gap.ref for gap in bare.gaps] == ["an error of get_params"]
+    assert verify(
+        read_program("c1 = get_params(run_id=run_id)\nreturn c1.params\n"), plain, task
+    ).proven
 
 
 def test_a_record_lacking_a_field_is_shrunk_before_it_is_shown() -> None:

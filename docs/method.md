@@ -191,6 +191,15 @@ verifier, which adds a link for it.
   lists what it rests on: the tool's errors transient within the runner's 8 attempts, and the
   annotations, a hint the server gives, unless the library marks the server trusted. A multi
   round-trip request is the client's loop around one call and leaves the plan unchanged.
+- **Refusals** (`Contract.refuses`, set for each tool a library's `tools.json` lists under
+  `"refuses"`). A tool that refuses some arguments its
+  contract admits, as a tool reading a tune's parameters refuses a run that is no tune, has an
+  outcome its contract does not state. A strong solution is strong of the model it is planned in
+  (Cimatti et al. 2003, Def. 2.1, Def. 2.10), and a contract holding only argument schemas puts
+  no such refusal there, so a plan over the tool reads strong where the server refuses. Where its
+  contract `refuses`, the tool's error is an outcome whatever `errors` says: a call to it needs an
+  error block, a program is strong over it only where that block reaches the goal too, and a
+  retry of it is refuted, since the same arguments are refused again.
 - **Policies** (`valgebra_planning/policy.py`). An automaton over a program's calls whose guards
   are valgebra sets over the argument record. Along each path a guard is taken surely, possibly or
   never, and a path surely reaching a bad state is refuted, possibly undecided. A state's

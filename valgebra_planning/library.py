@@ -7,8 +7,10 @@ server (`valgebra_planning.contracts.read_contract`), ``"afterViolation"``, the 
 calls after a violation (`after_violation`), ``"preempts"``, the tools a proxy sends at once,
 past the order a policy's calls hold (`preempts`), ``"nonTextBlocks"``, the tools whose blocks other
 than text a proxy keeps (`non_text_blocks`), ``"errorTexts"``, the set each tool's
-error text lies in to be passed on (`error_texts`), and ``"forwardsElicitation"``, the tools whose
-request for a person's answer a proxy forwards (`forwards_elicitation`). ``tasks.json``
+error text lies in to be passed on (`error_texts`), ``"forwardsElicitation"``, the tools whose
+request for a person's answer a proxy forwards (`forwards_elicitation`), and ``"refuses"``, the
+tools that refuse some arguments their contract admits, each read with its contract's
+`refuses` set. ``tasks.json``
 holds ``{"tasks": [...]}``, each task its ``name``, the JSON Schema of each input in ``inputs``
 and of the ``goal``, the rules it names, ``errors`` (any tool may fail), ``policies`` and
 ``flows`` by name, and ``types``, the file of observed calls its types are mined from, and
@@ -139,6 +141,7 @@ _TOOLS_KEYS = frozenset(
         "nonTextBlocks",
         "errorTexts",
         "forwardsElicitation",
+        "refuses",
     }
 )
 
@@ -298,7 +301,9 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
     an input as a tool is a `ValueError`, and so is a key a reader does not read, in a file, a
     task, a policy, a transition or a flow rule; a flag that is no boolean is a `TypeError`.
     ``tools.json``'s ``postconditions`` are read by
-    `valgebra_planning.contracts.read_postcondition` over the tools read.
+    `valgebra_planning.contracts.read_postcondition` over the tools read; a tool its
+    ``refuses`` lists is read with its contract's `refuses` set, and a name there that is no
+    tool is a `ValueError`.
     """
     specs = _listed(directory / "tasks.json", "tasks")
     for spec in specs:
@@ -338,7 +343,14 @@ def read_library(directory: Path, tools: Mapping[str, Contract] | None = None) -
             f"tools.json reads results closed, and these tools were read open: {', '.join(opened)}"
         )
         raise ValueError(msg)
-    tools = {name: replace(contract, trusted=trusted) for name, contract in tools.items()}
+    refuses = _named(directory, "refuses")
+    if unknown := sorted(refuses - set(tools)):
+        message = f"tools.json: 'refuses' names no tool: {', '.join(map(repr, unknown))}"
+        raise ValueError(message)
+    tools = {
+        name: replace(contract, trusted=trusted, refuses=name in refuses)
+        for name, contract in tools.items()
+    }
     # A program calls a tool Python does not spell by its alias; two tools one alias spells
     # would read as one, so the library is refused naming both.
     aliases(tools)

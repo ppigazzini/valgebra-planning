@@ -701,11 +701,13 @@ class _Search:
 
         A tool that is read-only or idempotent is retried. Any other gets a block searched
         from the state before the call, the call itself excluded, and a weak program may stop
-        there on the value the call was given.
+        there on the value the call was given. A tool whose contract `refuses` errs whatever
+        ``errors`` says and is never retried, a strong solution being strong of the outcomes
+        the model holds (Cimatti et al. 2003, Def. 2.1, Def. 2.10).
         """
-        if not self.errors:
+        if not self.errors and not contract.refuses:
             return Call(contract.name, bindings, result)
-        if contract.idempotent:
+        if contract.idempotent and not contract.refuses:
             return Call(contract.name, bindings, result, retry=True)
         if weak and (checked := self.checked(state, contract, bindings, depth)) is not None:
             return Call(contract.name, bindings, result, on_error=checked)
@@ -843,7 +845,8 @@ class _Search:
             if then is not None and again is not None:
                 test = Branch(Ref(read), "", "", then, again, key=key)
                 # A read-only read is retried on its error, as any read-only call is.
-                return Block((Call(reader.name, reading, read, retry=self.errors),), test)
+                retried = self.errors and not reader.refuses
+                return Block((Call(reader.name, reading, read, retry=retried),), test)
         return None
 
     def again(

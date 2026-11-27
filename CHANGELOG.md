@@ -19,6 +19,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
   (`plan:parcels:6`), and one with ties 1.04 (`plan:robot-skills:8`, two) to 1.16
   (`plan:robot-skills:7`, one) over repeated calls and 1.03 to 1.11 on contracts just read; the
   four weak cases `tools/perf.py` counts by default take 1.00.
+- `Contract.refuses`, set for each tool a library's `tools.json` lists under `"refuses": [...]`:
+  a tool that refuses some arguments its contract admits. Its error is an outcome whatever
+  `errors` says, so a call to it needs an error
+  block and a retry of it is refuted. Over fishtest's contracts `get_spsa`, which refuses a run that
+  is no tune, planned strong for a tune's parameters with no error block, and with `errors` as
+  `retry(get_spsa(...))` on the assumption its error is transient; listed, it plans weak with the
+  refusal's block, its stop naming the run. A name the list holds that is no tool is a
+  `ValueError` where the library is read.
 
 ### Fixed
 
