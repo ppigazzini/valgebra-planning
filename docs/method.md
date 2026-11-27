@@ -513,12 +513,13 @@ ones.
   which the walk resolves from the document's root and so reads as any value, a gap the
   companion's reader of the whole schema closes; a field whose record's `properties` do not declare it, which takes any JSON
   value, as one an `anyOf` alone declares; and a program the planner writes holds no
-  constant but those its task fixes, tests no key but an acted postcondition's, loops over no
+  constant but those its task fixes, tests a key only of a call's result, loops over no
   array, and writes an optional argument only where its task fixes it or an input the task
   requires read fills it. A program written elsewhere may do all four, and each is checked like
-  any value. Where the search finds no program and a result field meets the goal where present,
-  no record guaranteeing it, the reason names the field and says the search writes no key test,
-  since a program reading it under one exists past what the search writes. A task fixes the constants its
+  any value. Where the search finds no program and a field below a guaranteed one meets the goal
+  where present, no record guaranteeing it, the reason names the field and says the search
+  writes no key test on the field above it, since a program reading it under one exists past
+  what the search writes. A task fixes the constants its
   intent gives in `constants`, as the action a confirmation asks about: the planner writes each
   where its argument is, required or not, the verifier holds every call to the tool to it and
   refutes one leaving it out, since the tool then reads its own default, and a flow rule judges

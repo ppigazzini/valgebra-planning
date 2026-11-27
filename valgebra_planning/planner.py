@@ -32,6 +32,7 @@ from typing import Any, NamedTuple
 
 from valgebra_planning._valgebra import (
     ANNOTATIONS,
+    Unsupported,
     Validator,
     anything,
     complement,
@@ -579,18 +580,43 @@ class _Search:
                 continue
             stepped = state._replace(policed=policed)
             after = self.after(stepped, contract, bindings, result)
-            # A weak search tests the result into the goal first: searching on past the call
-            # reaches the same test deeper, after calls no path needs.
-            rest = self.observed(after, contract, result, depth, weak=True) if weak else None
-            if rest is None:
-                rest = self.solve(after, depth - 1, weak=weak)
-            if rest is None:
-                rest = self.split(state, after, contract, bindings, result, depth, weak=weak)
-            if rest is None and not weak:
-                rest = self.observed(after, contract, result, depth, weak=False)
+            rest = self.rest(state, after, contract, bindings, result, depth, weak=weak)
             if rest is not None:
                 return Block((call, *rest.calls), rest.end)
         return None
+
+    def rest(
+        self,
+        state: _State,
+        after: _State,
+        contract: Contract,
+        bindings: tuple[tuple[str, Ref], ...],
+        result: str,
+        depth: int,
+        *,
+        weak: bool,
+    ) -> Block | None:
+        """Return the program after a call: a test of its result, or a search past it.
+
+        A weak search tests the result into the goal first, on its members or on a key it may
+        lack: searching on past the call reaches the same test deeper, after calls no path
+        needs, as a `note` made before a booking is read again. A strong search tests it where
+        nothing past the call reaches the goal on every path.
+        """
+        if weak:
+            tested = self.observed(after, contract, result, depth, weak=True) or self.present(
+                after, contract, result, depth, weak=True
+            )
+            if tested is not None:
+                return tested
+        rest = self.solve(after, depth - 1, weak=weak)
+        if rest is None:
+            rest = self.split(state, after, contract, bindings, result, depth, weak=weak)
+        if rest is None and not weak:
+            rest = self.observed(after, contract, result, depth, weak=False) or self.present(
+                after, contract, result, depth, weak=False
+            )
+        return rest
 
     def split(
         self,
@@ -693,6 +719,49 @@ class _Search:
                 )
             if otherwise is not None:
                 return Block((), Branch(ref, "", "", then, otherwise, values))
+        return None
+
+    def present(
+        self, after: _State, contract: Contract, result: str, depth: int, *, weak: bool
+    ) -> Block | None:
+        """Return a test of a key of the call's result into the goal, and a program each side.
+
+        A field the result declares and does not guarantee, whose set meets the goal, is held
+        under a test of its key, an observation splitting the belief (Bertoli et al. 2006, Def.
+        3.6): the ``then`` side holds the field, and the other side takes a program reaching the
+        goal on every path or, in a weak search, stops (Cimatti et al. 2003, Def. 2.10).
+        """
+        if depth < _GUARD or not contract.results:
+            return None
+        root = contract.result()
+        guaranteed = {slot.path for slot in contract.results}
+        for slot in _optional_fields(contract):
+            name = _result_name(slot)
+            if slot.path in guaranteed or not self.holds(name):
+                continue
+            cells = self.cells_of(name)
+            if not cells & self.goal:
+                continue
+            opened = (Ref(result, slot.path), cells)
+            then = self.solve(after._replace(refs=(*after.refs, opened)), depth - 2, weak=weak)
+            if then is None:
+                continue
+            otherwise = self.solve(after, depth - 2, weak=False)
+            if otherwise is None and weak:
+                whole = Ref(result, root.path)
+                # A result no argument and no goal reads is held under no cells: the stop names it.
+                stopped = (
+                    after
+                    if whole in dict(after.refs)
+                    else after._replace(refs=(*after.refs, (whole, frozenset())))
+                )
+                otherwise = (
+                    self.stopping(stopped, whole, depth - 2)
+                    if self.settled(after)
+                    else self.solve(after, depth - 2, weak=True)
+                )
+            if otherwise is not None:
+                return Block((), Branch(Ref(result), "", "", then, otherwise, key=slot.path[0]))
         return None
 
     def _inside(self, cell: int, values: tuple[Any, ...]) -> bool:
@@ -1059,8 +1128,9 @@ def _reason(
     (`_needed`), callable or not, that only a tested input fills, then those of a tool only a
     policy names, and each result field that meets the goal and lies outside it and lists no
     members, which the search tests into the goal on none (`_Search.observed`). A field that
-    meets the goal where present and that no record guarantees is read only under a key test,
-    which the search does not write (`_unguaranteed`): a program reaching the goal through it
+    meets the goal where present, below a field its record guarantees, is read only under a
+    test of its key on that field, which the search does not write (`_unguaranteed`): a program
+    reaching the goal through it
     exists past what the search writes, so the reason names it and says so.
     """
     unguaranteed = _unguaranteed(listed, task)
@@ -1097,7 +1167,7 @@ def _reason(
         meets = unguaranteed[0] if len(unguaranteed) == 1 else f"each of {', '.join(unguaranteed)}"
         reason += (
             f"; {meets} meets the goal where present, and no record guarantees it: a program "
-            "reads it under a key test, which the search does not write"
+            "reads it under a key test on the field above it, which the search does not write"
         )
     return reason
 
@@ -1107,8 +1177,10 @@ def _unguaranteed(listed: Mapping[str, Contract], task: Task) -> list[str]:
 
     A result slot holds the fields its record guarantees (`valgebra_planning.contracts`); a
     field the record declares and does not require is held only on the side of a key test
-    showing it, an observation splitting the belief (Bertoli et al. 2006, Def. 3.6), which the
-    search writes for an acted postcondition alone.
+    showing it, an observation splitting the belief (Bertoli et al. 2006, Def. 3.6). The search
+    tests a key of a call's result itself (`_Search.present`), so a field of the result's own
+    record is no such field; one below a guaranteed field is, the test of its key on a field
+    being one the search does not write.
     """
     found = []
     for contract in _reachable(listed, task, frozenset(listed)).values():
@@ -1116,6 +1188,7 @@ def _unguaranteed(listed: Mapping[str, Contract], task: Task) -> list[str]:
         found += [
             field.name
             for slot in contract.results
+            if slot.path
             for key in slot.declared()
             if (*slot.path, key) not in guaranteed
             and _meets((field := slot.below(key)).values, task.goal)
@@ -1262,7 +1335,10 @@ def _reachable(
         for name, contract in callable_.items():
             if name in mattering:
                 continue
-            if any(_meets(slot.values, want) for slot in contract.results for want in needed):
+            # A field a key test opens is a result too, where it meets the goal.
+            opened = [s for s in _optional_fields(contract) if _meets(s.values, task.goal)]
+            results = (*contract.results, *opened)
+            if any(_meets(slot.values, want) for slot in results for want in needed):
                 mattering[name] = contract
                 needed += [slot.values for slot in contract.arguments]
                 grown = True
@@ -1381,7 +1457,11 @@ def predicates(
     entries += [
         (_result_name(slot), slot.values, slot.schema, slot.root)
         for contract in contracts.values()
-        for slot in (*contract.results, *_opened({contract.name: contract}, postconditions))
+        for slot in (
+            *contract.results,
+            *_opened({contract.name: contract}, postconditions),
+            *(s for s in _optional_fields(contract) if _meets(s.values, task.goal)),
+        )
         if _readable(slot.values, consumers)
     ]
     entries += [
@@ -1663,15 +1743,28 @@ def _preferred(program: Block, contracts: Mapping[str, Contract], task: Task) ->
     )
 
 
-def _stopped(block: Block, stops: dict[int, frozenset[int]]) -> int:
-    """Return how many cells the stops of ``block`` leave uncovered, its error blocks included."""
-    count = sum(_stopped(call.on_error, stops) for call in block.calls if call.on_error)
+def _stopped(
+    block: Block, stops: dict[int, frozenset[int]], *, erring: bool = False
+) -> tuple[int, int]:
+    """Return the cells the stops of ``block`` leave: on paths no error took, in error blocks.
+
+    A value no predicate reads is held under no cells: no predicate splits its set, so it is one
+    cell, the whole set, and a stop on it leaves that one uncovered. Counted as none, a stop on a
+    result read for a key it may lack would rank as covering every input.
+    """
+    plain, failed = 0, 0
+    for call in block.calls:
+        if call.on_error is not None:
+            failed += sum(_stopped(call.on_error, stops, erring=True))
     end = block.end
     if isinstance(end, Stop):
-        count += len(stops.get(id(end), frozenset()))
+        left = len(stops.get(id(end), frozenset())) or 1
+        failed, plain = (failed + left, plain) if erring else (failed, plain + left)
     elif isinstance(end, Branch):
-        count += _stopped(end.then, stops) + _stopped(end.otherwise, stops)
-    return count
+        for side in (end.then, end.otherwise):
+            side_plain, side_failed = _stopped(side, stops, erring=erring)
+            plain, failed = plain + side_plain, failed + side_failed
+    return plain, failed
 
 
 def _ranked(
@@ -1683,14 +1776,19 @@ def _ranked(
     tool the start may call first is tried for its own; once one is found, the others are tried
     until `RANKING` more expansions are spent. A weak plan for a goal is one some execution
     reaches it on (Cimatti et al. 2003, Def. 2.10), and of two such, the one stopping on fewer
-    cells covers more of what the inputs may hold. A tie goes to the earlier tool by name.
+    cells covers more of what the inputs may hold. A stop no tool's error leads to is counted
+    first: a program stopping only in error blocks reaches the goal on every outcome of the calls
+    that answer, strong over the domain with no error (Cimatti et al. 2003, Def. 2.1), where one
+    stopping on a path no error took leaves inputs uncovered whatever the tools do, as a read of
+    a booking that may not exist does in place of the booking. A tie goes to the earlier tool by
+    name.
     """
     goal = next((ref for ref, cells in start.refs if cells <= search.goal), None)
     if goal is not None:
         found = search.solve(start, depth, weak=True)
         return None if found is None else tidied(found)
     search.expanded += 1
-    ranked: list[tuple[int, int, Block]] = []
+    ranked: list[tuple[int, int, int, Block]] = []
     budget: int | None = None
     for order, contract in enumerate(search.contracts.values()):
         if budget is not None and search.expanded >= budget:
@@ -1699,10 +1797,10 @@ def _ranked(
         if found is None:
             continue
         program = tidied(found)
-        ranked.append((_stopped(program, search.stops), order, program))
+        ranked.append((*_stopped(program, search.stops), order, program))
         if budget is None:
             budget = search.expanded + RANKING
-    return min(ranked, key=lambda row: row[:2])[2] if ranked else None
+    return min(ranked, key=lambda row: row[:3])[3] if ranked else None
 
 
 def _ties(search: _Search, start: _State, bound: int, program: Block) -> tuple[str, ...]:
@@ -1779,6 +1877,23 @@ def _checked_key(post: Postcondition) -> str | None:
     Only a postcondition of a call's acting says what a read after its error shows.
     """
     return _key_of(post.schemas[1]) if post.acted else None
+
+
+def _optional_fields(contract: Contract) -> list[Slot]:
+    """Return the slot of each field a tool's result declares and does not guarantee."""
+    if not contract.results:
+        return []
+    root = contract.result()
+    guaranteed = {slot.path for slot in contract.results}
+    found = []
+    for key in root.declared():
+        if (*root.path, key) in guaranteed:
+            continue
+        try:
+            found.append(field_slot(root, key))
+        except Unsupported:
+            continue
+    return found
 
 
 def _opened(

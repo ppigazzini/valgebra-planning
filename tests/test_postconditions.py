@@ -634,9 +634,16 @@ def test_an_acted_postcondition_covers_no_read_after_a_call_that_returned() -> N
 
 
 def test_the_planner_reads_the_effect_before_it_makes_a_call_again() -> None:
+    # With no postcondition the read shows a booking that exists, and nothing says a booking
+    # the read does not show was not made: the error block returns its label, and books no more.
     plain = plan(BOOKING, SEND, errors=True)
     assert plain.program is not None
-    assert "find_booking" not in render(plain.program)
+    assert render(plain.program) == (
+        "try:\n    c1 = book(parcel_id=parcel_id)\nexcept ToolError:\n"
+        "    c1 = retry(find_booking(parcel_id=parcel_id))\n"
+        '    if "label_id" in c1:\n        return c1.label_id\n    else:\n        stop(c1)\n'
+        "return c1.label_id"
+    )
     found = plan(BOOKING, SEND, errors=True, postconditions=[ACTED])
     assert found.program is not None
     text = render(found.program)
@@ -727,8 +734,16 @@ def test_the_planner_writes_no_stop_a_policy_s_obligation_is_open_at() -> None:
         }
     )
     found = plan(BOOKING, SEND, errors=True, policies=[noted], postconditions=[ACTED])
-    # Each stop the block can write leaves the booking possibly unnoted: no program is found.
-    assert found.program is None
+    # Each stop a block after `book` can write leaves the booking possibly unnoted, so no
+    # program books: the one found reads a booking that exists, and stops where there is none,
+    # its policy clear on every path.
+    assert found.program is not None
+    assert render(found.program) == (
+        "c1 = retry(find_booking(parcel_id=parcel_id))\n"
+        'if "label_id" in c1:\n    return c1.label_id\nelse:\n    stop(c1)'
+    )
+    checked = verify(found.program, BOOKING, SEND, errors=True, policies=[noted])
+    assert {link.verdict for link in checked.links if link.claim.startswith("policy")} == {"proven"}
 
 
 def test_the_command_line_plans_a_library_s_block_and_proves_it(

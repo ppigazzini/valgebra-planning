@@ -8,6 +8,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- The planner tests a key of a call's result into the goal, for every task: a field the result
+  declares and does not guarantee, whose set meets the goal, is held on the side of the test
+  showing it, as `if "sprt" in c1: return c1.sprt`, and the other side takes a strong program or
+  stops. A goal only such a field meets had no program; all 18 optional fields of fishtest's
+  `get_run` plan, and the critic verifies each.
 - `run.paced` and the run rule `pause`: the seconds a run waits before making a call again, by
   the attempt. `paced`, the default, waits 0.1 s doubling to 5 s; `pause` replaces it, zero for
   no wait.
@@ -37,6 +42,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- Of two weak programs the planner ranks first the one whose stops all lie in error blocks, then
+  the one stopping on fewer cells, and a stop on a value no predicate splits counts its one
+  cell. A booking with errors now reads the booking after a failed `book` and returns its label
+  where the call acted: in the faults study the program planned without the postcondition stops
+  in 87 of 400 episodes at a fault rate of 0.5, where it stopped in 191. Under a policy whose
+  every block after `book` leaves an obligation open, the plan reads an existing booking and
+  books none. A failed plan's reason names only a field below a guaranteed one, since the
+  search tests a key of a result itself.
 - The code-mode preamble says a `try` holds one call and one `except ToolError:`, with no `else`
   or `finally`, the one shape the reader takes. It said any call may be wrapped so, and a model
   writing two calls under one `try` was refused at the `try`'s line for a rule it had not been
