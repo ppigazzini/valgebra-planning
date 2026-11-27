@@ -13,17 +13,19 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from valgebra_planning import verify as verifier
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.flows import read_flow
 from valgebra_planning.library import read_library
 from valgebra_planning.planner import plan
-from valgebra_planning.program import render
+from valgebra_planning.program import Ref, render
 from valgebra_planning.run import ToolError, run
 from valgebra_planning.verify import verify
 
@@ -172,6 +174,23 @@ def test_a_program_proven_under_a_rule_never_breaks_it_when_run(data: st.DataObj
         return
     ran = run(program, ROBOT.tools, TASK, GIVEN, _answering(data), flows=[flow], enforce=False)
     assert not [broken for broken in ran.broken if broken.startswith("flow ")], source
+
+
+@settings(max_examples=200, deadline=None)
+@given(st.data())
+def test_a_name_is_held_at_its_root_wherever_a_field_of_it_is(data: st.DataObject) -> None:
+    # The walk asks a name's root alone whether the name is bound, at every call.
+    source = "\n".join([*data.draw(_block({}, 0)), "return o"]) + "\n"
+    seen: list[bool] = []
+    original = verifier._unbound
+
+    def checked(env: dict[Ref, Any], name: str) -> dict[Ref, Any]:
+        seen.append(any(ref.variable == name for ref in env) == (verifier._ref(name) in env))
+        return original(env, name)
+
+    with mock.patch.object(verifier, "_unbound", side_effect=checked):
+        verify(read_program(source), ROBOT.tools, TASK)
+    assert all(seen), source
 
 
 def _flow_links(source: str, task: str) -> dict[str, str]:
