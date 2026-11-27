@@ -1806,8 +1806,13 @@ def _meeting(value: Any, path: tuple[str, ...], held: _Held) -> Any:
 
 
 def _unbound(env: dict[Ref, _Held], name: str) -> dict[Ref, _Held]:
-    """Return what the program holds under any name but ``name``."""
-    if not any(ref.variable == name for ref in env):
+    """Return what the program holds under any name but ``name``.
+
+    A name is bound at its root before a field of it is held, so its root says whether it is
+    bound at all: asked at every call, a scan of every reference held made a straight line of
+    calls quadratic in its length.
+    """
+    if _ref(name) not in env:
         return env.copy()
     return {ref: held for ref, held in env.items() if ref.variable != name}
 

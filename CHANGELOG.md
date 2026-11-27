@@ -30,6 +30,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- `verify` asks whether a name is bound by its root alone, where it scanned every reference
+  held at each call: a name is bound at its root before a field of it is held, which a property
+  test holds over drawn programs at every call. A straight line of calls costs less, timed on
+  one box: 2,000 calls of a tool that may act are critiqued in 0.19 s where they took 0.29, and
+  4,000 of a read-only tool in 0.14 s where they took 0.53. The walk stays quadratic in a straight
+  line's length, by the copies of the values held it makes at each call. Counted by
+  `tools/perf.py` against the change before, the parcel and booking cases take 0.98 to 1.00 of
+  their instructions.
 - A proxy refuses a call that may act and waited in order while a preempting call was made,
   where it made it after the stop: the stop is the later word on what was sent before it, as a
   robot's action server cancels every goal accepted at or before a cancel's stamp. A step back
