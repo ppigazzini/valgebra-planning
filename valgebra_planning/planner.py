@@ -64,6 +64,7 @@ from valgebra_planning.program import (
     Ref,
     Return,
     Stop,
+    aliases,
     render,
     renumber,
 )
@@ -1776,9 +1777,11 @@ def plan(
     mined ``types``, a value fills an argument only where their types agree, and the plan
     names every binding that rests on one. Where ``errors`` is set, a weak program answers an
     error of a call an acted postcondition covers by reading its effect first (`_Search.checked`).
-    Raises `ValueError` for a task naming an input as a tool.
+    Raises `ValueError` for a task naming an input as a tool, and for two tools one alias spells
+    (`valgebra_planning.program.aliases`): the program written would call one for the other.
     """
     fixes(task, contracts)
+    aliases(contracts)
     # The tools are tried in their names' order, so a server listing them in another order
     # gets the same program.
     contracts = dict(sorted(contracts.items()))

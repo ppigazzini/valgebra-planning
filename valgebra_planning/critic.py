@@ -43,10 +43,10 @@ from valgebra_planning.program import (
     Ref,
     Return,
     Stop,
+    alias,
     aliases,
     named,
     slot,
-    spelled,
 )
 from valgebra_planning.verify import Link, Verification, verify
 
@@ -690,7 +690,7 @@ def critique(
     whose name Python does not spell is called by its alias (`valgebra_planning.program.alias`).
     """
     program = read_program(source)
-    if not all(map(spelled, contracts)):
+    if any(alias(name) != name for name in contracts):
         program = named(program, aliases(contracts))
     checked = verify(
         program,

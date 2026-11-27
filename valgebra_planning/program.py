@@ -202,6 +202,13 @@ def slot(tool: str, argument: str) -> str:
     return alias(tool) + _member(argument)
 
 
+#: The names a program and its stubs bind beside the tools: the language's own calls, the
+#: preamble's class and the typing names it imports, and the builtins a stub's hints read.
+BOUND = frozenset(
+    {"stop", "retry", "ToolError", "Any", "Literal", "str", "int", "float", "bool", "list", "dict"}
+)
+
+
 @lru_cache(maxsize=_NAMES)
 def alias(name: str) -> str:
     """Return the identifier a program calls a tool by: its name, where Python spells one.
@@ -210,14 +217,16 @@ def alias(name: str) -> str:
     (MCP 2026-07-28, server/tools), so ``g1.grasp`` and ``get-run`` name tools no Python call
     spells. Such a name is called by an alias: each character outside ``[A-Za-z0-9_]`` written
     ``_``, a leading digit taking a leading ``_`` and a keyword a trailing ``_``, as
-    ``g1_grasp``, ``get_run`` and ``class_``.
+    ``g1_grasp``, ``get_run`` and ``class_``. A name the program or its stubs bind beside the
+    tools (`BOUND`) takes a trailing ``_`` too: a tool named ``stop`` would read as the
+    language's stop, and one named ``Literal`` would shadow the stubs' own.
     """
-    if spelled(name):
+    if spelled(name) and name not in BOUND:
         return name
     written = re.sub(r"[^A-Za-z0-9_]", "_", name)
     if not written or written[0].isdigit():
         written = "_" + written
-    return written + "_" if keyword.iskeyword(written) else written
+    return written + "_" if keyword.iskeyword(written) or written in BOUND else written
 
 
 def aliases(names: Iterable[str]) -> dict[str, str]:

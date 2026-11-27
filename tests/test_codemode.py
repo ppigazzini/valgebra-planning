@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import inspect
 import json
 from pathlib import Path
 from typing import Any, Literal
@@ -392,6 +393,10 @@ def test_a_program_error_names_the_form_the_reader_reads(source: str, says: str)
         ("get-run", "get_run"),
         ("class", "class_"),
         ("3d.scan", "_3d_scan"),
+        ("stop", "stop_"),
+        ("Literal", "Literal_"),
+        ("list", "list_"),
+        ("a.stop", "a_stop"),
     ],
 )
 def test_a_name_python_does_not_spell_is_called_by_its_alias(name: str, called: str) -> None:
@@ -546,6 +551,46 @@ def test_a_listing_s_infinity_is_left_out_of_the_test_a_plan_writes() -> None:
 def test_two_tools_one_alias_spells_are_refused_naming_both(names: list[str]) -> None:
     with pytest.raises(ValueError, match="are both called"):
         aliases(names)
+
+
+def _tool(name: str, inputs: dict[str, Any], outputs: dict[str, Any]) -> Any:
+    """Return a tool taking ``inputs``, every one required, and returning ``outputs``."""
+    return read_contract(
+        {
+            "name": name,
+            "inputSchema": {"type": "object", "properties": inputs, "required": [*inputs]},
+            "outputSchema": {"type": "object", "properties": outputs, "required": [*outputs]},
+        }
+    )
+
+
+def test_a_library_one_alias_spells_twice_is_refused_by_stubs_and_by_plan() -> None:
+    twins = {name: _tool(name, {}, {"n": {"type": "integer"}}) for name in ("a.b", "a-b")}
+    with pytest.raises(ValueError, match=r"'a-b' and 'a\.b' are both called 'a_b'"):
+        stubs(twins)
+    with pytest.raises(ValueError, match=r"'a-b' and 'a\.b' are both called 'a_b'"):
+        plan(twins, read_task("n", {}, {"type": "integer"}))
+
+
+def test_a_tool_named_as_the_stubs_bind_a_name_is_written_by_its_alias() -> None:
+    # A tool named `Literal` beside one whose argument lists its values: the stubs bind
+    # `Literal` from typing, which a function named so would shadow under every later hint.
+    listed = {"hand": {"enum": ["left", "right"]}}
+    tools = {
+        "Literal": _tool("Literal", {}, {"n": {"type": "integer"}}),
+        "pick": _tool("pick", listed, {"n": {"type": "integer"}}),
+        "stop": _tool("stop", {}, {"n": {"type": "integer"}}),
+    }
+    text = stubs(tools)
+    namespace: dict[str, Any] = {}
+    # Compiled as a model's file is, with no annotation of this module's future imports.
+    exec(compile(text, "<stubs>", "exec", dont_inherit=True), namespace)  # noqa: S102
+    assert {"Literal_", "pick", "stop_"} <= set(namespace)
+    for name in ("Literal_", "pick", "stop_"):
+        inspect.get_annotations(namespace[name], eval_str=False)
+    assert inspect.get_annotations(namespace["pick"])["hand"] == Literal["left", "right"]
+    program = read_program("c1 = stop_()\nreturn c1.n\n")
+    assert critique(render(program), tools, read_task("n", {}, {"type": "integer"})).accepted
 
 
 def test_an_attribute_call_is_refused_where_its_last_name_was_read() -> None:

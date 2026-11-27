@@ -72,6 +72,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A tool named as the program language or the stubs bind a name, `stop`, `retry`, `ToolError`,
+  `Any`, `Literal`, or a builtin a stub's hint reads, is called by its alias, the name with a
+  trailing `_`. A tool named `Literal` beside one whose argument lists its values made stubs that
+  raise `TypeError` on CPython 3.11 to 3.13, `Literal` shadowed before the next hint read it, and a
+  tool named `stop` read as the language's stop. `stubs` and `plan` refuse two tools one alias
+  spells, as the library and the critic did: the stubs held two functions of one name and the
+  plan called one for the other.
 - A refusal under a policy with `per` names the ways out of the instance the refused call steps.
   It named those of every state any instance held, the policy's own among them, so a walk refused
   for a held mug was told to ask for a yes, which from `held` leads nowhere, beside the release
