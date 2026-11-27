@@ -480,6 +480,13 @@ ones.
 - **A program writes at most 1024 calls** (`MAX_CALLS`), counted in its text.
   The verifier holds what a path returned at each call it walks and copies it there, so its walk
   grows with the square of a path's calls; a program past the bound is refused, naming the count.
+- **A constant nests at most 32 levels** (`MAX_NESTING`), and **a program's constants hold at most
+  10,000 JSON values and keys** (`MAX_VALUES`). valgebra compiles no set past 128 levels or
+  100,000 nodes, an array two levels a level and a value two or three nodes, and the verifier
+  meets a constant with the set of the value it is tested against and joins a call's constants
+  into one record; past either bound, a 64-deep array or 40,000 values, the compiler's own error
+  escaped the critic. A constant past the depth is refused at its line, and a program past the
+  count naming it, so `repair` hands either back as any program error.
 - **A proxy reads no text a tool declaring no output schema answers.** Such a tool's result is
   answered as the server wrote it, so its text reaches an agent held to no contract, and a
   result field any string fills reaches it inside the checked value: patterns and enums on the

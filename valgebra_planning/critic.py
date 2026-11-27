@@ -96,6 +96,7 @@ def _argument(node: ast.expr) -> Ref | Const:
         raise _fail(node, "an argument is a value the program holds or a JSON constant") from None
     if not _json(value):
         raise _fail(node, "a constant is a JSON value: no tuple, set, bytes or complex number")
+    _deep(node, value)
     return Const.of(value)
 
 
@@ -223,6 +224,7 @@ def _constants(node: ast.expr) -> tuple[Any, ...]:
             ) from None
         if not _json(value):
             raise _fail(item, f"a test lists JSON values, and {value!r} is none")
+        _deep(item, value)
         values.append(value)
     return tuple(values)
 
@@ -434,6 +436,14 @@ def read_program(source: str) -> Block:
             line = unparsed.lineno if unparsed.lineno is not None else "?"
             what = f"line {line}: {unparsed.msg}"
             raise ProgramError(what) from unparsed
+    # A value or a key is a character at least, so a shorter text writes fewer than the bound.
+    values = _values(module) if len(source) > MAX_VALUES else 0
+    if values > MAX_VALUES:
+        what = (
+            f"the program's constants hold {values} JSON values and keys, past {MAX_VALUES}: "
+            "valgebra compiles each into the sets the verifier asks of"
+        )
+        raise ProgramError(what)
     body = module.body
     if len(body) == 1 and isinstance(body[0], (ast.FunctionDef, ast.AsyncFunctionDef)):
         body = body[0].body
@@ -468,6 +478,40 @@ MAX_PATHS = 4096
 #: The calls a program's text may write: the verifier copies what a path holds at each call it
 #: walks, so a path's walk grows with the square of its calls, which its text bounds.
 MAX_CALLS = 1024
+#: The levels a constant may nest. valgebra compiles a set at most 128 levels deep
+#: (`MAX_SCHEMA_DEPTH`), an array two levels a level, and the verifier meets a constant with
+#: the set of the value it is tested against, a few levels more, so 32 leave half the depth to
+#: that value's own set.
+MAX_NESTING = 32
+#: The JSON values and keys a program's constants may hold together. valgebra compiles a set
+#: of at most 100,000 nodes (`MAX_SCHEMA_NODES`), a value two or three, and the verifier joins a
+#: call's constants into one record, so 10,000 leave three quarters to the sets they meet.
+MAX_VALUES = 10_000
+
+
+def _nesting(value: Any) -> int:
+    """Return the levels a JSON value nests: a scalar none, a container one past its items."""
+    deepest, level = 0, [(value, 0)]
+    while level:
+        here, depth = level.pop()
+        if isinstance(here, list | dict):
+            deepest = max(deepest, depth + 1)
+            level += [
+                (item, depth + 1) for item in (here.values() if isinstance(here, dict) else here)
+            ]
+    return deepest
+
+
+def _deep(node: ast.expr, value: Any) -> None:
+    """Raise `ProgramError` at ``node`` for a constant nesting past `MAX_NESTING`."""
+    if (depth := _nesting(value)) > MAX_NESTING:
+        raise _fail(node, f"a constant nests {depth} levels, past {MAX_NESTING}")
+
+
+def _values(module: ast.Module) -> int:
+    """Return the JSON values and keys a program's constants write, each literal and container."""
+    kinds = ast.Constant | ast.List | ast.Tuple | ast.Dict | ast.Set
+    return sum(isinstance(node, kinds) for node in ast.walk(module))
 
 
 def _calls(module: ast.Module) -> int:
