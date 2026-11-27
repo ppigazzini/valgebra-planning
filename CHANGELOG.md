@@ -37,6 +37,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- A failed plan's reason says the bound cut paths short of the goal without counting them, and
+  `Plan.cut` holds the count, as `--json` writes it as `cut`. The count follows what the search's
+  memo keys on, so it moved with a release's speed, 160 to 110 on one toy library, while the
+  verdict did not.
 - A failed plan's reason names each result field that meets the goal where present and that no
   record guarantees, as `get_run.sprt`, and says a program reads it under a key test, which the
   search does not write; where no path reached the bound it reads "no program the search writes".

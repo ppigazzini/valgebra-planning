@@ -194,6 +194,10 @@ class Plan:
     #: For a strong program, each other tool a strong program within the same bound calls
     #: first, in their names' order: the program returned is the earliest by name of them all.
     ties: tuple[str, ...] = ()
+    #: Where no program was found, the paths the depth bound cut short of the goal, none where no
+    #: path reached it. The count follows what the search's memo keys on, so it moves with the
+    #: search's speed and never with the verdict: the reason says whether the bound cut a path.
+    cut: int = 0
 
 
 class _State(NamedTuple):
@@ -1062,8 +1066,8 @@ def _reason(
     unguaranteed = _unguaranteed(listed, task)
     if cut:
         reason = (
-            f"no program within the bound of {depth} calls and tests, which cut {cut} paths "
-            "short of the goal: whether a deeper search finds one is not known"
+            f"no program within the bound of {depth} calls and tests, which cut paths short of "
+            "the goal: whether a deeper search finds one is not known"
         )
     else:
         reason = (
@@ -1934,4 +1938,5 @@ def plan(
         abstraction=abstraction,
         expanded=search.expanded,
         reason=_reason(search.cut, depth, contracts, task, mattering, listed),
+        cut=search.cut,
     )

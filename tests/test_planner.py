@@ -334,6 +334,37 @@ def test_a_reason_names_a_field_meeting_the_goal_that_no_record_guarantees() -> 
     assert "where present" not in (plan({"g": locked}, read_task("an a", {}, count)).reason or "")
 
 
+@pytest.mark.parametrize("depth", [4, 6, 8])
+def test_a_reason_says_the_bound_cut_paths_and_the_plan_counts_them(depth: int) -> None:
+    # A chain of ten tools from the input's kind to the goal's: every bound below ten cuts it.
+    # The count follows the search's memo, so it is a field and the words hold none of it.
+    def kind(at: int) -> dict[str, Any]:
+        return {"type": "string", "pattern": f"^k{at}_"}
+
+    chain = {
+        f"t{at}": read_contract(
+            {
+                "name": f"t{at}",
+                "inputSchema": {"type": "object", "properties": {"v": kind(at)}, "required": ["v"]},
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {"v": kind(at + 1)},
+                    "required": ["v"],
+                },
+            }
+        )
+        for at in range(10)
+    }
+    found = plan(chain, read_task("far", {"v": kind(0)}, kind(10)), depth=depth)
+    assert found.program is None
+    assert found.reason == (
+        f"no program within the bound of {depth} calls and tests, which cut paths short of the "
+        "goal: whether a deeper search finds one is not known"
+    )
+    assert found.cut > 0
+    assert plan(chain, read_task("far", {"v": kind(0)}, kind(10)), depth=10).cut == 0
+
+
 def test_render_takes_a_program_and_refuses_none() -> None:
     with pytest.raises(TypeError, match="render takes a program, a Block, not NoneType"):
         render(None)  # ty: ignore[invalid-argument-type]

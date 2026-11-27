@@ -96,7 +96,7 @@ def _planned(
     )
     row: dict[str, Any] = {"task": problem.task.name, "program": None}
     if found.program is None:
-        return row | {"reason": found.reason}, found
+        return row | {"reason": found.reason, "cut": found.cut}, found
     checked = verify(
         found.program,
         library.tools,
