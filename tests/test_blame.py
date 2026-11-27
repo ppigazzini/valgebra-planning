@@ -54,7 +54,8 @@ def test_an_error_a_retry_cannot_outlast_is_the_fairness_it_assumes() -> None:
     task = TASKS["settle a parcel, tools may fail"]
     program = plan(TOOLS, task, errors=True).program
     assert program is not None
-    ran = run(program, TOOLS, task, INPUTS, {"find_parcel": _raising})
+    # The waits between attempts are the runner's, and no check reads them.
+    ran = run(program, TOOLS, task, INPUTS, {"find_parcel": _raising}, pause=lambda _: 0.0)
     assert blame(ran, TOOLS, proven=True) == (
         "an error of find_parcel outlasted 8 attempts: the fairness a retry assumes"
     )
