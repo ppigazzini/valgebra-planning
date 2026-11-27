@@ -268,13 +268,17 @@ nor false (Bauer et al. 2011, Def. 4.14): every program that asks and then acts 
 a time between no program bounds, so a policy with a lapse would be left undecided on it. The walk
 departs from that reading and takes no lapse, so its link is proven under an assumption it names,
 the timing a run and a proxy hold by their clocks. It also walks each such policy with every lapse
-possible before each call and result, and a link proven so rests on no timing and names none. The
+possible before each call and result, and a link proven so rests on no timing and names none. A
+wait on a call's result is named only where the proof rests on it: where the lapse, taken before
+the result, leads to a state with no lapse of its own, from which the result leads only to states
+it leads to from the state held, none bad or pending, the verdict stands with the assumption
+removed, held vacuously (Kupferman and Vardi 1999, Def. 2, Thm. 1), and the wait is not named. The
 cost is a link proven that a late run breaks, at a check that names the lapse.
 **[DEVIATION: untimed-walk]**
 
-IMPLEMENTED-BY: verify.py::_Walk.obeyed
+IMPLEMENTED-BY: verify.py::_Walk.obeyed, verify.py::_Walk.awaiting, verify.py::_Walk.rests_on
 
-HELD-BY: test_a_policy_link_names_the_timing_it_rests_on_and_no_other_does, test_a_lapse_that_only_admits_more_is_no_assumption, test_an_end_past_a_lapse_into_an_obligation_or_a_violation_is_named, test_a_walk_after_the_yes_lapsed_is_refused_by_the_policy
+HELD-BY: test_a_policy_link_names_the_timing_it_rests_on_and_no_other_does, test_a_lapse_that_only_admits_more_is_no_assumption, test_an_end_past_a_lapse_into_an_obligation_or_a_violation_is_named, test_a_walk_after_the_yes_lapsed_is_refused_by_the_policy, test_a_wait_on_a_result_is_named_only_where_the_proof_rests_on_it
 
 **An obligation is decided over the whole program.** A property that no continuation of a
 run's prefix makes true or false for good, as a notice owed after every booking, is not

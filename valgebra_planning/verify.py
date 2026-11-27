@@ -261,7 +261,12 @@ class _Walk:
     def awaiting(
         self, states: _States, contract: Contract, record: Validator[Any]
     ) -> frozenset[_Awaited]:
-        """Return each state that lapses held where a call its policy reads, or its result, is."""
+        """Return each state that lapses held where a call its policy reads, or its result, is.
+
+        A wait on the result is one a proof rests on unless the lapse changes nothing the result
+        leads to: an assumption whose removal leaves the verdict standing is held vacuously
+        (Kupferman and Vardi 1999, Def. 2, Thm. 1), so it is not named (`_Walk.rests_on`).
+        """
         found: list[_Awaited] = []
         for policy, held in zip(self.policies, states, strict=False):
             if not policy.lapses:
@@ -277,9 +282,29 @@ class _Walk:
                 for state in sorted(reached)
                 if policy.lapse(state) is not None
                 and any((t.result is not None) == returned for t in reading)
+                and (not returned or self.rests_on(policy, state, contract, record))
             ]
         self.awaits += found
         return frozenset(found)
+
+    @staticmethod
+    def rests_on(policy: Policy, state: str, contract: Contract, record: Validator[Any]) -> bool:
+        """Return whether a proof rests on a call's result arriving before ``state`` lapses.
+
+        Where the lapse is taken first, the result steps from its target. It does not rest on
+        the timing where the target has no lapse of its own, since a state entered earlier comes
+        due earlier, and the result leads from it only to states it leads to from ``state``,
+        none bad or pending: the walk holds each already, and the verdict stands without the
+        assumption (Kupferman and Vardi 1999, Def. 2, Thm. 1). It errs toward naming the wait.
+        """
+        lapse = policy.lapse(state)
+        if lapse is None or policy.lapse(lapse.target) is not None:
+            return True
+        name, hints = contract.name, contract.hints
+        late = policy.answered(frozenset({lapse.target}), name, record, hints)
+        if late & (policy.bad | policy.pending):
+            return True
+        return not late <= policy.answered(frozenset({state}), name, record, hints)
 
     def version(self) -> int:
         """Return a version no value has yet.

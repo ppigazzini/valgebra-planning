@@ -225,7 +225,10 @@ verifier, which adds a link for it.
   state or a state nothing enters, and no chain of them leads back where it began. The walk reads no
   time and takes no lapse: a policy's link that would not be proven with each taken possibly names,
   as an assumption, that the run reaches each call within the seconds of entering the state held
-  there, and a plan names the same. A policy reads one program's calls in order
+  there, or its result where a transition reads it, and a plan names the same. A wait on a result
+  is named only where the proof rests on it: one whose lapse leads where the result would lead
+  anyway, with no lapse of its own and nothing bad or pending past it, is held vacuously and not
+  named. A policy reads one program's calls in order
   and, before the
   run, carries no value from one call to another; with `per`, the runner holds one instance per
   value. A transition may read an annotation hint, `destructiveHint` or
