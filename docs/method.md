@@ -309,7 +309,9 @@ verifier, which adds a link for it.
   wrong binding a plan made is never read back as observed. A task input a log records,
   `{"inputs": {...}}`, is typed as any slot; one it never records fills no argument whose type
   a tool's result was seen in. A mined type is an assumption: the verifier reads none, and a
-  plan names each binding that rests on one.
+  plan names each binding that rests on one, and each into or out of a slot no observation
+  typed, `resting on no observation`: such a slot agrees with every argument, so the binding
+  rests on the absence of one.
 - **Inferred outputs** (`valgebra_planning/mining.py`). A tool listed without an `outputSchema`
   gets one shaped from its results in the observed calls: each kind seen, an object's keys every
   observed one holds required, nothing narrower guessed. It is an assumption as a mined type is:

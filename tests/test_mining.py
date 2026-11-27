@@ -90,10 +90,38 @@ def test_mined_types_route_the_notice_through_the_sanitizer_as_observed() -> Non
         "c3 = notify(email=c2.email)\n"
         "return c3.notice_id"
     )
+    # The tracking code fills an argument the log types and was never recorded itself.
     assert found.assumed == (
+        "tracking -> find_parcel.tracking, resting on no observation",
         "c1.parcel.contact -> verify_contact.email",
         "c2.email -> notify.email",
     )
+
+
+def test_a_binding_no_observation_types_is_named_as_resting_on_none() -> None:
+    # A search whose username no call shows, filled from a run's id no log records: the types
+    # refute nothing there, so the binding rests on the absence of an observation.
+    def tool(name: str, inputs: dict[str, Any], outputs: dict[str, Any]) -> Contract:
+        return read_contract(
+            {
+                "name": name,
+                "inputSchema": {"type": "object", "properties": inputs},
+                "outputSchema": {"type": "object", "properties": outputs, "required": [*outputs]},
+            }
+        )
+
+    word, listed = {"type": "string"}, {"type": "array"}
+    tools = {
+        "get_run": tool("get_run", {"run_id": word}, {"run_id": word}),
+        "search_actions": tool("search_actions", {"username": word}, {"actions": listed}),
+    }
+    log = [{"tool": "get_run", "arguments": {"run_id": "r1"}, "result": {"run_id": "r1"}}]
+    task = read_task("events of a run", {"run_id": word}, listed, reads=["run_id"])
+    found = plan(tools, task, types=mine(log, tools))
+    assert found.program is not None
+    assert render(found.program) == "c1 = search_actions(username=run_id)\nreturn c1.actions"
+    assert found.assumed == ("run_id -> search_actions.username, resting on no observation",)
+    assert plan(tools, task).assumed == ()
 
 
 def test_the_verifier_reads_no_mined_type() -> None:

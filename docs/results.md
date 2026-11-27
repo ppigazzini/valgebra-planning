@@ -37,7 +37,8 @@ contact check and a notice. Each task is planned, then verified by valgebra alon
   `IT`, `FR` and `DE` for a customs form.
 - A notice goes to the contact as the sender wrote it, unless a flow rule or the types mined from
   observed calls route it through the contact check; under mined types the plan names both
-  bindings that rest on them.
+  bindings that rest on them, and the tracking code's, which rests on no observation: the log
+  types `find_parcel.tracking` and records no task input.
 - `tests/test_run.py`, `tests/test_outcomes.py` and `tests/test_policy.py` run these programs
   against tools answering with values drawn from their own output schemas, and failing three
   times in ten: no contract is broken, and the monitor reports every policy violation the
