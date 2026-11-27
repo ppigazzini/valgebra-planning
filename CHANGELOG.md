@@ -8,6 +8,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- `critic.MAX_CALLS`: a program whose text writes more than 1024 calls is a `ProgramError`
+  naming the count, as one past `MAX_PATHS` paths is. The verifier copies what a path holds at
+  each call it walks, so a path's walk grows with the square of its calls, and a program a model
+  writes bounded the walk by its paths alone.
 - `Plan.ties`: for a strong program, each other tool a strong program within the same bound
   calls first, in their names' order. The program returned is the first the names' order
   reaches, and two tools whose results both meet the goal were told apart by nothing a caller

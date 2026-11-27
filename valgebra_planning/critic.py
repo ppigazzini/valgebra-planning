@@ -451,12 +451,31 @@ def read_program(source: str) -> Block:
             "doubles them; end a side with a return or a stop"
         )
         raise ProgramError(what)
+    # A call is five characters at least, `x=f()`, so a shorter text writes fewer than the bound.
+    calls = _calls(module) if len(source) > 5 * MAX_CALLS else 0
+    if calls > MAX_CALLS:
+        what = (
+            f"the program writes {calls} calls, past {MAX_CALLS}: the verifier holds what a path "
+            "returned at each call it walks, so its walk grows with the square of a path's calls"
+        )
+        raise ProgramError(what)
     return program
 
 
 #: The paths a program may take: each `if` whose sides run on into what follows doubles them,
 #: and the verifier walks each.
 MAX_PATHS = 4096
+#: The calls a program's text may write: the verifier copies what a path holds at each call it
+#: walks, so a path's walk grows with the square of its calls, which its text bounds.
+MAX_CALLS = 1024
+
+
+def _calls(module: ast.Module) -> int:
+    """Return the calls a program's text writes: each a statement binding a call's result."""
+    return sum(
+        isinstance(node, ast.Assign) and isinstance(node.value, ast.Call | ast.Await)
+        for node in ast.walk(module)
+    )
 
 
 def _paths(block: Block, counted: dict[int, int]) -> int:
