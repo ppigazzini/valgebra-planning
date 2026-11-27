@@ -37,6 +37,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- The code-mode preamble says a `try` holds one call and one `except ToolError:`, with no `else`
+  or `finally`, the one shape the reader takes. It said any call may be wrapped so, and a model
+  writing two calls under one `try` was refused at the `try`'s line for a rule it had not been
+  told. The method page's Limits say why a run of calls is not read.
 - Under mined types a plan names each binding into or out of a slot no observation typed, as
   `run_id -> search_actions.username, resting on no observation`, beside those resting on a
   type. Such a slot agrees with every argument, so a plan filling a search's username from a

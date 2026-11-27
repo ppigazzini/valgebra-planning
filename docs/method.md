@@ -481,6 +481,11 @@ ones.
   would need each held to the argument's rules, or a `sources` rule on the argument would be
   proven while an untrusted value passes inside it. Where the tool takes the field as an
   argument of its own, the held value is passed there: `search_actions(username=r.username)`.
+- **A `try` holds one call.** Python sends a run of calls under one `try` to the handler from any
+  of them, each binding before it held, so the reader would read one error block per call. Every
+  program read so far has a plain spelling: a `return` after the `try` is the same program, and two
+  calls are two blocks where the handler ends its path. One shape has none, a handler that runs
+  out over two calls; the reader waits for a program that needs it before reading it.
 - **A program runs at most 4096 paths** (`MAX_PATHS`). Each `if` whose sides run on into what
   follows doubles the paths, and the verifier walks each, so twelve in a row are the most a
   program holds and a thirteenth is refused, naming the count; the planner's programs over the
