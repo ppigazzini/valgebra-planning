@@ -65,6 +65,13 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A refusal under a policy with `per` names the ways out of the instance the refused call steps.
+  It named those of every state any instance held, the policy's own among them, so a walk refused
+  for a held mug was told to ask for a yes, which from `held` leads nowhere, beside the release
+  that does. A call carrying the `per` argument is an event of its value's instance alone, so the
+  ways out read are that instance's, or, for a value no call has carried, the states a new
+  instance starts in; naming them makes no instance. A call carrying no `per` argument names
+  every instance's, as before.
 - A task's required input is written into the first optional argument its set fills, as the
   planner's own rule says, where it was written into the first the mined types agreed with:
   with no types mined that is the first optional argument listed, so a tool listing an integer

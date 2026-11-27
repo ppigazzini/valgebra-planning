@@ -615,7 +615,7 @@ class Gate:
                     kept.restore(snapshot)
                 # Name the calls that move the policy on from where the refusal leaves it, so an
                 # agent reads what admits the call, not the state alone.
-                ways = monitor.ways_out(tool, hints)
+                ways = monitor.ways_out(tool, hints, arguments)
                 return "; ".join([monitor.violations[-1], *ways])
         self.opened(tool, arguments, hints, list(zip(watched, states, strict=True)))
         for monitor, order in orders:

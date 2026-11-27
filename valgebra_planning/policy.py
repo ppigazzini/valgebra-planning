@@ -830,7 +830,12 @@ class Monitor:
         """Step on a call's result; return whether it may reach a bad state, never left."""
         return self.step(tool, arguments, hints, result, at)
 
-    def ways_out(self, tool: str, hints: frozenset[str] = frozenset()) -> list[str]:
+    def ways_out(
+        self,
+        tool: str,
+        hints: frozenset[str] = frozenset(),
+        arguments: Mapping[str, Any] | None = None,
+    ) -> list[str]:
         """Return each call that moves the run on from where a refused call to ``tool`` leaves it.
 
         Each is a transition from a state the run may be in to one that is not bad, on a call
@@ -839,9 +844,12 @@ class Monitor:
         there are any, a no that leads back left out. A transition reading a result is named by
         the test a program writes where its guard reads one field's members, `confirm with status
         'yes'`, and otherwise as reading its result; one reading a hint by the hint; each is named
-        once, in the order the policy lists them.
+        once, in the order the policy lists them. A call carrying the ``per`` argument in
+        ``arguments`` is an event of its value's instance alone (Roşu and Chen 2012, Def. 11), so
+        the states read are that instance's, or, for a value no call has carried, the states a
+        new instance starts in; no instance is made.
         """
-        held = self.held() - self.policy.bad
+        held = self.instance_held(arguments) - self.policy.bad
         named: list[str] = []
         moves: list[str] = []
         for lapse in self.policy.lapses:
@@ -866,6 +874,19 @@ class Monitor:
         # A way that leads the refused call out comes first; where none does in one call, each
         # call that moves the policy on is named, the first of a longer way among them.
         return named or moves
+
+    def instance_held(self, arguments: Mapping[str, Any] | None = None) -> frozenset[str]:
+        """Return the states a call carrying ``arguments`` steps from, every instance's for none.
+
+        A call carrying the ``per`` argument steps its value's instance, which starts where the
+        calls carrying none left the policy (`stepping`); this reads it and makes none.
+        """
+        every = self.held()
+        per = self.policy.per
+        if not per or arguments is None or per not in arguments:
+            return every
+        instance = self.instances.get(json_key(arguments[per]))
+        return instance.holding() if instance is not None else self.also | {self.state}
 
     def admits(self, state: str, tool: str, hints: frozenset[str]) -> bool:
         """Return whether no transition reading a call to ``tool`` takes ``state`` to a bad one."""
