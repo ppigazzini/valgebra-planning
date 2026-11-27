@@ -300,7 +300,13 @@ class _Runner:
             if var not in inputs:
                 message = f"the input {var} the task names is not given"
             elif not whole.values.is_valid(inputs[var]):
-                detail = failures(whole.values, inputs[var], declared(whole.schema))
+                detail = failures(
+                    whole.values,
+                    inputs[var],
+                    declared(whole.schema),
+                    whole.root,
+                    asserted=whole.asserted,
+                )
                 message = f"the input {var} lies outside the task's ({detail})"
             else:
                 continue
@@ -332,7 +338,13 @@ class _Runner:
         """Check a return: its value inside the goal, read from each input the task requires."""
         value = _read(env, end.ref)
         if not self.task.goal.is_valid(value):
-            detail = failures(self.task.goal, value, declared(self.task.goal_schema))
+            detail = failures(
+                self.task.goal,
+                value,
+                declared(self.task.goal_schema),
+                self.task.goal_schema,
+                asserted=self.task.asserted,
+            )
             refused = self.breaks(f"returned a value outside the goal ({detail})", "goal")
             if refused is not None:
                 return refused
@@ -414,7 +426,13 @@ class _Runner:
             ):
                 continue
             if not post.shows.is_valid(result):
-                detail = failures(post.shows, result, declared(*post.schemas))
+                detail = failures(
+                    post.shows,
+                    result,
+                    declared(*post.schemas),
+                    post.schemas[1],
+                    asserted=post.asserted,
+                )
                 message = f"{call.tool} returned a value outside {post.name} ({detail})"
                 refused = self.breaks(message, "postcondition", call.tool)
                 if refused is not None:
@@ -441,7 +459,13 @@ class _Runner:
                 outside = "the output schema inferred from observed calls"
             else:
                 outside = "its contract"
-            detail = failures(values, result, contract_names(contract))
+            detail = failures(
+                values,
+                result,
+                contract_names(contract),
+                contract.schemas[1],
+                asserted=contract.asserted,
+            )
             message = f"{call.tool} returned a value outside {outside} ({detail})"
             refused = self.breaks(message, check, call.tool)
             if refused is not None:
@@ -460,7 +484,13 @@ class _Runner:
         """
         tool = call.tool
         if not contract.accepts.is_valid(arguments):
-            detail = failures(contract.accepts, arguments, contract_names(contract))
+            detail = failures(
+                contract.accepts,
+                arguments,
+                contract_names(contract),
+                contract.schemas[0],
+                asserted=contract.asserted,
+            )
             refused = self.breaks(f"{tool} refuses its arguments ({detail})", "arguments", tool)
             if refused is not None:
                 return refused

@@ -152,9 +152,10 @@ library defines, and, the call made, its result to the output schema
 (`valgebra_planning/proxy.py`). A broken check answers the call with a tool error naming it, and
 the call never reaches the server, or its result the agent. The server's tools are read as the
 library reads its own listing, with its `assertFormat` and `closedResults`. The error names the
-path and code of the value's first three failures, at most, as `run_id: string_pattern_mismatch`,
-and never the value: a key the tool's schemas do not declare is written `*`, so no part of a
-refused result reaches the agent through the error.
+path of the value's first three failures, at most, each with the JSON Schema keyword that
+refuses the value there, as `run_id: pattern`, or valgebra's code where no keyword is found, and
+never the value: a key the tool's schemas do not declare is written `*`, so no part of a refused
+result reaches the agent through the error.
 A policy's lapses are read by the process's monotonic clock at each call, so a yes held for two
 minutes admits no call after them, and a proxy started again holds none of it.
 A policy's refusal names the calls that admit the refused one, a result by the test a program

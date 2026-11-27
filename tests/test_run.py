@@ -542,7 +542,7 @@ def test_a_call_to_a_tool_the_run_was_not_given_ends_the_run_there() -> None:
     [
         (
             {"tracking": "nope"},
-            "the input tracking lies outside the task's (string_pattern_mismatch)",
+            "the input tracking lies outside the task's (pattern)",
         ),
         ({}, "the input tracking the task names is not given"),
     ],

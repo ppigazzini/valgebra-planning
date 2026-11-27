@@ -37,6 +37,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- A refusal names each failure by the JSON Schema keyword that refuses the value at its path, as
+  `limit: minimum` and `kind: enum`, and by valgebra's code only where no keyword is found: an
+  integer's bound failed as valgebra's `union_error`, which names no bound. `failures` reads the
+  keyword from the document the set is compiled from, which `Contract.schemas` keeps for the
+  input and output sets beside `Contract.asserted`, and `Task.asserted` for the goal; the value is
+  still never written. A refusal takes 13 to 200 microseconds more, on the refusal alone.
 - A run holds its task's rules on the values: each argument the task fixes to its constant, each
   it reads fresh to a value returned after every call before it that may act, and the returned
   value to being read from each input `reads` names. A run held the task's inputs and its goal

@@ -241,6 +241,12 @@ class Contract:
     #: ``"refuses"``: an outcome the schemas do not state, so an error of it is read as one
     #: whatever ``errors`` says, and it is never retried, the same arguments refused again.
     refuses: bool = False
+    #: The input schema ``accepts`` is compiled from and the output schema ``returns`` is, as
+    #: read, an older draft upgraded and a result read closed closed, None where there is no
+    #: output schema: the documents a refusal reads the keyword a failure breaks from.
+    schemas: tuple[object, object] = (True, None)
+    #: Whether ``format`` is read as an assertion in both.
+    asserted: bool = False
     #: What `shown` found, in a tuple of one, kept from its first call: a contract never changes.
     _shown: tuple[Any, ...] = field(default=(), init=False, repr=False, compare=False)
 
@@ -307,6 +313,8 @@ class Task:
     #: The inputs a program must read before it returns: a value meeting the goal's set and
     #: read from none of them is not the one the task asks.
     reads: frozenset[str] = frozenset()
+    #: Whether ``format`` is read as an assertion in the goal and the inputs' sets.
+    asserted: bool = False
 
 
 def _root(schema: object) -> object:
@@ -481,7 +489,7 @@ def read_contract(
     )
     output = spec.get("outputSchema")
     results: tuple[Slot, ...] = ()
-    returns, declared = tool.result, None
+    returns, declared, out_root = tool.result, None, None
     if output is not None and tool.result is not None:
         out_root = _root(output)
         whole = tool.result
@@ -499,7 +507,7 @@ def read_contract(
             except Unsupported as error:
                 msg = f"tool {tool.name!r}: its output schema read closed: {error}"
                 raise Unsupported(msg) from error
-            declared = whole
+            declared, out_root = whole, shut
             results = (replace(results[0], schema=shut, values=returns, root=shut), *results[1:])
     return Contract(
         name=tool.name,
@@ -511,6 +519,8 @@ def read_contract(
         idempotent=_idempotent(spec.get("annotations")),
         hints=_hints(spec.get("annotations")),
         declared=declared,
+        schemas=(root, out_root),
+        asserted=assert_format,
     )
 
 
@@ -655,6 +665,7 @@ def read_task(
         constants=tuple(fixed),
         fresh=read_fresh,
         reads=frozenset(reads),
+        asserted=assert_format,
     )
 
 
@@ -963,21 +974,38 @@ def contract_names(contract: Contract) -> frozenset[str]:
     return declared(*roots.values())
 
 
-def failures(values: Validator[Any], value: object, names: frozenset[str]) -> str:
-    """Return where ``value`` lies outside ``values``: its first failures' paths and codes.
+def failures(
+    values: Validator[Any],
+    value: object,
+    names: frozenset[str],
+    schema: object = None,
+    *,
+    asserted: bool = False,
+) -> str:
+    """Return where ``value`` lies outside ``values``: its first failures' paths and keywords.
 
     At most three are listed, the first valgebra's full report holds, in its order, and the
     walk stops there: how many follow is not counted, so a value failing a thousand times
-    costs its refusal no more than one failing three. The value is never written, nor a key
-    ``names`` does not hold, which is written ``*``: a refusal reaches whoever made the call,
-    and a value outside its contract, or a key it chose, would reach them through it.
+    costs its refusal no more than one failing three. Each is named by the keyword of
+    ``schema``, the document ``values`` is compiled from, an older draft read upgraded as
+    `compile_schema` reads it, that refuses the value at its path,
+    as JSON Schema's output names an error (draft 2020-12, section 12.3) and
+    valgebra-jsonschema's ``located`` finds it, ``asserted`` reading ``format`` as ``values``
+    does; by valgebra's code where none is found or no ``schema`` is given. An integer's bound
+    fails in valgebra as a union of two kinds, which its code names and ``minimum`` does not.
+    The value is never written, nor a key ``names`` does not hold, which is written ``*``: a
+    refusal reaches whoever made the call, and a value outside its contract, or a key it
+    chose, would reach them through it.
     """
     try:
         values.validate(value, limit=_FAILURES_SHOWN)
     except ValidationError as error:
-        return "; ".join(
-            f"{_where(failure['path'], names)}{failure['code']}" for failure in error.errors
-        )
+        compiler = None if schema is None else Compiler(_root(schema), assert_format=asserted)
+        named = []
+        for failure in error.errors:
+            found = None if compiler is None else compiler.located(failure, value).get("keyword")
+            named.append(f"{_where(failure['path'], names)}{found or failure['code']}")
+        return "; ".join(named)
     return "no failure valgebra names"
 
 

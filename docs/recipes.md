@@ -188,7 +188,7 @@ print(blame(ended, contracts, proven=checked.accepted))
 
 ```text
 True None
-find_order returned a value outside its contract (status: union_error)
+find_order returned a value outside its contract (status: enum)
 find_order broke the output schema its server declares
 ```
 
@@ -1037,7 +1037,7 @@ True
 uncovered: c3.answer (at then.else); the task tolerates it
 uncovered: c2.distance (at else); the task tolerates it
 assumed: the annotation hints policy a destructive call follows a confirmation reads
-estimate_pose returned a value outside its contract (distance.unit: literal_error; distance.value: union_error)
+estimate_pose returned a value outside its contract (distance.unit: const; distance.value: maximum)
 ```
 
 Over the contracts alone, the program filling the answer with the task's `name` is verified:

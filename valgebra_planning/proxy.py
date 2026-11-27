@@ -583,7 +583,13 @@ class Gate:
         if stopped is not None:
             return stopped
         if not contract.accepts.is_valid(arguments):
-            detail = failures(contract.accepts, arguments, contract_names(contract))
+            detail = failures(
+                contract.accepts,
+                arguments,
+                contract_names(contract),
+                contract.schemas[0],
+                asserted=contract.asserted,
+            )
             return f"{tool} refuses its arguments ({detail})"
         flowing = self.flowing(tool, arguments)
         if flowing is not None:
@@ -798,7 +804,13 @@ class Gate:
             self.unread(tool, arguments or {})
             if contract.declared is not None and contract.declared.is_valid(value):
                 return f"{tool} returned a key its output schema does not declare, read closed"
-            detail = failures(contract.returns, value, contract_names(contract))
+            detail = failures(
+                contract.returns,
+                value,
+                contract_names(contract),
+                contract.schemas[1],
+                asserted=contract.asserted,
+            )
             return f"{tool} returned a value outside its contract ({detail})"
         refused = self.stepped_on(tool, dict(arguments or {}), value, contract.hints)
         if refused is not None:
