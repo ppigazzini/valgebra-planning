@@ -83,6 +83,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Fixed
 
+- A program's constant nested past what valgebra compiles, as an array 64 levels deep in an
+  argument or an object 126 deep in a test, or a program whose constants held 40,000 values,
+  escaped `critique` as the compiler's `Unsupported` or `ValueError`, and `repair` ended on it. The
+  reader refuses a constant nesting past 32 levels (`MAX_NESTING`) at its line and a program whose
+  constants hold past 10,000 JSON values and keys (`MAX_VALUES`) naming the count, each a
+  `ProgramError`; at the bounds every shape the verifier compiles stays inside valgebra's limits.
 - A key test is proven only on an object and a loop only on an array. `"p" in r.xs` on an array
   and `"a" in r.s` on a string were read as key tests, always false, where Python reads membership
   and a substring test, and `for ch in r.s` ran no iteration where Python walks the characters:

@@ -2,14 +2,24 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from valgebra_planning import critic
+from valgebra_planning.codemode import repair
 from valgebra_planning.contracts import read_contract, read_task
-from valgebra_planning.critic import MAX_CALLS, MAX_PATHS, ProgramError, critique, read_program
+from valgebra_planning.critic import (
+    MAX_CALLS,
+    MAX_NESTING,
+    MAX_PATHS,
+    MAX_VALUES,
+    ProgramError,
+    critique,
+    read_program,
+)
 from valgebra_planning.flows import read_flow
 from valgebra_planning.library import read_library
 from valgebra_planning.mining import mine
@@ -399,6 +409,69 @@ def test_a_key_test_on_an_object_and_a_loop_on_an_array_are_proven(source: str) 
     task = read_task("a string", {}, {"type": "string"}, stops={"g": {}})
     checked = critique(source, LISTING, task)
     assert checked.verification.verified, checked.notes
+
+
+#: A tool taking any JSON value, and a task its result's count meets.
+TAKING = {
+    "f": read_contract(
+        {
+            "name": "f",
+            "inputSchema": {"type": "object", "properties": {"x": {}}, "required": ["x"]},
+            "outputSchema": {
+                "type": "object",
+                "properties": {"n": {"type": "integer"}, "v": {}},
+                "required": ["n", "v"],
+            },
+        }
+    )
+}
+COUNT = read_task("an n", {}, {"type": "integer"}, stops={"f": {}})
+
+
+def _arrays(depth: int) -> str:
+    return "[" * depth + "1" + "]" * depth
+
+
+def _objects(depth: int) -> str:
+    return '{"a": ' * depth + "1" + "}" * depth
+
+
+@pytest.mark.parametrize(
+    ("written", "line"),
+    [
+        (lambda d: f"c1 = f(x={_arrays(d)})\nreturn c1.n\n", 1),
+        (lambda d: f"c1 = f(x={_objects(d)})\nreturn c1.n\n", 1),
+        (lambda d: f"c1 = f(x=1)\nif c1.v in ({_arrays(d)},):\n    return c1.n\nstop(c1)\n", 2),
+        (lambda d: f"c1 = f(x=1)\nif c1.v in (1, {_objects(d)}):\n    return c1.n\nstop(c1)\n", 2),
+    ],
+)
+def test_a_constant_nesting_past_the_bound_is_refused_at_its_line(
+    written: Callable[[int], str], line: int
+) -> None:
+    # valgebra compiles no set past 128 levels, an array two a level: a 64-deep array argument
+    # and a 126-deep object in a test escaped the critic as the compiler's own errors.
+    assert critique(written(MAX_NESTING), TAKING, COUNT).verification.verified
+    for depth in (MAX_NESTING + 1, 64, 126, 127):
+        with pytest.raises(ProgramError, match=f"^line {line}: a constant nests {depth} levels"):
+            read_program(written(depth))
+
+
+def test_a_program_past_the_value_bound_is_refused_with_its_count() -> None:
+    # A list of n items is n + 1 values: the list and each item.
+    at = f"c1 = f(x={list(range(MAX_VALUES - 1))})\nreturn c1.n\n"
+    assert critique(at, TAKING, COUNT).verification.verified
+    past = f"c1 = f(x={list(range(MAX_VALUES))})\nreturn c1.n\n"
+    with pytest.raises(ProgramError, match=f"constants hold {MAX_VALUES + 1} JSON values"):
+        read_program(past)
+
+
+def test_repair_hands_a_constant_past_the_bound_back_and_goes_on() -> None:
+    sources = iter([f"c1 = f(x={_objects(127)})\nreturn c1.n\n", "c1 = f(x=1)\nreturn c1.n\n"])
+    repaired = repair(lambda _: next(sources), TAKING, COUNT)
+    (_, first), (_, second) = repaired.rounds
+    assert first == "line 1: a constant nests 127 levels, past 32"
+    assert isinstance(second, critic.Critique)
+    assert second.accepted
 
 
 @pytest.mark.parametrize(("tests", "read"), [(12, True), (13, False)])
