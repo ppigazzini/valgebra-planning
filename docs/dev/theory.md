@@ -70,9 +70,14 @@ Def. 2.10). The members are the tool's own, so the test narrows what a call retu
 input or a free-text field is never tested into the goal, since a value equal to the goal's
 member is then no outcome any call reported. A field its record declares and does not require is
 held only on the side of a key test, the same observation on whether the key is present, which
-the search writes for an acted postcondition alone; where the search finds no program and such
-a field meets the goal, the reason names it, a program reaching the goal through it lying past
-what the search writes. A strong program found, each other tool a strong
+the search writes on a call's result where the field meets the goal: the `then` side holds the
+field, and the other takes a strong program or, in a weak search, stops (Cimatti et al. 2003,
+Def. 2.10). A stop on a value no predicate splits leaves its one cell uncovered, and of two weak
+programs the one whose stops all lie in error blocks ranks first: it reaches the goal on every
+outcome of the calls that answer, strong over the domain with no error (Cimatti et al. 2003,
+Def. 2.1), as a booking does where a read of one that may not exist does not. A field below a
+guaranteed one is tested by no search; where none finds a program and such a field meets the
+goal, the reason names it. A strong program found, each other tool a strong
 program within the same bound calls first is named beside it (Cimatti et al. 2003, Def. 2.10):
 the names' order broke the tie, and the plan says which tools it broke it among. A program is
 strong of the transitions its domain holds (Cimatti et al. 2003, Def. 2.1), so a tool whose
@@ -80,9 +85,9 @@ contract `refuses` some arguments it admits, an outcome no schema states, has it
 one whatever the errors flag says, and is never retried.
 **[LOAD-BEARING: strong-programs]**
 
-IMPLEMENTED-BY: planner.py, planner.py::_ranked, planner.py::_Search.stopping, planner.py::_test_first, planner.py::_Search.observed, planner.py::_ties, planner.py::_Search.failure, planner.py::_unguaranteed
+IMPLEMENTED-BY: planner.py, planner.py::_ranked, planner.py::_Search.stopping, planner.py::_test_first, planner.py::_Search.observed, planner.py::_ties, planner.py::_Search.failure, planner.py::_unguaranteed, planner.py::_Search.present
 
-HELD-BY: test_a_strong_program_branches_on_every_status_and_verifies, test_a_strong_program_names_the_other_tools_one_could_start_with, test_a_tool_that_refuses_arguments_it_admits_is_planned_with_its_error_block, test_a_weak_program_names_the_status_no_tool_settles, test_a_strong_program_breaks_no_contract_whatever_the_tools_return, test_the_depth_bounds_the_calls_and_tests_on_a_path, test_the_program_is_the_same_whatever_order_the_tools_are_listed_in, test_the_weak_program_leaving_the_fewest_cells_uncovered_is_returned, test_a_preferred_goal_is_returned_where_it_can_be_and_the_next_fills_its_stops, test_where_no_program_reaches_the_preferred_goal_the_plan_returns_in_the_next, test_a_call_one_branch_alone_needs_is_made_after_the_test_that_decides_it, test_a_call_every_path_needs_stays_before_the_test, test_a_listed_field_is_tested_into_the_goal_on_the_members_it_lists, test_no_input_and_no_field_listing_no_members_is_tested_into_the_goal, test_a_reason_names_a_field_meeting_the_goal_that_no_record_guarantees
+HELD-BY: test_a_strong_program_branches_on_every_status_and_verifies, test_a_strong_program_names_the_other_tools_one_could_start_with, test_a_tool_that_refuses_arguments_it_admits_is_planned_with_its_error_block, test_a_weak_program_names_the_status_no_tool_settles, test_a_strong_program_breaks_no_contract_whatever_the_tools_return, test_the_depth_bounds_the_calls_and_tests_on_a_path, test_the_program_is_the_same_whatever_order_the_tools_are_listed_in, test_the_weak_program_leaving_the_fewest_cells_uncovered_is_returned, test_a_preferred_goal_is_returned_where_it_can_be_and_the_next_fills_its_stops, test_where_no_program_reaches_the_preferred_goal_the_plan_returns_in_the_next, test_a_call_one_branch_alone_needs_is_made_after_the_test_that_decides_it, test_a_call_every_path_needs_stays_before_the_test, test_a_listed_field_is_tested_into_the_goal_on_the_members_it_lists, test_no_input_and_no_field_listing_no_members_is_tested_into_the_goal, test_a_reason_names_a_field_meeting_the_goal_that_no_record_guarantees, test_a_key_of_a_result_is_tested_into_the_goal, test_the_planner_writes_no_stop_a_policy_s_obligation_is_open_at
 
 **The verifier reads a program as belief execution.** The set a reference lies in at a point of
 a program is its belief there: a call's result enters as its output set, replacing every belief

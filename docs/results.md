@@ -151,8 +151,9 @@ uv run python tools/faults.py examples/bookings --check docs/studies/faults.json
 `examples/bookings` holds `book`, which is not idempotent, `find_booking`, which reads a parcel's
 label once one is booked, and the postcondition that whenever `book` acts, `find_booking` on the
 same parcel shows a label. Three programs are verified and run, 400 seeded episodes for each
-fault mode and rate: the one planned without the postcondition, which stops on an error of
-`book`; the one planned with it, which reads the booking after the error and books again only
+fault mode and rate: the one planned without the postcondition, which reads the booking after
+an error of `book`, returns its label where it shows one and stops where it does not, booking no
+more; the one planned with it, which reads the booking after the error and books again only
 where the read shows no label; and a blind retry, which books again whatever happened, the
 retry the verifier refutes. A call to `book` faults in one of the failure modes of non-atomic
 tools (Mansoor et al. 2026): acting and then answering with an error, or answering with an
@@ -161,9 +162,9 @@ label.
 
 | faults | rate | planned: stopped, duplicates | with the postcondition: stopped, duplicates | blind retry: stopped, duplicates |
 |---|---:|---|---|---|
-| act or not, then an error | 0.1 | 37, 0 | 2, 0 | 5, 16 |
-| act or not, then an error | 0.3 | 114, 0 | 18, 0 | 29, 47 |
-| act or not, then an error | 0.5 | 191, 0 | 49, 0 | 102, 82 |
+| act or not, then an error | 0.1 | 20, 0 | 2, 0 | 5, 16 |
+| act or not, then an error | 0.3 | 61, 0 | 18, 0 | 29, 47 |
+| act or not, then an error | 0.5 | 87, 0 | 49, 0 | 102, 82 |
 | act, then a stale read | 0.1 | 37, 0 | 8, 37 | 8, 37 |
 | act, then a stale read | 0.3 | 128, 0 | 48, 128 | 48, 128 |
 | act, then a stale read | 0.5 | 190, 0 | 100, 190 | 100, 190 |
@@ -172,8 +173,9 @@ label.
 | a booking with no label | 0.5 | 199, 0 | 89, 199 | 89, 199 |
 
 - Where the read reports what the call did, the block turns most stops into returns and books
-  no parcel twice: 49 stops in 400 at a fault rate of 0.5, where the program without it stops
-  in 191.
+  no parcel twice: 49 stops in 400 at a fault rate of 0.5. Without the postcondition the read
+  returns the label where `book` acted, and stops in 87 on the errors where it did not, since
+  nothing says a booking the read does not show was not made.
 - A stale read and a partial booking are where the postcondition is false: the read shows no
   label after a call that acted. There the block books a parcel twice in as many episodes as the
   blind retry. Both

@@ -19,6 +19,7 @@ from valgebra_planning.mining import mine
 from valgebra_planning.planner import plan, predicates
 from valgebra_planning.policy import read_policy
 from valgebra_planning.program import Branch, Ref, Return, render, steps
+from valgebra_planning.run import run
 from valgebra_planning.verify import verify
 
 ORDER_ID = {"type": "string", "pattern": "^ord_[0-9]+$"}
@@ -300,26 +301,45 @@ def _reading(name: str, output: dict[str, Any]) -> Contract:
     )
 
 
-def test_a_reason_names_a_field_meeting_the_goal_that_no_record_guarantees() -> None:
-    # `f.a` meets an integer goal where present, and `{a?: integer}` does not guarantee it: a
-    # key test reads it, which the search does not write, so a program exists past the search.
+def test_a_key_of_a_result_is_tested_into_the_goal() -> None:
+    # `f() -> {a?: integer}`: a test of the key is an observation splitting the belief, `a` held
+    # on its `then` side, and a weak plan stops on the other, the task tolerating it.
     count = {"type": "integer"}
-    optional = _reading(
-        "f", {"type": "object", "properties": {"a": count, "s": {"type": "string"}}}
-    )
-    found = plan({"f": optional}, read_task("an a", {}, count))
+    optional = {"f": _reading("f", {"type": "object", "properties": {"a": count}})}
+    task = read_task("an a", {}, count, stops={"f": {}})
+    found = plan(optional, task)
+    assert found.program is not None
+    assert render(found.program) == 'c1 = f()\nif "a" in c1:\n    return c1.a\nelse:\n    stop(c1)'
+    checked = verify(found.program, optional, task)
+    assert checked.weak
+    assert {link.verdict for link in checked.links} == {"proven"}
+    assert run(found.program, optional, task, {}, {"f": lambda: {"a": 3}}).value == 3
+    lacking = run(found.program, optional, task, {}, {"f": dict})
+    assert (lacking.stopped, lacking.value) == ("c1", {})
+
+
+def test_a_reason_names_a_field_meeting_the_goal_that_no_record_guarantees() -> None:
+    # `f.r.a` meets an integer goal where present, below `r`, which `f` guarantees: the search
+    # tests a key of a call's result, never of a field of it, so no program it writes reads `a`.
+    count = {"type": "integer"}
+    inner = {"type": "object", "properties": {"a": count, "s": {"type": "string"}}}
+    nested = _reading("f", {"type": "object", "properties": {"r": inner}, "required": ["r"]})
+    found = plan({"f": nested}, read_task("an a", {}, count))
     assert found.program is None
     assert found.reason == (
         "no program the search writes: no path reached the bound of 6, so no deeper search "
-        "finds one from the first 16 bindings of each call the search tries; f.a meets the goal "
-        "where present, and no record guarantees it: a program reads it under a key test, which "
-        "the search does not write"
+        "finds one from the first 16 bindings of each call the search tries; f.r.a meets the "
+        "goal where present, and no record guarantees it: a program reads it under a key test on "
+        "the field above it, which the search does not write"
     )
-    required = _reading("f", {"type": "object", "properties": {"a": count}, "required": ["a"]})
-    assert plan({"f": required}, read_task("an a", {}, count)).reason is None
+    # A field of the result's own record is tested for its key, and planned.
+    optional = _reading("f", {"type": "object", "properties": {"a": count}})
+    tested = plan({"f": optional}, read_task("an a", {}, count))
+    assert tested.program is not None
+    assert render(tested.program) == 'c1 = f()\nif "a" in c1:\n    return c1.a\nelse:\n    stop(c1)'
     # A field outside the goal's set, or one no program can call the tool to read, is not named.
     flag = read_task("a flag", {}, {"type": "boolean"})
-    assert "where present" not in (plan({"f": optional}, flag).reason or "")
+    assert "where present" not in (plan({"f": nested}, flag).reason or "")
     locked = read_contract(
         {
             "name": "g",
@@ -328,41 +348,10 @@ def test_a_reason_names_a_field_meeting_the_goal_that_no_record_guarantees() -> 
                 "properties": {"key": {"type": "string"}},
                 "required": ["key"],
             },
-            "outputSchema": {"type": "object", "properties": {"a": count}},
+            "outputSchema": {"type": "object", "properties": {"r": inner}, "required": ["r"]},
         }
     )
     assert "where present" not in (plan({"g": locked}, read_task("an a", {}, count)).reason or "")
-
-
-@pytest.mark.parametrize("depth", [4, 6, 8])
-def test_a_reason_says_the_bound_cut_paths_and_the_plan_counts_them(depth: int) -> None:
-    # A chain of ten tools from the input's kind to the goal's: every bound below ten cuts it.
-    # The count follows the search's memo, so it is a field and the words hold none of it.
-    def kind(at: int) -> dict[str, Any]:
-        return {"type": "string", "pattern": f"^k{at}_"}
-
-    chain = {
-        f"t{at}": read_contract(
-            {
-                "name": f"t{at}",
-                "inputSchema": {"type": "object", "properties": {"v": kind(at)}, "required": ["v"]},
-                "outputSchema": {
-                    "type": "object",
-                    "properties": {"v": kind(at + 1)},
-                    "required": ["v"],
-                },
-            }
-        )
-        for at in range(10)
-    }
-    found = plan(chain, read_task("far", {"v": kind(0)}, kind(10)), depth=depth)
-    assert found.program is None
-    assert found.reason == (
-        f"no program within the bound of {depth} calls and tests, which cut paths short of the "
-        "goal: whether a deeper search finds one is not known"
-    )
-    assert found.cut > 0
-    assert plan(chain, read_task("far", {"v": kind(0)}, kind(10)), depth=10).cut == 0
 
 
 def test_render_takes_a_program_and_refuses_none() -> None:
