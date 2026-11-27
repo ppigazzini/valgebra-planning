@@ -11,12 +11,13 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from valgebra_planning._valgebra import Sampler, compile_schema
+from valgebra_planning._valgebra import Sampler, compile_schema, json_key
 from valgebra_planning.contracts import read_contract, read_task
 from valgebra_planning.critic import read_program
 from valgebra_planning.planner import plan
 from valgebra_planning.policy import Monitor, read_policy
 from valgebra_planning.program import render
+from valgebra_planning.proxy import Gate
 from valgebra_planning.run import ToolError, blame, run
 from valgebra_planning.verify import verify
 
@@ -606,6 +607,89 @@ KEY_TESTED = (
     "    return t.params\n"
     "stop(r)\n"
 )
+
+
+#: A grasp needs a yes for its object, a walk is refused while an object is held, and a release
+#: lets go: one instance for each object.
+HELD_APART = read_policy(
+    {
+        "name": "a grasp needs a yes",
+        "initial": "unasked",
+        "bad": ["refused"],
+        "per": "object_id",
+        "transitions": [
+            {
+                "from": "unasked",
+                "tool": "confirm",
+                "result": {"properties": {"status": {"const": "yes"}}},
+                "to": "asked",
+            },
+            {"from": "asked", "tool": "grasp", "to": "held"},
+            {"from": "unasked", "tool": "grasp", "to": "refused"},
+            {"from": "held", "tool": "walk", "to": "refused"},
+            {"from": "held", "tool": "release", "to": "unasked"},
+        ],
+    }
+)
+
+
+def test_a_refusal_under_per_names_the_ways_out_of_its_own_instance() -> None:
+    # A call carrying the per argument is an event of its value's instance alone, so the ways out
+    # read are that instance's: the held mug is let go, and no yes asked helps it.
+    monitor = Monitor(HELD_APART)
+    mug = {"object_id": "mug"}
+    monitor.observe("confirm", mug)
+    monitor.returned("confirm", mug, {"status": "yes"})
+    monitor.observe("grasp", mug)
+    assert monitor.ways_out("walk", arguments=mug) == ["from held, release leads to unasked"]
+    # A call carrying no object is an event of every instance, the root's own state among them.
+    assert monitor.ways_out("walk") == [
+        "from unasked, confirm with status 'yes' leads to asked",
+        "from held, release leads to unasked",
+    ]
+    # An object no call has carried starts where the calls carrying none left the policy, and
+    # naming its ways out makes no instance.
+    cup = {"object_id": "cup"}
+    assert monitor.ways_out("grasp", arguments=cup) == [
+        "from unasked, confirm with status 'yes' leads to asked"
+    ]
+    assert list(monitor.instances) == [json_key("mug")]
+
+
+def _object_tool(name: str, output: dict[str, Any]) -> Any:
+    return read_contract(
+        {
+            "name": name,
+            "inputSchema": {
+                "type": "object",
+                "properties": {"object_id": {"type": "string"}},
+                "required": ["object_id"],
+            },
+            "outputSchema": {"type": "object", "properties": output, "required": [*output]},
+        }
+    )
+
+
+def test_a_gate_names_the_ways_out_of_the_refused_call_s_instance() -> None:
+    contracts = {
+        name: _object_tool(name, output)
+        for name, output in (
+            ("confirm", {"status": {"enum": ["yes", "no"]}}),
+            ("grasp", {"held": {"type": "boolean"}}),
+            ("walk", {"arrived": {"type": "boolean"}}),
+            ("release", {"released": {"type": "boolean"}}),
+        )
+    }
+    gate = Gate(contracts, [Monitor(HELD_APART)], [])
+    mug = {"object_id": "mug"}
+    assert gate.before("confirm", mug) is None
+    assert gate.after("confirm", {"status": "yes"}, mug) is None
+    assert gate.before("grasp", mug) is None
+    assert gate.after("grasp", {"held": True}, mug) is None
+    assert gate.before("walk", mug) == (
+        'a grasp needs a yes for object_id "mug": walk reached refused; '
+        "from held, release leads to unasked"
+    )
 
 
 def test_a_key_test_narrows_the_case_of_the_result_it_reads() -> None:
