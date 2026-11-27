@@ -1171,8 +1171,9 @@ async def read_proxy(
     `valgebra_planning.servers.read_server` reads them, so a proxy held to a library's rules
     reads the server's tools as the library does. With ``spell_out``, each tool is listed as
     `spelled_out` returns it, and one it returns None for is listed as published, with a
-    `UserWarning` naming it; the gate holds every call to the published schemas. The
-    ``rules`` are `proxy`'s (`ProxyRules`).
+    `UserWarning` naming it; the gate holds every call to the published schemas. A tool
+    `read_server` leaves out, its schemas unread, is not listed, and a call to it is refused
+    as one to no tool the proxy holds. The ``rules`` are `proxy`'s (`ProxyRules`).
     """
     from valgebra_planning.servers import read_listing, read_server  # noqa: PLC0415
 
@@ -1183,11 +1184,8 @@ async def read_proxy(
         closed_results=closed_results,
         listing=published,
     )
-    listing = (
-        [_listed(tool, assert_format=assert_format) for tool in published]
-        if spell_out
-        else published
-    )
+    held = [tool for tool in published if tool.name in contracts]
+    listing = [_listed(tool, assert_format=assert_format) for tool in held] if spell_out else held
     return proxy(upstream, listing, contracts, **rules)
 
 

@@ -151,7 +151,10 @@ answers a call only after holding it to the tool's contract, to every policy and
 library defines, and, the call made, its result to the output schema
 (`valgebra_planning/proxy.py`). A broken check answers the call with a tool error naming it, and
 the call never reaches the server, or its result the agent. The server's tools are read as the
-library reads its own listing, with its `assertFormat` and `closedResults`. The error names the
+library reads its own listing, with its `assertFormat` and `closedResults`, each tool apart: one
+valgebra does not read, as one whose schema names a document the listing does not hold, is left
+out of the proxy's listing and named in a warning with the reason, and a call to it is refused as
+one to no tool the proxy holds. The error names the
 path of the value's first three failures, at most, each with the JSON Schema keyword that
 refuses the value there, as `run_id: pattern`, or valgebra's code where no keyword is found, and
 never the value: a key the tool's schemas do not declare is written `*`, so no part of a refused

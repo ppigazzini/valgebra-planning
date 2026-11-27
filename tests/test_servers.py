@@ -70,6 +70,19 @@ def test_a_live_listing_reads_as_the_listing_on_disk() -> None:
         assert live[name].idempotent == contract.idempotent
 
 
+def test_a_listing_is_read_tool_by_tool_one_valgebra_refuses_left_out() -> None:
+    unread = {"name": "odd", "inputSchema": {"type": "object", "$schema": "https://example.com/d"}}
+
+    async def listed() -> dict[str, Any]:
+        async with Client(_server(_drawn(random.Random(0)))) as client:
+            tools = [types.Tool.model_validate(tool) for tool in (unread, *LISTING)]
+            return await read_server(client, listing=tools)
+
+    with pytest.warns(UserWarning, match="^odd is left out: .*this dialect is not supported"):
+        live = asyncio.run(listed())
+    assert set(live) == set(TOOLS)
+
+
 def test_a_strong_program_runs_against_a_live_server_breaking_nothing() -> None:
     found = plan(TOOLS, SETTLE)
     assert found.program is not None

@@ -694,6 +694,38 @@ def _listed_through(**options: Any) -> tuple[list[types.Tool], list[Any]]:
     return asyncio.run(session())
 
 
+#: A tool whose input schema reads a document the listing does not hold: valgebra refuses it.
+REMOTE = {
+    "name": "fetch_remote",
+    "inputSchema": {
+        "type": "object",
+        "properties": {"x": {"$ref": "https://example.com/remote.json"}},
+    },
+}
+
+
+def test_a_tool_valgebra_does_not_read_is_left_out_of_the_proxy_and_named() -> None:
+    made: list[str] = []
+
+    async def session() -> tuple[list[str], Any]:
+        async with Client(
+            _upstream(made, {**ANSWERS, "fetch_remote": {}}, [*LISTING, REMOTE])
+        ) as up:
+            front = await read_proxy(up)
+            async with Client(front) as client:
+                listed = [tool.name for tool in (await client.list_tools()).tools]
+                return listed, await client.call_tool("fetch_remote", {"x": 1})
+
+    with pytest.warns(
+        UserWarning, match=r"^fetch_remote is left out: \$ref 'https://example"
+    ) as caught:
+        listed, answer = asyncio.run(session())
+    assert len(caught) == 1
+    assert listed == [tool["name"] for tool in LISTING]
+    assert _refused(answer) == "refused: fetch_remote is no tool the proxy holds"
+    assert made == []
+
+
 @pytest.mark.parametrize("spelling", [False, True], ids=["as-published", "spelled-out"])
 def test_a_proxy_listing_its_tools_spelled_out_holds_calls_to_the_published_schemas(
     *, spelling: bool

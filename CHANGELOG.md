@@ -37,6 +37,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- `read_server` reads each tool of a listing apart: a tool valgebra refuses to read, as one whose
+  schema names a document the listing does not hold or a dialect it does not read, is left out of
+  the contracts with a `UserWarning` naming it and the reason, and the others are read. One such
+  tool raised out of the whole listing, so a proxy or a `--server` run read none of the server.
+  `read_proxy` lists only the tools it holds a contract of, and refuses a call to another.
 - A refusal names each failure by the JSON Schema keyword that refuses the value at its path, as
   `limit: minimum` and `kind: enum`, and by valgebra's code only where no keyword is found: an
   integer's bound failed as valgebra's `union_error`, which names no bound. `failures` reads the
