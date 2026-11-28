@@ -181,6 +181,14 @@ and stays out.
   validator does not pickle, so a verification would not.
 - **A random stream for each predicate.** A pool's draws come off one stream in the order of the
   predicates' names, so another stream draws other candidates, and other cells and witnesses.
+- **A key every record holds left out of a shrink's tries.** A refuted record lacking a field is
+  shrunk a key at a time, and a key valgebra proves every record of its set holds is never
+  dropped; leaving it untried counts 0.4% fewer instructions on sixty programs with mistakes,
+  where the membership each kept try asks is the cost.
+- **The reader's names walked off one stack.** What a program binds, calls and reads is read a
+  block at a time, a call each; one loop over a stack of blocks counts no fewer.
+- **The objects holding a key, kept by the key.** A key test builds them at each walk; kept, the
+  verify cases count no fewer.
 - **The listed values of every field, found at the first reading.** Each is read off its schema by
   compiling it, and most fields are never asked.
 
