@@ -1,6 +1,6 @@
 [project]
 name = "valgebra-planning"
-version = "0.0.10"
+version = "0.0.11"
 description = "Plans of tool calls proven well-typed for every output the tool contracts admit, decided by valgebra's sets."
 readme = "README.md"
 license = "MIT OR Apache-2.0"

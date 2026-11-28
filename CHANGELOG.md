@@ -6,6 +6,17 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.0.11] - 2026-11-28
+
+A release of policies held per value, and of the runs and refusals around them. The walk holds a
+policy with `per` as one instance for each value, told apart by the names holding it, so a grasp
+of the object a yes was for is proven and one no yes came before refuted, and the planner holds
+the instances alike and plans the grasp it wrote none of. The planner tests a key of a call's
+result into the goal and names the tools a tie was broken among; a run holds its task's rules on
+the values and waits before a call made again; a refusal names the JSON Schema keyword each
+failure breaks; the reader refuses what Python would run otherwise than it is read. It requires
+valgebra 0.0.37.
+
 ### Added
 
 - The planner plans under a policy with `per`, holding its instances as the walk does, each by
@@ -53,6 +64,21 @@ All notable changes to valgebra-planning are recorded here. The format follows
   `ValueError` where the library is read.
 
 ### Changed
+
+- What the release costs, counted by `tools/perf.py` under cachegrind against 0.0.10's wheel, each
+  release's wheel in an environment of its own, on CPython 3.15 with valgebra 0.0.37 in both:
+  `verify` of a planned program takes 1.00 to 1.06 of 0.0.10's instructions over repeated calls and
+  1.00 to 1.02 on contracts just read, a stop under a test that left a value no member asking
+  valgebra the emptiness only where no known member lies in the set; `verify` of sixty programs with
+  mistakes 1.10, nearly all of it the record each refutation shows, shrunk to the fields a read
+  lacks; `read_program` 1.05 and `critique` 1.04 to 1.06, the reader refusing a decorated function,
+  a call to a name the program binds and the other forms Python runs otherwise than they are read;
+  `stubs` 1.01; `plan` 1.00 to 1.02, the bookings task 0.92, and the robot-skills task under `a
+  grasp needs its own yes` 4.50, where 0.0.10's search fails and this one writes the grasp. Timed
+  in the releasing page's loop on a quiet box, the sixty take 134 ms where 0.0.10 took 121, a
+  critique 129 µs where it took 122, the stubs 56.0 µs where 55.8, the bookings plan 1.52 ms where
+  it took 1.64, and the robot-skills plan 1.16 s where 0.0.10 failed in 0.29; 0.0.10's two
+  environments read within 1.8% of each other on each.
 
 - valgebra is required from 0.0.37, where 0.0.10 requires 0.0.36: the release the studies are
   read on. A meet there asks a predicate only of a value its other members admit, and a refusal
@@ -183,10 +209,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
   the runner refuses a result outside its output set before any test reads it, so no run takes
   that `else`. Such a stop now leaves nothing uncovered and the three programs are accepted. Each
   narrowed reference's own set is asked, an answer kept by its validators, so a side only two
-  tests on two fields empty together keeps its stop. Counted by `tools/perf.py` against the
-  change before it, verifying and critiquing the parcel and booking programs takes 1.00 to 1.04
-  of their instructions over repeated calls, and up to 1.09 on contracts just read
-  (`verify:parcels:3`).
+  tests on two fields empty together keeps its stop, and a known member a test left in a set
+  shows it holds one, so valgebra is asked the emptiness only where none lies there. Counted by
+  `tools/perf.py` against the change before it, verifying and critiquing the parcel and booking
+  programs takes 1.00 to 1.04 of their instructions over repeated calls, and 1.00 on contracts
+  just read, where asking each set took 1.09 (`verify:parcels:3`).
 - A test on a key of a value keeps what the value rests on. The walk narrowed the tested value
   and dropped the case of a policy's split it was one of and the postconditions it was narrowed
   by, so a key test on a result a guard splits walked its `then` side in the case lacking the
@@ -1403,7 +1430,8 @@ decides more of it; the user guide is published.
   on synthetic libraries of 8 to 256 tools the cut holds 5 predicates and 12 cells at every
   size.
 
-[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.10...HEAD
+[Unreleased]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.11...HEAD
+[0.0.11]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/ppigazzini/valgebra-planning/compare/v0.0.7...v0.0.8
