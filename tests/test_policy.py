@@ -4,6 +4,7 @@ import itertools
 import json
 import math
 import random
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -820,6 +821,49 @@ def test_a_run_refuses_a_grasp_of_an_object_no_confirmation_was_for(
     checked = verify(read_program(SWAPPED), PERSONAL, task, policies=[EACH_CONFIRMED])
     verdicts = {link.verdict for link in checked.links if link.claim.startswith("policy")}
     assert verdicts == {"undecided"}
+
+
+#: The personal tools with a grasp whose id no input can be: a planned program must grasp.
+GRASPING = {
+    **PERSONAL,
+    "grasp": read_contract(
+        {
+            "name": "grasp",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"object_id": OBJECT_ID},
+                "required": ["object_id"],
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {"grasp_id": {"type": "string", "pattern": "^grs_[0-9]+$"}},
+                "required": ["grasp_id"],
+            },
+        }
+    ),
+}
+
+
+def test_the_walk_and_the_planner_take_a_per_policy_s_every_transition_possibly() -> None:
+    # The walk holds no value's identity: a link is proven where no transition may reach a bad
+    # state, never refuted, and the planner makes no call a transition may take to one.
+    inputs = {"question": {"type": "string"}, "first": OBJECT_ID}
+    asks = read_task("ask", inputs, {"type": "boolean"})
+    confirms = "c1 = confirm_with_user(question=question, object_id=first)\nreturn c1.confirmed\n"
+    checked = verify(read_program(confirms), GRASPING, asks, policies=[EACH_CONFIRMED])
+    assert {link.verdict for link in checked.links if link.claim.startswith("policy")} == {"proven"}
+    grasps = read_task("grasp", inputs, {"type": "string", "pattern": "^grs_[0-9]+$"})
+    unconfirmed = "c2 = grasp(object_id=first)\nreturn c2.grasp_id\n"
+    checked = verify(read_program(unconfirmed), GRASPING, grasps, policies=[EACH_CONFIRMED])
+    assert {link.verdict for link in checked.links if link.claim.startswith("policy")} == {
+        "undecided"
+    }
+    assert plan(GRASPING, grasps, policies=[EACH_CONFIRMED]).program is None
+    shared = plan(GRASPING, grasps, policies=[replace(EACH_CONFIRMED, per="")])
+    assert shared.program is not None
+    written = render(shared.program)
+    assert "confirm_with_user(" in written
+    assert written.index("confirm_with_user(") < written.index("grasp(")
 
 
 def test_a_policy_names_its_per_argument_by_name() -> None:
