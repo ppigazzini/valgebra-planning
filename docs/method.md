@@ -573,8 +573,12 @@ ones.
   another returned is a flow rule with `only`. A policy naming an argument in `per` holds an
   instance for each value of it at run time, the parametric monitoring of Roşu and Chen 2012, so
   the runner and the proxy refuse a booking of a parcel no approval was for; the walk holds no
-  value's identity, takes every transition of such a policy possibly at most, and proves none of
-  its links. A proxy reads no pending state: MCP 2026-07-28 has no session, and a proxy sees no
+  value's identity, so it takes every transition of such a policy possibly at most. A link of it is
+  proven only where no state its calls may take the policy to is bad, or pending where a path ends,
+  as a program that only asks; none is refuted unless the policy starts in a bad or pending state,
+  so a grasp no yes came before is undecided, though every run refuses it; and the planner makes
+  no call a transition may take to a bad state, so it writes no grasp at all. A proxy reads no
+  pending state: MCP 2026-07-28 has no session, and a proxy sees no
   end of a task.
 - **A proof reads no time.** A program is walked before it runs, so a policy's lapse is taken by no
   walk and no search: a link that needs one not to come due is proven under the timing it names,

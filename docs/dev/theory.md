@@ -313,12 +313,14 @@ its client, issuer and subject as the mcp SDK reads a token's principal: each pr
 are one instance's trace (Roşu and Chen 2012, Def. 12), so a yes one principal relays admits no
 call of another's, and a value one was returned grounds no call of another's. A program runs as
 one principal, so the walk reads either scope alike. The walk holds no value's identity, so it
-takes every transition of such a policy possibly at most and proves none of its links: the
-static half is not built. **[DEVIATION: no-parametric-policy]**
+takes every transition of such a policy possibly at most: a link of it is proven only where no
+state its calls may take the policy to is bad, or pending where a path ends, none is refuted unless
+the policy starts in a bad or pending state, and the planner, stepping it alike, makes no call a
+transition may take to a bad state. The static half is not built. **[DEVIATION: no-parametric-policy]**
 
 IMPLEMENTED-BY: policy.py, policy.py::Monitor.stepping, proxy.py::Gate.watching, policy.py::Monitor.ways_out
 
-HELD-BY: test_a_rule_about_one_parcel_reads_as_a_rule_about_any_two_calls, test_a_yes_one_principal_relays_admits_another_s_walk_only_under_a_shared_policy, test_a_value_one_principal_was_returned_grounds_another_s_call_only_under_a_shared_rule, test_every_call_on_an_item_the_user_listed_is_a_flow_rule_with_only, test_a_policy_per_value_holds_an_instance_for_each_value_its_argument_takes, test_a_call_carrying_no_value_steps_every_instance_and_the_ones_to_come, test_a_run_refuses_a_grasp_of_an_object_no_confirmation_was_for, test_a_refusal_under_per_names_the_ways_out_of_its_own_instance, test_a_gate_names_the_ways_out_of_the_refused_call_s_instance
+HELD-BY: test_a_rule_about_one_parcel_reads_as_a_rule_about_any_two_calls, test_a_yes_one_principal_relays_admits_another_s_walk_only_under_a_shared_policy, test_a_value_one_principal_was_returned_grounds_another_s_call_only_under_a_shared_rule, test_every_call_on_an_item_the_user_listed_is_a_flow_rule_with_only, test_a_policy_per_value_holds_an_instance_for_each_value_its_argument_takes, test_a_call_carrying_no_value_steps_every_instance_and_the_ones_to_come, test_a_run_refuses_a_grasp_of_an_object_no_confirmation_was_for, test_a_refusal_under_per_names_the_ways_out_of_its_own_instance, test_a_gate_names_the_ways_out_of_the_refused_call_s_instance, test_the_walk_and_the_planner_take_a_per_policy_s_every_transition_possibly
 
 ## Vacuity
 

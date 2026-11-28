@@ -42,6 +42,12 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- The pages say what the walk and the planner do with a `per` policy: its every transition is
+  taken possibly, so a link is proven only where no state the calls may take it to is bad or left
+  pending, as a program that only asks; none is refuted unless the policy starts in a bad or
+  pending state, so a grasp no yes came before is undecided; and the planner makes no call a
+  transition may take to a bad state, so it writes no grasp at all. The pages said the walk
+  proves none of its links, and said nothing of the planner.
 - Of two weak programs the planner ranks first the one whose stops all lie in error blocks, then
   the one stopping on fewer cells, and a stop on a value no predicate splits counts its one
   cell. A booking with errors now reads the booking after a failed `book` and returns its label
