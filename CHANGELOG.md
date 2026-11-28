@@ -54,6 +54,11 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
+- valgebra is required from 0.0.37, where 0.0.10 requires 0.0.36: the release the studies are
+  read on. A meet there asks a predicate only of a value its other members admit, and a refusal
+  names each predicate it ran. On it the suite passes and the parcels, robot-skills, bench and
+  faults studies read every count the tree recorded on 0.0.36.
+
 - Of two weak programs the planner ranks first the one whose stops all lie in error blocks, then
   the one stopping on fewer cells, and a stop on a value no predicate splits counts its one
   cell. A booking with errors now reads the booking after a failed `book` and returns its label

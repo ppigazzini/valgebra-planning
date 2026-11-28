@@ -23,7 +23,7 @@ dependencies = [
     # The decision procedure every proof here rests on, from the release the studies were read
     # on. No ceiling: a ceiling cannot be lifted from a published version, so a valgebra release
     # installs beside this package the day it is published, and asks no release here.
-    "valgebra>=0.0.36",
+    "valgebra>=0.0.37",
     # JSON Schema and MCP tool listings read into valgebra's sets, from the release the studies
     # were read on, and with no ceiling for the same reason.
     "valgebra-jsonschema>=0.0.8",
