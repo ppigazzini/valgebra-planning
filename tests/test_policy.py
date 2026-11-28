@@ -847,9 +847,9 @@ GRASPING = {
 }
 
 
-def test_the_walk_holds_a_per_policy_s_instances_and_the_planner_none() -> None:
-    # The walk holds each value's instance: a grasp no yes came before is refuted, as every run
-    # refuses it. The planner holds none, and makes no call a transition may take to a bad state.
+def test_the_walk_and_the_planner_hold_a_per_policy_s_instances() -> None:
+    # A grasp no yes came before is refuted, as every run refuses it, and the planner writes the
+    # grasp of the object the yes was for, which the walk proves.
     inputs = {"question": {"type": "string"}, "first": OBJECT_ID}
     asks = read_task("ask", inputs, {"type": "boolean"})
     confirms = "c1 = confirm_with_user(question=question, object_id=first)\nreturn c1.confirmed\n"
@@ -861,12 +861,13 @@ def test_the_walk_holds_a_per_policy_s_instances_and_the_planner_none() -> None:
     assert {link.verdict for link in checked.links if link.claim.startswith("policy")} == {
         "refuted"
     }
-    assert plan(GRASPING, grasps, policies=[EACH_CONFIRMED]).program is None
-    shared = plan(GRASPING, grasps, policies=[replace(EACH_CONFIRMED, per="")])
-    assert shared.program is not None
-    written = render(shared.program)
-    assert "confirm_with_user(" in written
-    assert written.index("confirm_with_user(") < written.index("grasp(")
+    for policy in (EACH_CONFIRMED, replace(EACH_CONFIRMED, per="")):
+        found = plan(GRASPING, grasps, policies=[policy])
+        assert found.program is not None
+        written = render(found.program)
+        assert written.index("confirm_with_user(") < written.index("grasp(")
+        checked = verify(found.program, GRASPING, grasps, policies=[policy])
+        assert "refuted" not in {link.verdict for link in checked.links}
 
 
 def test_a_policy_names_its_per_argument_by_name() -> None:

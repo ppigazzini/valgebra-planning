@@ -16,7 +16,7 @@ import valgebra_planning
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "valgebra_planning"
 PAGE = ROOT / "docs" / "api.md"
-INTERNAL = frozenset({"_valgebra", "cli"})
+INTERNAL = frozenset({"_instances", "_valgebra", "cli"})
 ROW = re.compile(r"^\| `valgebra_planning\.(\w+)` \| (.*?) \|(.*?)\|$")
 
 

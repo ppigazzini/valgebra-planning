@@ -8,6 +8,10 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- The planner plans under a policy with `per`, holding its instances as the walk does, each by
+  the references its search bound, two holding one value only where their cells meet. Under "each
+  object is confirmed before it is grasped" it asks for the yes on the object it then grasps,
+  where it planned no grasp at all.
 - The walk holds a policy with `per` as its instances, each by the names holding its value, a
   version read at one path or a constant: a call carrying a name steps the instances that name
   holds alone, a call carrying none steps every one, and two names hold one value only where
@@ -50,9 +54,6 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
-- The pages say what the planner does with a `per` policy: it holds no instance, takes every
-  transition possibly, and makes no call a transition may take to a bad state, so it writes no
-  grasp under "each object is confirmed before it is grasped". They said nothing of it.
 - Of two weak programs the planner ranks first the one whose stops all lie in error blocks, then
   the one stopping on fewer cells, and a stop on a value no predicate splits counts its one
   cell. A booking with errors now reads the booking after a failed `book` and returns its label

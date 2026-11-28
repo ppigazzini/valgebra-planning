@@ -85,7 +85,8 @@ extra.
 A module's `__all__` holds what a caller calls, the types those calls take and return, and the
 defaults a caller passes, `DEPTH` among them. Every other name a module defines serves the
 package's other modules and is not promised. `valgebra_planning._valgebra`, the one module
-importing valgebra and valgebra-jsonschema, and `valgebra_planning.cli`, the command line's,
+importing valgebra and valgebra-jsonschema, `valgebra_planning._instances`, the instances of a
+`per` policy the walk and the planner share, and `valgebra_planning.cli`, the command line's,
 are not public.
 
 ## What holds the table

@@ -56,6 +56,8 @@ CASES = (
     "plan:parcels:2",
     "plan:parcels:3",
     "plan:bookings:0",
+    "plan:robot-skills:9",
+    "verify:robot-skills:9",
     "findings:parcels:0",
     "findings:bookings:0",
 )

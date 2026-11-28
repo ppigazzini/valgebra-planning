@@ -173,7 +173,16 @@
       "predicates": 9,
       "cells": 14,
       "undecided cells": 0,
-      "program": "none"
+      "program": "weak",
+      "calls": 4,
+      "tests": 1,
+      "stops": 1,
+      "steps": 5,
+      "links": 8,
+      "proven": 8,
+      "refuted": 0,
+      "undecided": 0,
+      "assumed": 0
     }
   ],
   "programs": [

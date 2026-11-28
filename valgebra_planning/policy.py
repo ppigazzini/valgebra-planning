@@ -35,9 +35,8 @@ Def. 12): a call carrying the argument is an event of the instance its value nam
 call not carrying it an event of every instance (Roşu and Chen 2012, Def. 11), so "each object
 is confirmed before it is grasped" holds of each object, as Agent-C binds a file read to the
 file opened before it (Kamath et al. 2025, §5.1). The monitor holds the instances at run time,
-and the walk holds them by the names holding each value (`valgebra_planning.verify`); the
-planner holds none, so it takes every transition of such a policy possibly at most and makes no
-call a transition may take to a bad state.
+and the walk and the planner hold them by the names holding each value
+(`valgebra_planning._instances`).
 
 A state may lapse (`Lapse`): it is left for a named state once it was held its seconds, with no
 call. The monitor reads it by a clock at each event. The walk reads no time and takes no lapse, and

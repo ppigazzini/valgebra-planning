@@ -577,8 +577,7 @@ ones.
   was for is proven, one no yes came before refuted, and one of an object read after the yes,
   which may be another, undecided, as two names of one set may hold one value. Past six names, and
   in the copy whose lapses come due, it holds the policy as one set of states. The planner holds
-  no instance, takes every transition of such a policy possibly at most, and makes no call a
-  transition may take to a bad state, so it writes no grasp under one. A proxy reads no
+  the instances alike, so it asks for the yes on the object it then grasps. A proxy reads no
   pending state: MCP 2026-07-28 has no session, and a proxy sees no
   end of a task.
 - **A proof reads no time.** A program is walked before it runs, so a policy's lapse is taken by no

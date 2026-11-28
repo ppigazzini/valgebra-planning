@@ -1,4 +1,4 @@
-"""The walk holds a policy with ``per`` as its instances, each by the keys holding its value."""
+"""The walk and the planner hold a policy with ``per`` as its instances, by the keys of each."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from hypothesis import strategies as st
 
 from valgebra_planning.contracts import Contract, read_contract, read_task
 from valgebra_planning.critic import read_program
+from valgebra_planning.planner import plan
 from valgebra_planning.policy import Policy, read_policy
 from valgebra_planning.run import run
 from valgebra_planning.verify import verify
@@ -271,3 +272,97 @@ def test_a_program_the_walk_proves_has_no_run_the_policy_refuses(drawn: tuple[st
         assert not some
     if not looped and verdicts == {"refuted"}:
         assert every
+
+
+TOKEN = {"type": "string", "pattern": "^tok_[0-9]+$"}
+ASK = read_contract(
+    {
+        "name": "ask",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"object_id": OBJECT_ID, "prior": TOKEN},
+            "required": ["object_id", "prior"],
+        },
+        "outputSchema": {"type": "object", "properties": {"token": TOKEN}, "required": ["token"]},
+    }
+)
+#: An object is asked of once: a second ask of one object is refused.
+ONCE = read_policy(
+    {
+        "name": "an object is asked of once",
+        "initial": "start",
+        "bad": ["violated"],
+        "per": "object_id",
+        "transitions": [
+            {"from": "start", "tool": "ask", "to": "asked"},
+            {"from": "asked", "tool": "ask", "to": "violated"},
+        ],
+    }
+)
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "plans"),
+    [(OBJECT_ID, OBJECT_ID, False), ({"const": "obj_1"}, {"const": "obj_2"}, True)],
+    ids=["may-be-one", "proven-two"],
+)
+def test_the_planner_asks_of_two_inputs_only_where_they_are_two_objects(
+    first: dict[str, Any], second: dict[str, Any], *, plans: bool
+) -> None:
+    # Two inputs of one set may be one object, which a second ask refuses on every run: the
+    # planner holds the instance both may name, as the walk does.
+    inputs = {"first": first, "second": second, "seed": TOKEN}
+    task = read_task("both", inputs, TOKEN, reads=["first", "second"])
+    found = plan({"ask": ASK}, task, policies=[ONCE])
+    assert (found.program is not None) == plans
+    if found.program is not None:
+        checked = verify(found.program, {"ask": ASK}, task, policies=[ONCE])
+        assert {link.verdict for link in checked.links if link.claim.startswith("policy")} == {
+            "proven"
+        }
+
+
+TICKET = {"type": "string", "pattern": "^tkt_[0-9]+$"}
+PICK = read_contract(
+    {
+        "name": "pick",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"object_id": OBJECT_ID},
+            "required": ["object_id"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {"ticket": TICKET},
+            "required": ["ticket"],
+        },
+    }
+)
+#: The first object is never picked: a guard on the call's arguments.
+NOT_THE_FIRST = read_policy(
+    {
+        "name": "obj_1 is never picked",
+        "initial": "start",
+        "bad": ["violated"],
+        "per": "object_id",
+        "transitions": [
+            {
+                "from": "start",
+                "tool": "pick",
+                "arguments": {"properties": {"object_id": {"const": "obj_1"}}},
+                "to": "violated",
+            }
+        ],
+    }
+)
+
+
+def test_the_planner_steps_an_instance_on_what_each_call_passes() -> None:
+    # The call on an input that may be obj_1 may be refused, the one on obj_2 never: a step is
+    # read for the values its arguments hold, each call's apart from another's of the same tool.
+    inputs = {"first": OBJECT_ID, "second": {"const": "obj_2"}}
+    task = read_task("a ticket", inputs, TICKET)
+    found = plan({"pick": PICK}, task, policies=[NOT_THE_FIRST])
+    assert found.program is not None
+    checked = verify(found.program, {"pick": PICK}, task, policies=[NOT_THE_FIRST])
+    assert {link.verdict for link in checked.links if link.claim.startswith("policy")} == {"proven"}

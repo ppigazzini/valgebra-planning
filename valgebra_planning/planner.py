@@ -25,11 +25,13 @@ from __future__ import annotations
 
 import itertools
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import partial
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, cast
 
+from valgebra_planning import _instances as instances
+from valgebra_planning._instances import Instances
 from valgebra_planning._valgebra import (
     ANNOTATIONS,
     Unsupported,
@@ -225,6 +227,9 @@ class _State(NamedTuple):
     #: the path read.
     reading: frozenset[str] = frozenset()
     read: frozenset[str] = frozenset()
+    #: The instances of each policy with ``per``, by the references holding each value, None for
+    #: any other policy, and none where no policy has one (`valgebra_planning._instances`).
+    instances: tuple[Instances | None, ...] = ()
 
     def cells(self, ref: Ref) -> frozenset[int]:
         for held, cells in self.refs:
@@ -264,7 +269,9 @@ class _State(NamedTuple):
         held = fed = frozenset(cells for _, cells in self.refs)
         if self.reading:
             fed = frozenset(cells for ref, cells in self.refs if self.fed(ref.variable))
-        return held, self.policed, self.tested, old, listed, self.read, fed
+        # The keys a call carried are read by a refutation alone, which the search makes none of.
+        ones = tuple(None if i is None else (i.base, i.held, i.weak) for i in self.instances)
+        return held, self.policed, ones, self.tested, old, listed, self.read, fed
 
     def fed(self, variable: str) -> bool:
         """Return whether the value ``variable`` holds was read from every input required.
@@ -323,6 +330,10 @@ class _Search:
     #: The cells each argument takes, and the references each tool's result is read by with
     #: theirs, by the tool: read off the abstraction once a search.
     takes: dict[tuple[str, str], frozenset[int]] = field(default_factory=dict)
+    #: The states a `per` policy's instance steps to from one state on a call, by the policy's
+    #: index, the tool, each binding's cells or constant and the state: the call's record is
+    #: theirs alone, so the search asks valgebra its guards once for each (`_Search.policed`).
+    instance_steps: dict[tuple[Any, ...], frozenset[str]] = field(default_factory=dict)
     gives: dict[str, tuple[tuple[tuple[str, ...], frozenset[int]], ...]] = field(
         default_factory=dict
     )
@@ -572,13 +583,12 @@ class _Search:
                 continue
             # A tool that answered with an error may still have acted, so the block run then
             # starts from either set of policy states.
-            either = tuple(a | b for a, b in zip(state.policed, policed, strict=True))
             result = f"c{state.fresh}"
-            failing = state._replace(policed=either)
+            failing = self.either(state, policed)
             call = self.failure(failing, contract, bindings, result, depth, weak=weak)
             if call is None:
                 continue
-            stepped = state._replace(policed=policed)
+            stepped = state._replace(policed=policed[0], instances=policed[1])
             after = self.after(stepped, contract, bindings, result)
             rest = self.rest(state, after, contract, bindings, result, depth, weak=weak)
             if rest is not None:
@@ -639,7 +649,6 @@ class _Search:
         """
         if depth <= _GUARD:
             return None
-        record = record_of({name: self.bound(before, ref) for name, ref in bindings}, closed=True)
         whole = contract.returns if contract.returns is not None else anything
         held = dict(after.refs)
         for guard in self.guards.get(contract.name, ()):
@@ -653,19 +662,13 @@ class _Search:
                 (tested, guard.whole),
                 (cells - tested, complement(guard.whole)),
             ):
-                policed = tuple(
-                    policy.step(
-                        states, contract.name, record, contract.hints, intersection(whole, meets)
-                    )
-                    for policy, states in zip(self.policies, before.policed, strict=True)
-                )
-                if not narrowed or any(
-                    policy.reach(states) != "never"
-                    for policy, states in zip(self.policies, policed, strict=True)
-                ):
+                policed = self.policed(before, contract, bindings, intersection(whole, meets))
+                if not narrowed or policed is None:
                     sides.append(None)
                 else:
-                    sides.append(after.narrowed(ref, narrowed)._replace(policed=policed))
+                    states, ones = policed
+                    side = after.narrowed(ref, narrowed)
+                    sides.append(side._replace(policed=states, instances=ones))
             inside, outside = sides
             then = None if inside is None else self.solve(inside, depth - 2, weak=weak)
             if then is None:
@@ -913,7 +916,8 @@ class _Search:
             if policed is None:
                 continue
             read = f"c{state.fresh}"
-            seen = self.after(state._replace(policed=policed), reader, reading, read)
+            moved = state._replace(policed=policed[0], instances=policed[1])
+            seen = self.after(moved, reader, reading, read)
             name = _result_name(field_slot(reader.result(), key))
             then = None
             if self.holds(name):
@@ -942,11 +946,11 @@ class _Search:
         if policed is None:
             return None
         result = f"c{state.fresh}"
-        either = tuple(a | b for a, b in zip(state.policed, policed, strict=True))
-        stop = self.stopped(state._replace(policed=either), bindings, depth - 1)
+        stop = self.stopped(self.either(state, policed), bindings, depth - 1)
         if stop is None:
             return None
-        after = self.after(state._replace(policed=policed), contract, bindings, result)
+        moved = state._replace(policed=policed[0], instances=policed[1])
+        after = self.after(moved, contract, bindings, result)
         rest = self.solve(after, depth - 1, weak=True)
         if rest is None:
             return None
@@ -1008,21 +1012,79 @@ class _Search:
         return record.relation_to(contract.accepts) == "subset"
 
     def policed(
-        self, state: _State, contract: Contract, bindings: tuple[tuple[str, Ref], ...]
-    ) -> tuple[frozenset[str], ...] | None:
-        """Return each policy's states after the call, or None if one may turn bad."""
+        self,
+        state: _State,
+        contract: Contract,
+        bindings: tuple[tuple[str, Ref], ...],
+        result: Validator[Any] | None = None,
+    ) -> tuple[tuple[frozenset[str], ...], tuple[Instances | None, ...]] | None:
+        """Return each policy's states and instances after the call, or None if one may turn bad.
+
+        A policy with ``per`` steps its instances as the walk does, each by the references
+        holding its value (`valgebra_planning._instances`): two references hold one value only
+        where their cells meet, the cells partitioning every value.
+        """
         if not self.policies:
-            return state.policed
+            return state.policed, state.instances
         record = record_of({name: self.bound(state, ref) for name, ref in bindings}, closed=True)
-        after = tuple(
-            policy.step(held, contract.name, record, contract.hints)
-            for policy, held in zip(self.policies, state.policed, strict=True)
+        apart = _apart(state)
+        given = dict(bindings)
+        # A result set narrows a step to one side of a split, and is no key of the cache.
+        call = result is None and (
+            contract.name,
+            tuple(
+                (name, ref if ref in self.literals else state.cells(ref)) for name, ref in bindings
+            ),
         )
+        after, moved = [], []
+        for at, (policy, held) in enumerate(zip(self.policies, state.policed, strict=True)):
+            ones = state.instances[at] if state.instances else None
+            if ones is None:
+                after.append(policy.step(held, contract.name, record, contract.hints, result))
+                moved.append(None)
+                continue
+
+            def step(
+                states: frozenset[str], policy: Policy = policy, at: int = at
+            ) -> frozenset[str]:
+                cached = (at, call, states, True) if call else None
+                found = self.instance_steps.get(cached) if cached else None
+                if found is None:
+                    found = policy.step(
+                        states, contract.name, record, contract.hints, result, instance=True
+                    )
+                    if cached:
+                        self.instance_steps[cached] = found
+                return found
+
+            def loose(states: frozenset[str], policy: Policy = policy) -> frozenset[str]:
+                return policy.step(states, contract.name, record, contract.hints, result)
+
+            key = given.get(policy.per, instances.NO_VALUE)
+            ones = instances.stepped(ones, key, step, loose, apart)
+            after.append(ones.every())
+            moved.append(ones)
         if any(
             policy.reach(held) != "never" for policy, held in zip(self.policies, after, strict=True)
         ):
             return None
-        return after
+        return tuple(after), tuple(moved) if state.instances else ()
+
+    def either(
+        self,
+        state: _State,
+        policed: tuple[tuple[frozenset[str], ...], tuple[Instances | None, ...]],
+    ) -> _State:
+        """Return the state a call's error leaves: before the call or after it, either."""
+        states, ones = policed
+        either = tuple(a | b for a, b in zip(state.policed, states, strict=True))
+        if not state.instances:
+            return state._replace(policed=either)
+        apart = _apart(state)
+        joined = tuple(
+            instances.joined(a, b, apart) for a, b in zip(state.instances, ones, strict=True)
+        )
+        return state._replace(policed=either, instances=joined)
 
     def after(
         self,
@@ -1347,6 +1409,17 @@ def _reachable(
         for name, contract in contracts.items()
         if name in mattering or (name in kept and name in callable_)
     }
+
+
+def _apart(state: _State) -> instances.Apart:
+    """Return whether two references a state holds hold two values: their cells meet in none."""
+    held = dict(state.refs)
+
+    def apart(one: Hashable, other: Hashable) -> bool:
+        mine, theirs = held.get(cast("Ref", one)), held.get(cast("Ref", other))
+        return mine is not None and theirs is not None and not mine & theirs
+
+    return apart
 
 
 def _result_key(origin: str, ref: Ref) -> SlotKey:
@@ -1999,6 +2072,7 @@ def plan(
         1,
         tuple(frozenset({policy.initial}) for policy in policies),
         reading=task.reads,
+        instances=instances.initial(policies),
     )
 
     checked = partial(

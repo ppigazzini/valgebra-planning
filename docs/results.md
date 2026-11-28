@@ -71,7 +71,7 @@ the parcels' are.
 | say | weak | 2 of 2 | 1 | 13 (0) |
 | sweep a scan | strong | 4 of 4 | 0 | 12 (0) |
 | confirm a grasp | strong | 4 of 4 | 0 | 13 (0) |
-| grasp the object confirmed | none | -- | -- | 14 (0) |
+| grasp the object confirmed | weak | 8 of 8 | 1 | 14 (0) |
 
 - A pick under `measured` measures the object and grasps it at once. Under `scanned` no program
   is found within 4 calls and tests, and under a policy refusing every grasp none can be.
@@ -79,8 +79,8 @@ the parcels' are.
   speech stops where the status is not `spoken`.
 - The confirmation is asked with the action the task fixes, `confirm_with_user.action`, though
   the tool takes it as an optional argument.
-- Under `a grasp needs its own yes` the planner writes no program: it holds no object's instance,
-  and a grasp may be of an object no yes was for.
+- Under `a grasp needs its own yes` the planner asks for the yes on the object it then grasps, and
+  stops where the answer is no: it holds each object's instance as the walk does.
 
 The library also holds 26 programs written as an agent writes one (`programs.json`). Each is
 read, critiqued under its task's rules, and run where a row of the file scripts the tools'
