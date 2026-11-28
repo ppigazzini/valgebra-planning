@@ -312,15 +312,26 @@ starts in, so an agent is not told the way out of another object's state. A prox
 its client, issuer and subject as the mcp SDK reads a token's principal: each principal's calls
 are one instance's trace (Roşu and Chen 2012, Def. 12), so a yes one principal relays admits no
 call of another's, and a value one was returned grounds no call of another's. A program runs as
-one principal, so the walk reads either scope alike. The walk holds no value's identity, so it
-takes every transition of such a policy possibly at most: a link of it is proven only where no
-state its calls may take the policy to is bad, or pending where a path ends, none is refuted unless
-the policy starts in a bad or pending state, and the planner, stepping it alike, makes no call a
-transition may take to a bad state. The static half is not built. **[DEVIATION: no-parametric-policy]**
+one principal, so the walk reads either scope alike. The walk holds the instances too: a
+policy with `per` is the states of the base, the instance of a value no call has carried, beside
+the states of each instance by the set of keys holding its value exactly, a key one version read
+at one path or one literal, which tells may and must alias apart at once (Naeem and Lhoták 2008,
+§3.1). A call carrying no value steps every instance (Roşu and Chen 2012, Def. 11); a call carrying
+a key first splits each instance the key may hold in two, the one it holds and the one it does
+not (Fink et al. 2008, §5.2), a new value's instance starting from the base (Roşu and Chen 2012,
+Fig. 3), and steps those it holds alone, a strong update, one key holding one value (Fink et al.
+2008, §2.2.3). Two keys hold one value only where valgebra does not prove their sets apart. An
+iteration over, the keys its body read hold no value: its item is a past one, as the object made
+last is one and those made before it a summary (Balakrishnan and Reps 2006, §3). Past six keys,
+and in the copy whose lapses come due, the policy is one set of states again with every
+transition taken possibly, which forgets what the keys told apart soundly (Fink et al. 2008,
+§5.4). A path ends refuted where the base, or every instance of a key a call carried, is bad or
+pending. The planner holds no instance: it takes every transition of such a policy possibly at
+most and makes no call a transition may take to a bad state. **[DEVIATION: no-parametric-plan]**
 
-IMPLEMENTED-BY: policy.py, policy.py::Monitor.stepping, proxy.py::Gate.watching, policy.py::Monitor.ways_out
+IMPLEMENTED-BY: policy.py, policy.py::Monitor.stepping, proxy.py::Gate.watching, policy.py::Monitor.ways_out, verify.py::_Instances, verify.py::_Instances.dropped, verify.py::_Walk.instance_step, verify.py::_Walk.resolved
 
-HELD-BY: test_a_rule_about_one_parcel_reads_as_a_rule_about_any_two_calls, test_a_yes_one_principal_relays_admits_another_s_walk_only_under_a_shared_policy, test_a_value_one_principal_was_returned_grounds_another_s_call_only_under_a_shared_rule, test_every_call_on_an_item_the_user_listed_is_a_flow_rule_with_only, test_a_policy_per_value_holds_an_instance_for_each_value_its_argument_takes, test_a_call_carrying_no_value_steps_every_instance_and_the_ones_to_come, test_a_run_refuses_a_grasp_of_an_object_no_confirmation_was_for, test_a_refusal_under_per_names_the_ways_out_of_its_own_instance, test_a_gate_names_the_ways_out_of_the_refused_call_s_instance, test_the_walk_and_the_planner_take_a_per_policy_s_every_transition_possibly
+HELD-BY: test_a_rule_about_one_parcel_reads_as_a_rule_about_any_two_calls, test_a_yes_one_principal_relays_admits_another_s_walk_only_under_a_shared_policy, test_a_value_one_principal_was_returned_grounds_another_s_call_only_under_a_shared_rule, test_every_call_on_an_item_the_user_listed_is_a_flow_rule_with_only, test_a_policy_per_value_holds_an_instance_for_each_value_its_argument_takes, test_a_call_carrying_no_value_steps_every_instance_and_the_ones_to_come, test_a_run_refuses_a_grasp_of_an_object_no_confirmation_was_for, test_a_refusal_under_per_names_the_ways_out_of_its_own_instance, test_a_gate_names_the_ways_out_of_the_refused_call_s_instance, test_the_walk_holds_a_per_policy_s_instances_and_the_planner_none, test_a_yes_admits_the_grasp_of_its_own_object, test_two_inputs_valgebra_proves_apart_are_two_objects, test_each_item_confirmed_and_grasped_is_proven, test_a_past_item_is_held_by_no_key_once_its_iteration_ends, test_a_key_met_first_in_a_loop_holds_a_new_value_where_no_iteration_ran, test_an_error_block_holds_the_instances_before_the_call_and_after_it, test_past_six_keys_the_policy_steps_as_one_set_of_states, test_a_lapse_is_named_where_the_proof_rests_on_it, test_a_program_the_walk_proves_has_no_run_the_policy_refuses
 
 ## Vacuity
 

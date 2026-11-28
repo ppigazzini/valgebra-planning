@@ -817,10 +817,13 @@ def test_a_run_refuses_a_grasp_of_an_object_no_confirmation_was_for(
     ended = run(read_program(SWAPPED), PERSONAL, task, inputs, tools, policies=[EACH_CONFIRMED])
     assert (ended.outcome == "refused") is refused
     assert made == ([] if refused else ["obj_1"])
-    # The walk holds no value's identity, so it proves no link of such a policy either way.
+    # The walk tells the yes's object from the grasp's: where the answer is no, the grasp's
+    # object surely had none; where it is yes, the second object may be the first, or not.
     checked = verify(read_program(SWAPPED), PERSONAL, task, policies=[EACH_CONFIRMED])
-    verdicts = {link.verdict for link in checked.links if link.claim.startswith("policy")}
-    assert verdicts == {"undecided"}
+    verdicts = {
+        link.where: link.verdict for link in checked.links if link.claim.startswith("policy")
+    }
+    assert verdicts == {"case:c1:0": "undecided", "case:c1:1": "refuted"}
 
 
 #: The personal tools with a grasp whose id no input can be: a planned program must grasp.
@@ -844,9 +847,9 @@ GRASPING = {
 }
 
 
-def test_the_walk_and_the_planner_take_a_per_policy_s_every_transition_possibly() -> None:
-    # The walk holds no value's identity: a link is proven where no transition may reach a bad
-    # state, never refuted, and the planner makes no call a transition may take to one.
+def test_the_walk_holds_a_per_policy_s_instances_and_the_planner_none() -> None:
+    # The walk holds each value's instance: a grasp no yes came before is refuted, as every run
+    # refuses it. The planner holds none, and makes no call a transition may take to a bad state.
     inputs = {"question": {"type": "string"}, "first": OBJECT_ID}
     asks = read_task("ask", inputs, {"type": "boolean"})
     confirms = "c1 = confirm_with_user(question=question, object_id=first)\nreturn c1.confirmed\n"
@@ -856,7 +859,7 @@ def test_the_walk_and_the_planner_take_a_per_policy_s_every_transition_possibly(
     unconfirmed = "c2 = grasp(object_id=first)\nreturn c2.grasp_id\n"
     checked = verify(read_program(unconfirmed), GRASPING, grasps, policies=[EACH_CONFIRMED])
     assert {link.verdict for link in checked.links if link.claim.startswith("policy")} == {
-        "undecided"
+        "refuted"
     }
     assert plan(GRASPING, grasps, policies=[EACH_CONFIRMED]).program is None
     shared = plan(GRASPING, grasps, policies=[replace(EACH_CONFIRMED, per="")])

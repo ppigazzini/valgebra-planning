@@ -572,12 +572,13 @@ ones.
   passes a rule that a booking follows its own parcel's approval. That one call takes the value
   another returned is a flow rule with `only`. A policy naming an argument in `per` holds an
   instance for each value of it at run time, the parametric monitoring of Roşu and Chen 2012, so
-  the runner and the proxy refuse a booking of a parcel no approval was for; the walk holds no
-  value's identity, so it takes every transition of such a policy possibly at most. A link of it is
-  proven only where no state its calls may take the policy to is bad, or pending where a path ends,
-  as a program that only asks; none is refuted unless the policy starts in a bad or pending state,
-  so a grasp no yes came before is undecided, though every run refuses it; and the planner makes
-  no call a transition may take to a bad state, so it writes no grasp at all. A proxy reads no
+  the runner and the proxy refuse a booking of a parcel no approval was for. The walk holds an
+  instance of each value too, told apart by the names holding it: a grasp of the object a yes
+  was for is proven, one no yes came before refuted, and one of an object read after the yes,
+  which may be another, undecided, as two names of one set may hold one value. Past six names, and
+  in the copy whose lapses come due, it holds the policy as one set of states. The planner holds
+  no instance, takes every transition of such a policy possibly at most, and makes no call a
+  transition may take to a bad state, so it writes no grasp under one. A proxy reads no
   pending state: MCP 2026-07-28 has no session, and a proxy sees no
   end of a task.
 - **A proof reads no time.** A program is walked before it runs, so a policy's lapse is taken by no

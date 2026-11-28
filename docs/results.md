@@ -56,7 +56,9 @@ package describes them: a detection, a pose estimate, a walk, a grasp, a scan li
 objects, speech, a joint move whose speed is bounded by `additionalProperties`, a speed reading
 and a user's confirmation. Two flow rules hold the grasp's distance: `measured`, read from
 `estimate_pose` for the object grasped and after the last call that may act, and `scanned`, from a
-scan's item for that object. Each task is planned and verified as the parcels' are.
+scan's item for that object, and a policy, `a grasp needs its own yes`, holds each object's
+grasp to a confirmation for it, one instance per `object_id`. Each task is planned and verified as
+the parcels' are.
 
 | task | program | links proven | stops | cells (undecided) |
 |---|---|---|---:|---|
@@ -69,6 +71,7 @@ scan's item for that object. Each task is planned and verified as the parcels' a
 | say | weak | 2 of 2 | 1 | 13 (0) |
 | sweep a scan | strong | 4 of 4 | 0 | 12 (0) |
 | confirm a grasp | strong | 4 of 4 | 0 | 13 (0) |
+| grasp the object confirmed | none | -- | -- | 14 (0) |
 
 - A pick under `measured` measures the object and grasps it at once. Under `scanned` no program
   is found within 4 calls and tests, and under a policy refusing every grasp none can be.
@@ -76,8 +79,10 @@ scan's item for that object. Each task is planned and verified as the parcels' a
   speech stops where the status is not `spoken`.
 - The confirmation is asked with the action the task fixes, `confirm_with_user.action`, though
   the tool takes it as an optional argument.
+- Under `a grasp needs its own yes` the planner writes no program: it holds no object's instance,
+  and a grasp may be of an object no yes was for.
 
-The library also holds 24 programs written as an agent writes one (`programs.json`). Each is
+The library also holds 26 programs written as an agent writes one (`programs.json`). Each is
 read, critiqued under its task's rules, and run where a row of the file scripts the tools'
 answers. A verdict is `accepted` where every link is proven and no path stops, `proven, weak`
 where a stop the task tolerates is left, and `proven, no return` where no execution returns.
@@ -108,7 +113,13 @@ where a stop the task tolerates is left, and `proven, no return` where no execut
 | an argument named for a keyword | sweep a scan | refused, line 1 |  |
 | a grasp at a reading the walk has made stale | pick, measured | refuted: `flow measured: c1.distance_m from estimate_pose was returned after every call before grasp that may act` | refused: estimate_pose, walk_to |
 | a confirmation leaving out the action the task fixes | confirm a grasp | refuted: `confirm_with_user.action is the task's 'grasp'` |  |
+| a grasp of the object its yes was for | grasp the object confirmed | proven, weak | returned: confirm_with_user, estimate_pose, grasp |
+| a grasp of an object detected after the yes | grasp the object confirmed | undecided: `policy a grasp needs its own yes holds` | refused: confirm_with_user, detect, estimate_pose |
 
+- The walk holds `a grasp needs its own yes` as one instance an object, each told apart by the
+  keys holding its value: the grasp of the object the yes was for is proven, and a grasp of an
+  object detected after it, which may be another, is undecided. Run on a detection of another
+  object, that grasp is refused.
 - Five programs grasp at a reading or a detection through a name the program rebinds before the
   grasp: in an error block, after a second detection, in a branch the grasp is not on, and in a
   loop. Each is refuted under `measured` on the path that reads the stale value or another

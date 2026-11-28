@@ -41,8 +41,20 @@ directions.
   manuscript. A monitor decides a property on a prefix only by a bad or a good one, which a
   pending state is not.
 - **Roşu and Chen 2012.** G. Roşu, F. Chen. Semantics and algorithms for parametric monitoring.
-  Logical Methods in Computer Science 8(1:09), 2012. Parametric trace slicing, which a policy
-  does not read.
+  Logical Methods in Computer Science 8(1:09), 2012. Parametric trace slicing: the instances a
+  run and a proxy hold, and those the walk holds of each value.
+- **Fink et al. 2008.** S. J. Fink, E. Yahav, N. Dor, G. Ramalingam, E. Geay. Effective typestate
+  verification in the presence of aliasing. ACM Transactions on Software Engineering and
+  Methodology 17(2), 2008, read in the authors' copy. A strong update needs one concrete object,
+  and a focus splits a summary by the object an operation reads.
+- **Naeem and Lhoták 2008.** N. A. Naeem, O. Lhoták. Typestate-like analysis of multiple
+  interacting objects. OOPSLA 2008, 347-366.
+  [doi:10.1145/1449764.1449792](https://doi.org/10.1145/1449764.1449792). An object read as the
+  set of names holding it, which tells may and must alias apart at once.
+- **Balakrishnan and Reps 2006.** G. Balakrishnan, T. Reps. Recency-abstraction for
+  heap-allocated storage. SAS 2006, LNCS 4134, 221-239.
+  [doi:10.1007/11823230_15](https://doi.org/10.1007/11823230_15), read in the authors' copy. The
+  object made last is one, and those made before it a summary.
 
 ## Records and their fields
 

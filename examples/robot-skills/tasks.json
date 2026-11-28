@@ -189,6 +189,24 @@
       "constants": {
         "confirm_with_user.action": "grasp"
       }
+    },
+    {
+      "name": "grasp the object confirmed",
+      "inputs": {
+        "o": {
+          "type": "string"
+        }
+      },
+      "goal": {
+        "type": "string",
+        "pattern": "^g_[0-9]+$"
+      },
+      "policies": [
+        "a grasp needs its own yes"
+      ],
+      "stops": {
+        "confirm_with_user": true
+      }
     }
   ]
 }
