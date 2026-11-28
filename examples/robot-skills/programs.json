@@ -551,6 +551,81 @@
         "c1 = confirm_with_user(object_id=o)",
         "return c1.confirmed"
       ]
+    },
+    {
+      "name": "a grasp of the object its yes was for",
+      "task": "grasp the object confirmed",
+      "source": [
+        "c1 = confirm_with_user(object_id=o)",
+        "if c1.confirmed in (True,):",
+        "    c2 = estimate_pose(object_id=o)",
+        "    c3 = grasp(object_id=o, distance_m=c2.distance_m)",
+        "    return c3.grasp_id",
+        "stop(c1)"
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1"
+        },
+        "answers": {
+          "confirm_with_user": [
+            {
+              "confirmed": true
+            }
+          ],
+          "estimate_pose": [
+            {
+              "distance_m": 0.4
+            }
+          ],
+          "grasp": [
+            {
+              "grasp_id": "g_1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a grasp of an object detected after the yes",
+      "task": "grasp the object confirmed",
+      "source": [
+        "c1 = confirm_with_user(object_id=o)",
+        "if c1.confirmed in (True,):",
+        "    c2 = detect(label=\"mug\")",
+        "    c3 = estimate_pose(object_id=c2.object_id)",
+        "    c4 = grasp(object_id=c2.object_id, distance_m=c3.distance_m)",
+        "    return c4.grasp_id",
+        "stop(c1)"
+      ],
+      "run": {
+        "inputs": {
+          "o": "obj_1"
+        },
+        "answers": {
+          "confirm_with_user": [
+            {
+              "confirmed": true
+            }
+          ],
+          "detect": [
+            {
+              "object_id": "obj_2",
+              "found": true
+            }
+          ],
+          "estimate_pose": [
+            {
+              "distance_m": 0.4
+            }
+          ],
+          "grasp": [
+            {
+              "grasp_id": "g_1"
+            }
+          ]
+        }
+      }
     }
   ]
 }

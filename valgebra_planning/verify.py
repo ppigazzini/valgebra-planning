@@ -39,6 +39,7 @@ from valgebra_planning._valgebra import (
     compile_schema,
     complement,
     intersection,
+    json_key,
     nothing,
     union,
 )
@@ -204,8 +205,8 @@ class _Walk:
     policies: tuple[Policy, ...]
     flows: tuple[Flow, ...]
     links: list[Link] = field(default_factory=list)
-    #: The policy states each iteration of the loop being walked ends in.
-    ends: list[_States] | None = None
+    #: The policy states and instances each iteration of the loop being walked ends in.
+    ends: list[tuple[_States, _Instanced]] | None = None
     #: The origins tested on each path that ends the run inside the loop being walked.
     exits: list[frozenset[str]] | None = None
     gaps: list[Gap] = field(default_factory=list)
@@ -232,6 +233,10 @@ class _Walk:
     returns: list[str] = field(default_factory=list)
     #: Each state that lapses read by a call so far, in order: what a loop's body added to it.
     awaits: list[_Awaited] = field(default_factory=list)
+    #: The set each key a `per` argument held was bound in, read when two keys are asked apart,
+    #: and what each pair asked answered.
+    key_sets: dict[_Key, Validator[Any]] = field(default_factory=dict)
+    asked_apart: dict[tuple[_Key, _Key], bool] = field(default_factory=dict)
 
     @property
     def lapsing(self) -> tuple[Policy, ...]:
@@ -242,21 +247,168 @@ class _Walk:
         """Return the states a program starts in."""
         return tuple(frozenset({p.initial}) for p in (*self.policies, *self.lapsing))
 
+    def initial_instances(self) -> _Instanced:
+        """Return the instances a program starts with: each policy with ``per`` its base alone.
+
+        With no such policy there are none, and no step reads them.
+        """
+        if not any(p.per for p in self.policies):
+            return ()
+        return tuple(_Instances(frozenset({p.initial})) if p.per else None for p in self.policies)
+
     def stepped(
         self,
-        states: _States,
+        path: _Path,
         contract: Contract,
         record: Validator[Any],
+        keys: tuple[Any, ...],
         result: Validator[Any] | None = None,
-    ) -> _States:
-        """Return the states a call leaves, each policy's and each lapsing one's whatever time."""
+    ) -> tuple[_States, _Instanced]:
+        """Return the states a call leaves, each policy's and each lapsing one's whatever time.
+
+        A policy with ``per`` steps its instances (`_Walk.instance_step`), ``keys`` holding what
+        the call's argument holds for each, and its states are every state of them.
+        """
         every = len(self.policies)
-        return tuple(
-            policy.step(held, contract.name, record, contract.hints, result, late=at >= every)
-            for at, (policy, held) in enumerate(
-                zip((*self.policies, *self.lapsing), states, strict=True)
+        if not path.instances:
+            stepped = tuple(
+                policy.step(held, contract.name, record, contract.hints, result, late=at >= every)
+                for at, (policy, held) in enumerate(
+                    zip((*self.policies, *self.lapsing), path.states, strict=True)
+                )
             )
+            return stepped, ()
+        states, instances = [], []
+        for at, (policy, held) in enumerate(
+            zip((*self.policies, *self.lapsing), path.states, strict=True)
+        ):
+            ones = path.instances[at] if at < every and path.instances else None
+            if ones is not None:
+                ones = self.instance_step(policy, ones, keys[at], contract, record, result)
+                states.append(ones.every())
+            else:
+                step = policy.step(
+                    held, contract.name, record, contract.hints, result, late=at >= every
+                )
+                states.append(step)
+            if at < every:
+                instances.append(ones)
+        return tuple(states), tuple(instances)
+
+    def instance_step(
+        self,
+        policy: Policy,
+        ones: _Instances,
+        key: Any,
+        contract: Contract,
+        record: Validator[Any],
+        result: Validator[Any] | None,
+    ) -> _Instances:
+        """Return a policy's instances once a call is made, its argument holding ``key``.
+
+        A call carrying no value is an event of every instance (Roşu and Chen 2012, Def. 11). A
+        call carrying one is an event of that value's instance alone: each instance the key may
+        hold is told apart first (`_Walk.resolved`), and only those it holds are stepped, a
+        strong update, as one key holds one value (Fink et al. 2008, §2.2.3). A key the walk
+        cannot name steps the policy as one set of states.
+        """
+
+        def step(states: frozenset[str], *, instance: bool = True) -> frozenset[str]:
+            return policy.step(
+                states, contract.name, record, contract.hints, result, instance=instance
+            )
+
+        if key is _UNNAMED and not ones.weak:
+            ones = ones.collapsed()
+        if not ones.weak and key is not _NO_VALUE:
+            ones = self.resolved(ones, key)
+        if ones.weak:
+            return ones._replace(base=step(ones.base, instance=False))
+        if key is _NO_VALUE:
+            held = [(keys, step(states)) for keys, states in ones.held]
+            return ones._replace(base=step(ones.base), held=_merged(held))
+        held = [(keys, step(states) if key in keys else states) for keys, states in ones.held]
+        return ones._replace(held=_merged(held), called=ones.called | {key})
+
+    def resolved(self, ones: _Instances, key: _Key) -> _Instances:
+        """Return the instances with ``key`` told apart in each: held by it or not.
+
+        Each instance every key of which may hold ``key``'s value splits in two, the one ``key``
+        holds and the one it does not, as a focus splits a summary by the access path an
+        operation reads (Fink et al. 2008, §5.2); and ``key`` may hold a value no call carried,
+        whose instance starts from the base (Roşu and Chen 2012, Fig. 3). An instance no key
+        holds may be any value's (`_Instances`), so ``key`` may hold its value too.
+        """
+        if ones.weak or key in ones.resolved:
+            return ones
+        if len(ones.resolved) >= _INSTANCE_KEYS:
+            return ones.collapsed()
+        held = [(frozenset({key}), ones.base)]
+        for keys, states in ones.held:
+            held.append((keys, states))
+            if not any(self.apart(key, other) for other in keys):
+                held.append((keys | {key}, states))
+        return ones._replace(held=_merged(held), resolved=ones.resolved | {key})
+
+    def apart(self, one: _Key, other: _Key) -> bool:
+        """Return whether two keys hold two values on every run, their sets proven apart."""
+        if one == other:
+            return False
+        if isinstance(one, Const) and isinstance(other, Const):
+            return json_key(one.value) != json_key(other.value)
+        pair = (one, other) if repr(one) <= repr(other) else (other, one)
+        found = self.asked_apart.get(pair)
+        if found is None:
+            sets = (self.key_sets.get(one), self.key_sets.get(other))
+            found = None not in sets and inside(intersection(*sets), nothing) == "subset"
+            self.asked_apart[pair] = found
+        return found
+
+    def joined(self, one: _Instances | None, other: _Instances | None) -> _Instances | None:
+        """Return the instances either of two paths may hold.
+
+        Each side tells apart the keys the other told apart, so one set of keys names one
+        instance on both; a key one side never met holds there the value it would start with.
+        """
+        if one is None or other is None:
+            return other if one is None else one
+        if one.weak or other.weak:
+            return _Instances(one.every() | other.every(), weak=True)
+        for key in sorted(one.resolved | other.resolved, key=repr):
+            one, other = self.resolved(one, key), self.resolved(other, key)
+        if one.weak or other.weak:
+            return _Instances(one.every() | other.every(), weak=True)
+        return _Instances(
+            one.base | other.base,
+            _merged([*one.held, *other.held]),
+            one.resolved | other.resolved,
+            one.called & other.called,
         )
+
+    def instance_keys(
+        self, call: Call, env: Mapping[Ref, _Held], bound: Mapping[str, _Held]
+    ) -> tuple[Any, ...]:
+        """Return what a call's ``per`` argument holds for each policy: a key, or none at all.
+
+        A key is what a binding reads, one version at one path or one literal (`_Walk.keyed`),
+        its set the one the argument was bound in, which two keys are asked apart by.
+        """
+        bindings = dict(call.bindings)
+        keys: list[Any] = []
+        for policy in self.policies:
+            if not policy.per:
+                keys.append(None)
+                continue
+            if policy.per not in bindings:
+                keys.append(_NO_VALUE)
+                continue
+            key = self.keyed(env, bindings[policy.per])
+            if key is None or policy.per not in bound:
+                keys.append(_UNNAMED)
+                continue
+            self.key_sets.setdefault(key, bound[policy.per].values)
+            keys.append(key)
+        return tuple(keys)
 
     def awaiting(
         self, states: _States, contract: Contract, record: Validator[Any]
@@ -375,7 +527,7 @@ class _Walk:
             self.ended(path)
         elif isinstance(end, Next):
             if self.ends is not None:
-                self.ends.append(path.states)
+                self.ends.append((path.states, path.instances))
         elif isinstance(end, For):
             self.loop(end, env, where, path)
         else:
@@ -446,6 +598,8 @@ class _Walk:
             self.inclusion(where, claim, end.ref, held, ARRAY, env)
         item = self.element(held)
         inner = _unbound(env, end.item)
+        # A key read in the body is one value in one iteration: its version is newer than this.
+        born = self.versions
         # The item is a value of its own, returned by the call that returned its array.
         array = env.get(_ref(end.ref.variable))
         inner[_ref(end.item)] = _Held(
@@ -467,30 +621,50 @@ class _Walk:
         )
         path = path._replace(withdrawn=listed)
         states, holding, read = path.states, path.states, len(self.awaits)
+        entry, kept = path.instances, path.instances
+
+        def gone(key: _Key) -> bool:
+            # An iteration over, the values its body read are a past item's: no key holds them.
+            return isinstance(key, tuple) and key[0] > born
+
         if self.policies:
             # The states once the body ran at least once, to a fixpoint from the first walk's.
             holding = tuple(frozenset() for _ in states)
-            ran = states
+            kept = tuple(None for _ in entry)
+            ran, running = states, entry
             while True:
-                ends, _ = self.iterate(
-                    end.body, inner, body_at, path._replace(states=ran, tested=tested), silent=True
-                )
-                grown = tuple(s.union(*(e[i] for e in ends)) for i, s in enumerate(holding))
-                if grown == holding:
+                walked = path._replace(states=ran, instances=running, tested=tested)
+                ends, _ = self.iterate(end.body, inner, body_at, walked, silent=True)
+                grown = tuple(s.union(*(e[0][i] for e in ends)) for i, s in enumerate(holding))
+                widened = kept
+                for _, ended in ends:
+                    widened = tuple(
+                        self.joined(one, None if other is None else other.dropped(gone))
+                        for one, other in zip(widened, ended, strict=True)
+                    )
+                if grown == holding and widened == kept:
                     break
-                holding = ran = grown
+                holding, kept = grown, widened
+                ran, running = grown, widened
         reach = tuple(before | then for before, then in zip(states, holding, strict=True))
-        _, exits = self.iterate(
-            end.body, inner, body_at, path._replace(states=reach, tested=tested), silent=False
-        )
+        reaching = tuple(self.joined(one, other) for one, other in zip(entry, kept, strict=True))
+        walked = path._replace(states=reach, instances=reaching, tested=tested)
+        _, exits = self.iterate(end.body, inner, body_at, walked, silent=False)
         after = path.tested.union(*exits)
         path = path._replace(awaited=path.awaited.union(self.awaits[read:]))
-        sides = self.sides(held, states, holding)
-        for label, at in sides:
+        sides = self.sides(held, (states, entry), (holding, kept))
+        for label, (at, instances) in sides:
             here = where if len(sides) == 1 else _join(where, f"{label}:{end.item}")
-            self.block(end.after, env, here, path._replace(states=at, tested=after))
+            self.block(
+                end.after, env, here, path._replace(states=at, instances=instances, tested=after)
+            )
 
-    def sides(self, held: _Held, empty: _States, holding: _States) -> list[tuple[str, _States]]:
+    def sides(
+        self,
+        held: _Held,
+        empty: tuple[_States, _Instanced],
+        holding: tuple[_States, _Instanced],
+    ) -> list[tuple[str, tuple[_States, _Instanced]]]:
         """Return the sides of a loop what follows it is walked on, each with its states.
 
         A loop is a test on whether its array holds an item (Bertoli et al. 2006, Def. 2.8): the
@@ -503,7 +677,7 @@ class _Walk:
         found = []
         if intersection(held.values, _EMPTY).relation_to(nothing) != "subset":
             found.append(("empty", empty))
-        if any(holding) and intersection(held.values, _HOLDING).relation_to(nothing) != "subset":
+        if any(holding[0]) and intersection(held.values, _HOLDING).relation_to(nothing) != "subset":
             found.append(("items", holding))
         return found or [("empty", empty)]
 
@@ -540,7 +714,7 @@ class _Walk:
 
     def iterate(
         self, body: Block, env: dict[Ref, _Held], where: str, path: _Path, *, silent: bool
-    ) -> tuple[list[_States], list[frozenset[str]]]:
+    ) -> tuple[list[tuple[_States, _Instanced]], list[frozenset[str]]]:
         """Walk a loop's body; return the states its iterations end in, and what ends the run.
 
         The second list holds, for each path ending the run in the body, the origins it tested.
@@ -574,6 +748,9 @@ class _Walk:
         for at, policy in enumerate(self.policies):
             held = path.states[at]
             verdict = _OBEYED[policy.reach(held, ended=True)]
+            ones = path.instances[at] if path.instances else None
+            if verdict == "undecided" and ones is not None and _surely(policy, ones):
+                verdict = "refuted"
             hinted = policy.hints() and not all(c.trusted for c in self.contracts.values())
             assumed = [f"the annotation hints policy {policy.name} reads"] if hinted else []
             if policy.lapses and verdict == "proven":
@@ -731,7 +908,8 @@ class _Walk:
         self.read_fresh(call, env, where, path)
         if not contract.plain and len(bound) == len(call.bindings):
             self.record(call, contract, bound, where, env)
-        record, after, awaited = self.sent(contract, bound, path)
+        keys = self.instance_keys(call, env, bound) if path.instances else ()
+        record, after, after_instances, awaited = self.sent(contract, bound, path, keys)
         # The result is a new version, so no value held under its name before is made fresh, as
         # the error's block, which reads that value, reads it.
         stale = path.stale
@@ -749,8 +927,12 @@ class _Walk:
         if call.on_error is not None:
             # A tool that answered with an error may still have acted, so its block reads both.
             either = tuple(before | then for before, then in zip(states, after, strict=True))
+            joined = path.instances and tuple(
+                self.joined(before, then)
+                for before, then in zip(path.instances, after_instances, strict=True)
+            )
             erred = _Path(
-                either, path.tested, failing, stale, unknown, observed, withdrawn, awaited
+                either, path.tested, failing, stale, unknown, observed, withdrawn, awaited, joined
             )
         self.failure(call, contract, env, where, erred)
         observed = self.observing(call, env, path, observed, acts=acts)
@@ -775,7 +957,9 @@ class _Walk:
             if transition.result is not None and transition.reads(call.tool, contract.hints)
         ]
         cells = [] if whole is None or not guards else _cells(whole.values, guards)
-        made = _Path(after, path.tested, left, stale, last, observed, withdrawn, awaited)
+        made = _Path(
+            after, path.tested, left, stale, last, observed, withdrawn, awaited, after_instances
+        )
         if whole is None or not cells:
             return [(defined, made)]
         cases = []
@@ -789,22 +973,26 @@ class _Walk:
                 returned=whole.returned,
             )
             narrowed = {**defined, _ref(call.result): held}
-            stepped = self.stepped(states, contract, record, cell)
-            cases.append((narrowed, made._replace(states=stepped)))
+            stepped, instanced = self.stepped(path, contract, record, keys, cell)
+            cases.append((narrowed, made._replace(states=stepped, instances=instanced)))
         return cases
 
     def sent(
-        self, contract: Contract, bound: Mapping[str, _Held], path: _Path
-    ) -> tuple[Validator[Any], _States, frozenset[_Awaited]]:
-        """Return a call's record, the policy states it leaves, and the states awaited once sent.
+        self,
+        contract: Contract,
+        bound: Mapping[str, _Held],
+        path: _Path,
+        keys: tuple[Any, ...] = (),
+    ) -> tuple[Validator[Any], _States, _Instanced, frozenset[_Awaited]]:
+        """Return a call's record, the policy states and instances it leaves, and those awaited.
 
         A policy alone reads the record, so with none it is not built.
         """
         if not self.policies:
-            return nothing, path.states, path.awaited
+            return nothing, path.states, path.instances, path.awaited
         record = record_of({name: held.values for name, held in bound.items()}, closed=True)
-        after = self.stepped(path.states, contract, record)
-        return record, after, path.awaited | self.awaiting(path.states, contract, record)
+        after, instances = self.stepped(path, contract, record, keys)
+        return record, after, instances, path.awaited | self.awaiting(path.states, contract, record)
 
     def repeated(
         self, call: Call, contract: Contract, where: str, env: dict[Ref, _Held], path: _Path
@@ -1959,6 +2147,93 @@ class _Path(NamedTuple):
     withdrawn: tuple[tuple[str, frozenset[int]], ...] = ()
     #: Each state that lapses held on the way here where a call its policy reads was reached.
     awaited: frozenset[_Awaited] = frozenset()
+    #: The instances of each policy with ``per`` the path may hold, None for any other policy;
+    #: ``states`` holds every state of them, as every reader of a policy's states reads it.
+    instances: _Instanced = ()
+
+
+#: The keys whose values one `per` policy's instances are told apart by, at most, on a path:
+#: past them the policy steps as one set of states again, every transition taken possibly.
+_INSTANCE_KEYS = 6
+#: What a call's `per` argument holds, where it holds no key: none at all, the call stepping
+#: every instance, or one the walk cannot name, the call stepping as one set of states does.
+_NO_VALUE: Any = object()
+_UNNAMED: Any = object()
+
+
+class _Instances(NamedTuple):
+    """The instances of one policy with ``per`` a path may hold, by the keys holding each value.
+
+    ``base`` is the states of the instance of a value no call has carried: a new value's
+    instance starts there (Roşu and Chen 2012, Fig. 3), and a call carrying no value steps it.
+    ``held`` maps a set of keys to the states of an instance whose value exactly those keys hold
+    among ``resolved``, each object read by the set of names holding it, which tells may and must
+    alias apart at once (Naeem and Lhoták 2008, §3.1); the empty set is every instance no key
+    holds, a past item of a loop among them. ``called`` are the keys a call on the path carried.
+    ``weak`` holds past `_INSTANCE_KEYS`: the states are then ``base`` alone, every transition
+    taken possibly, which discards what the keys told apart soundly (Fink et al. 2008, §5.4).
+    """
+
+    base: frozenset[str]
+    held: tuple[tuple[frozenset[_Key], frozenset[str]], ...] = ()
+    resolved: frozenset[_Key] = frozenset()
+    called: frozenset[_Key] = frozenset()
+    weak: bool = False
+
+    def every(self) -> frozenset[str]:
+        """Return every state some instance may be in."""
+        return self.base.union(*(states for _, states in self.held))
+
+    def collapsed(self) -> _Instances:
+        """Return the instances as one set of states, as the walk read them with no key."""
+        return _Instances(self.every(), weak=True)
+
+    def dropped(self, gone: Callable[[_Key], bool]) -> _Instances:
+        """Return the instances with each key ``gone`` names forgotten: its values a past one's.
+
+        A loop's item is one object within its iteration and one of the past ones after it, as
+        the block an allocation made last is one and those made before it a summary
+        (Balakrishnan and Reps 2006, §3): the keys an iteration read hold no value past it.
+        """
+        if self.weak:
+            return self
+        held = [
+            (frozenset(key for key in keys if not gone(key)), states) for keys, states in self.held
+        ]
+        return self._replace(
+            held=_merged(held),
+            resolved=frozenset(key for key in self.resolved if not gone(key)),
+            called=frozenset(key for key in self.called if not gone(key)),
+        )
+
+
+def _merged(
+    held: Iterable[tuple[frozenset[_Key], frozenset[str]]],
+) -> tuple[tuple[frozenset[_Key], frozenset[str]], ...]:
+    """Return ``held`` with the states of each set of keys joined, in one order."""
+    joined: dict[frozenset[_Key], frozenset[str]] = {}
+    for keys, states in held:
+        joined[keys] = joined.get(keys, frozenset()) | states
+    return tuple(sorted(joined.items(), key=lambda pair: sorted(map(repr, pair[0]))))
+
+
+#: The instances of each policy a path holds, None for a policy with no ``per``.
+_Instanced = tuple[_Instances | None, ...]
+
+
+def _surely(policy: Policy, ones: _Instances) -> bool:
+    """Return whether a path ends with some instance surely in a bad or pending state.
+
+    The base is the policy's own instance, stepped by every call carrying no value, and a key a
+    call carried holds one value, whose instance is exactly one of those holding the key: where
+    every state of either is bad or pending, the run that took the path ends so.
+    """
+    if ones.weak:
+        return False
+    wrong = policy.bad | policy.pending
+    return ones.base <= wrong or any(
+        all(states <= wrong for keys, states in ones.held if key in keys) for key in ones.called
+    )
 
 
 #: How many smaller witnesses a refutation's is shrunk through at most, and the mark of none.
@@ -2098,5 +2373,5 @@ def verify(
         for var, slots in task.held.items()
         for slot in slots
     }
-    walk.block(program, env, "", _Path(walk.initial()))
+    walk.block(program, env, "", _Path(walk.initial(), instances=walk.initial_instances()))
     return Verification(tuple(walk.links), tuple(walk.gaps), tuple(walk.returns))

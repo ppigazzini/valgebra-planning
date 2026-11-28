@@ -8,6 +8,14 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Added
 
+- The walk holds a policy with `per` as its instances, each by the names holding its value, a
+  version read at one path or a constant: a call carrying a name steps the instances that name
+  holds alone, a call carrying none steps every one, and two names hold one value only where
+  valgebra does not prove their sets apart. A grasp of the object a yes was for is proven, one no
+  yes came before refuted, and one of an object read after the yes undecided, where the walk
+  proved no such link and refuted none. A loop's item is a past one once its iteration ends; past
+  six names, and in the copy whose lapses come due, the policy is one set of states as before.
+  `examples/robot-skills` holds `a grasp needs its own yes`, a task under it and two programs.
 - The planner tests a key of a call's result into the goal, for every task: a field the result
   declares and does not guarantee, whose set meets the goal, is held on the side of the test
   showing it, as `if "sprt" in c1: return c1.sprt`, and the other side takes a strong program or
@@ -42,12 +50,9 @@ All notable changes to valgebra-planning are recorded here. The format follows
 
 ### Changed
 
-- The pages say what the walk and the planner do with a `per` policy: its every transition is
-  taken possibly, so a link is proven only where no state the calls may take it to is bad or left
-  pending, as a program that only asks; none is refuted unless the policy starts in a bad or
-  pending state, so a grasp no yes came before is undecided; and the planner makes no call a
-  transition may take to a bad state, so it writes no grasp at all. The pages said the walk
-  proves none of its links, and said nothing of the planner.
+- The pages say what the planner does with a `per` policy: it holds no instance, takes every
+  transition possibly, and makes no call a transition may take to a bad state, so it writes no
+  grasp under "each object is confirmed before it is grasped". They said nothing of it.
 - Of two weak programs the planner ranks first the one whose stops all lie in error blocks, then
   the one stopping on fewer cells, and a stop on a value no predicate splits counts its one
   cell. A booking with errors now reads the booking after a failed `book` and returns its label

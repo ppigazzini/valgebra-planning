@@ -34,11 +34,10 @@ per value that argument takes, each checked on its own slice of the trace (Roşu
 Def. 12): a call carrying the argument is an event of the instance its value names alone, and a
 call not carrying it an event of every instance (Roşu and Chen 2012, Def. 11), so "each object
 is confirmed before it is grasped" holds of each object, as Agent-C binds a file read to the
-file opened before it (Kamath et al. 2025, §5.1). The monitor holds the instances at run time;
-the walk holds no value's identity, so it takes every transition of such a policy possibly at
-most: a link of it is proven only where no state the calls may take it to is bad, or pending
-where a path ends, none is refuted unless it starts in a bad or pending state, and the planner
-makes no call a transition may take to a bad state.
+file opened before it (Kamath et al. 2025, §5.1). The monitor holds the instances at run time,
+and the walk holds them by the names holding each value (`valgebra_planning.verify`); the
+planner holds none, so it takes every transition of such a policy possibly at most and makes no
+call a transition may take to a bad state.
 
 A state may lapse (`Lapse`): it is left for a named state once it was held its seconds, with no
 call. The monitor reads it by a clock at each event. The walk reads no time and takes no lapse, and
@@ -195,6 +194,7 @@ class Policy:
         result: Validator[Any] | None = None,
         *,
         late: bool = False,
+        instance: bool = False,
     ) -> frozenset[str]:
         """Return the states the automaton may be in after a call whose record lies in ``record``.
 
@@ -211,11 +211,15 @@ class Policy:
         result being known.
 
         A lapse is not taken, the events of a walk having no times; with ``late``, each may have
-        come due before the call, and before its result.
+        come due before the call, and before its result. A policy with ``per`` takes each
+        transition possibly at most, a call being maybe another value's event, unless
+        ``instance`` says ``states`` are one instance's and the call that instance's event.
         """
         waited = self.due if late else frozenset
-        made = self._stepped(waited(states), tool, record, hints, returned=False)
-        return self._stepped(waited(made), tool, record, hints, returned=True, result=result)
+        made = self._stepped(waited(states), tool, record, hints, returned=False, instance=instance)
+        return self._stepped(
+            waited(made), tool, record, hints, returned=True, result=result, instance=instance
+        )
 
     def sent(
         self,
@@ -249,6 +253,7 @@ class Policy:
         *,
         returned: bool,
         result: Validator[Any] | None = None,
+        instance: bool = False,
     ) -> frozenset[str]:
         after: set[str] = set()
         for state in states:
@@ -256,7 +261,7 @@ class Policy:
                 after.add(state)
                 continue
             reached, stays = self._from(
-                state, tool, record, hints, returned=returned, result=result
+                state, tool, record, hints, returned=returned, result=result, instance=instance
             )
             after |= reached
             if stays:
@@ -272,6 +277,7 @@ class Policy:
         *,
         returned: bool,
         result: Validator[Any] | None,
+        instance: bool = False,
     ) -> tuple[set[str], bool]:
         """Return the states the transitions from ``state`` take on a call, and whether it stays.
 
@@ -304,7 +310,7 @@ class Policy:
                 taken = _both(taken, met)
             else:
                 on_call.append(transition.guard)
-            if self.per and taken == "surely":
+            if self.per and not instance and taken == "surely":
                 # A call may be another value's event: no value's identity is held here.
                 taken = "possibly"
             if taken != "never":

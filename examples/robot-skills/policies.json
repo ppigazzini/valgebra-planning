@@ -13,6 +13,38 @@
           "to": "violated"
         }
       ]
+    },
+    {
+      "name": "a grasp needs its own yes",
+      "initial": "unasked",
+      "bad": [
+        "violated"
+      ],
+      "per": "object_id",
+      "transitions": [
+        {
+          "from": "unasked",
+          "tool": "confirm_with_user",
+          "result": {
+            "properties": {
+              "confirmed": {
+                "const": true
+              }
+            }
+          },
+          "to": "yes"
+        },
+        {
+          "from": "yes",
+          "tool": "grasp",
+          "to": "unasked"
+        },
+        {
+          "from": "unasked",
+          "tool": "grasp",
+          "to": "violated"
+        }
+      ]
     }
   ]
 }

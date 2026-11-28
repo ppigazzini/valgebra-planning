@@ -163,6 +163,17 @@
       "refuted": 0,
       "undecided": 0,
       "assumed": 0
+    },
+    {
+      "task": "grasp the object confirmed",
+      "errors": false,
+      "policies": 1,
+      "flows": 0,
+      "mined": false,
+      "predicates": 9,
+      "cells": 14,
+      "undecided cells": 0,
+      "program": "none"
     }
   ],
   "programs": [
@@ -585,6 +596,55 @@
       "notes": [
         "refuted: confirm_with_user.action is the task's 'grasp'"
       ]
+    },
+    {
+      "program": "a grasp of the object its yes was for",
+      "task": "grasp the object confirmed",
+      "accepted": false,
+      "verified": true,
+      "weak": true,
+      "links": 7,
+      "proven": 7,
+      "refuted": [],
+      "undecided": [],
+      "notes": [
+        "uncovered: c1 (at case:c1:1.else); the task tolerates it"
+      ],
+      "run": {
+        "outcome": "returned",
+        "calls": [
+          "confirm_with_user",
+          "estimate_pose",
+          "grasp"
+        ],
+        "refused": null
+      }
+    },
+    {
+      "program": "a grasp of an object detected after the yes",
+      "task": "grasp the object confirmed",
+      "accepted": false,
+      "verified": false,
+      "weak": false,
+      "links": 8,
+      "proven": 7,
+      "refuted": [],
+      "undecided": [
+        "case:c1:0.then: policy a grasp needs its own yes holds"
+      ],
+      "notes": [
+        "undecided: policy a grasp needs its own yes holds (at case:c1:0.then); this path reaches a bad state of the policy or ends in a pending one: make the call it requires where it requires it, or leave out the call it forbids",
+        "uncovered: c1 (at case:c1:1.else); the task tolerates it"
+      ],
+      "run": {
+        "outcome": "refused",
+        "calls": [
+          "confirm_with_user",
+          "detect",
+          "estimate_pose"
+        ],
+        "refused": "a grasp needs its own yes for object_id \"obj_2\": grasp reached violated"
+      }
     }
   ]
 }
